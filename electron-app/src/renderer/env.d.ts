@@ -18,9 +18,9 @@ interface Window {
       trigger: () => Promise<{ ocrText: string; imageBase64: string }>
     }
     tray: {
-      onTrayCapture: (callback: () => void) => void
-      onNavigate: (callback: (path: string) => void) => void
-      onToolToggle: (callback: (toolId: string) => void) => void
+      onTrayCapture: (callback: () => void) => (() => void)
+      onNavigate: (callback: (path: string) => void) => (() => void)
+      onToolToggle: (callback: (toolId: string) => void) => (() => void)
     }
   }
 }

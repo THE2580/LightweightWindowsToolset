@@ -19,14 +19,19 @@ const api = {
       ipcRenderer.invoke('capture:trigger')
   },
   tray: {
-    onTrayCapture: (callback: () => void): void => {
+    onTrayCapture: (callback: () => void): (() => void) => {
       ipcRenderer.on('tray:capture', () => callback())
+      return () => { ipcRenderer.removeAllListeners('tray:capture') }
     },
-    onNavigate: (callback: (path: string) => void): void => {
-      ipcRenderer.on('navigate', (_event, path: string) => callback(path))
+    onNavigate: (callback: (path: string) => void): (() => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, path: string) => callback(path)
+      ipcRenderer.on('navigate', handler)
+      return () => { ipcRenderer.removeListener('navigate', handler) }
     },
-    onToolToggle: (callback: (toolId: string) => void): void => {
-      ipcRenderer.on('tray:toggle-tool', (_event, toolId: string) => callback(toolId))
+    onToolToggle: (callback: (toolId: string) => void): (() => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, toolId: string) => callback(toolId)
+      ipcRenderer.on('tray:toggle-tool', handler)
+      return () => { ipcRenderer.removeListener('tray:toggle-tool', handler) }
     }
   }
 }

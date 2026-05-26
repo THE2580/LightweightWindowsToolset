@@ -11,13 +11,16 @@ function AppListeners(): null {
   const toggleToolEnabled = usePluginStore((s) => s.toggleToolEnabled)
 
   useEffect(() => {
-    window.api.tray.onNavigate((path) => {
+    const unsubNav = window.api.tray.onNavigate((path) => {
       navigate(path)
     })
-
-    window.api.tray.onToolToggle((toolId) => {
+    const unsubTool = window.api.tray.onToolToggle((toolId) => {
       toggleToolEnabled(toolId)
     })
+    return () => {
+      unsubNav()
+      unsubTool()
+    }
   }, [navigate, toggleToolEnabled])
 
   return null
