@@ -2,12 +2,52 @@
   "name": "lightweight-windows-toolset",
   "version": "1.0.0",
   "description": "轻量化 Windows 桌面工具集",
+  "author": "THE2580",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "package": "electron-builder"
+    "package": "npm run build && electron-builder --win",
+    "package:portable": "npm run build && electron-builder --win --dir"
+  },
+  "build": {
+    "appId": "com.lightweight.toolset",
+    "productName": "轻量化工具集",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "resources/**/*"
+    ],
+    "asar": true,
+    "win": {
+      "target": {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
+      "icon": "resources/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "轻量化工具集",
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico",
+      "installerHeaderIcon": "resources/icon.ico",
+      "language": "2052"
+    },
+    "extraResources": [
+      {
+        "from": "resources/",
+        "to": "resources/",
+        "filter": ["*.ico", "*.png"]
+      }
+    ]
   },
   "dependencies": {
     "clsx": "^2.1.1",
