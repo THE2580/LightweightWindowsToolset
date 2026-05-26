@@ -16,30 +16,6 @@ const ICON_MAP: Record<string, LucideIcon> = {
   'settings': Settings
 }
 
-interface NavItem {
-  id: string
-  label: string
-  icon: LucideIcon
-  path: string
-}
-
-function getNavItems(): NavItem[] {
-  const items: NavItem[] = [
-    { id: 'home', label: '首页', icon: Home, path: '/' }
-  ]
-
-  for (const plugin of BUILTIN_PLUGINS) {
-    items.push({
-      id: plugin.id,
-      label: plugin.name,
-      icon: ICON_MAP[plugin.icon] || Zap,
-      path: `/tool/${plugin.id}`
-    })
-  }
-
-  return items
-}
-
 function Sidebar(): React.JSX.Element {
   const navigate = useNavigate()
   const location = useLocation()
@@ -47,93 +23,88 @@ function Sidebar(): React.JSX.Element {
     sidebarCollapsed, toggleSidebar, isToolEnabled, toggleToolEnabled, isToolUpcoming
   } = usePluginStore()
 
-  const navItems = getNavItems()
-
-  const isActive = (item: NavItem): boolean => {
-    if (item.id === 'home') return location.pathname === '/'
-    return location.pathname === item.path
+  const isActive = (path: string): boolean => {
+    if (path === '/') return location.pathname === '/'
+    return location.pathname === path
   }
 
-  const handleToolClick = (item: NavItem): void => {
-    if (item.id === 'home') {
-      usePluginStore.getState().activatePlugin('home')
-      navigate('/')
-      return
-    }
-    if (!isToolEnabled(item.id)) return
-    usePluginStore.getState().activatePlugin(item.id)
-    navigate(item.path)
+  const handleNav = (path: string, id: string): void => {
+    if (id !== 'home' && !isToolEnabled(id)) return
+    usePluginStore.getState().activatePlugin(id === 'home' ? 'home' : id)
+    navigate(path)
   }
+
+  const btnCls = (active: boolean, enabled: boolean): string =>
+    cn(
+      'flex items-center gap-1.5 w-full px-1.5 py-1.5 rounded-md text-xs transition-colors duration-150',
+      active && enabled
+        ? 'bg-primary text-primary-foreground'
+        : 'text-foreground hover:bg-muted',
+      !enabled && 'cursor-not-allowed opacity-40'
+    )
 
   return (
     <div
       className={cn(
-        'flex flex-col bg-secondary border-r border-border flex-shrink-0 transition-all duration-200 overflow-hidden',
+        'flex flex-col bg-secondary border-r border-border flex-shrink-0 overflow-hidden',
+        'transition-[width] duration-200 ease-out',
         sidebarCollapsed ? 'w-11' : 'w-[155px]'
       )}
     >
-      <div className="flex justify-end p-1">
+      {/* Collapse toggle */}
+      <div className="flex justify-center px-1.5 pt-1.5 pb-0.5">
         <button
           onClick={toggleSidebar}
           className="p-1 rounded-md hover:bg-muted transition-colors"
           aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          {sidebarCollapsed ? <PanelLeft size={13} /> : <PanelLeftClose size={13} />}
+          {sidebarCollapsed ? <PanelLeft size={14} /> : <PanelLeftClose size={14} />}
         </button>
       </div>
 
-      <nav className="flex-1 flex flex-col gap-0.5 px-1">
-        {navItems.map((item) => {
-          const upcoming = isToolUpcoming(item.id)
-          const enabled = item.id === 'home' || isToolEnabled(item.id)
-          const active = isActive(item)
+      {/* Tool nav items */}
+      <nav className="flex-1 flex flex-col gap-0.5 px-1.5">
+        {/* Home */}
+        <button
+          onClick={() => handleNav('/', 'home')}
+          className={btnCls(isActive('/'), true)}
+          title={sidebarCollapsed ? '首页' : undefined}
+        >
+          <span className="w-5 flex-shrink-0 flex justify-center"><Home size={15} /></span>
+          <span className="truncate">首页</span>
+        </button>
+
+        {BUILTIN_PLUGINS.map((plugin) => {
+          const upcoming = isToolUpcoming(plugin.id)
+          const enabled = !upcoming && isToolEnabled(plugin.id)
+          const active = isActive(`/tool/${plugin.id}`)
+          const Icon = ICON_MAP[plugin.icon] || Zap
+          const path = `/tool/${plugin.id}`
 
           return (
-            <div
-              key={item.id}
-              className={cn(
-                'flex items-center rounded-md text-xs transition-all duration-150',
-                sidebarCollapsed && 'justify-center',
-                !enabled && 'opacity-40'
-              )}
-            >
+            <div key={plugin.id} className="flex items-center gap-0.5">
               <button
-                onClick={() => handleToolClick(item)}
+                onClick={() => handleNav(path, plugin.id)}
                 disabled={!enabled}
-                className={cn(
-                  'flex items-center gap-[5px] flex-1 px-2 py-1.5 rounded-md text-xs min-w-0',
-                  active && enabled
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-foreground hover:bg-muted',
-                  !enabled && 'cursor-not-allowed',
-                  sidebarCollapsed && 'justify-center px-1'
-                )}
-                title={sidebarCollapsed ? item.label : undefined}
+                className={cn(btnCls(active, enabled), 'flex-1 min-w-0')}
+                title={sidebarCollapsed ? plugin.name : undefined}
               >
-                <item.icon size={15} className="flex-shrink-0" />
-                <span className="truncate">{item.label}</span>
+                <span className="w-5 flex-shrink-0 flex justify-center"><Icon size={15} /></span>
+                <span className="truncate">{plugin.name}</span>
               </button>
 
-              {!sidebarCollapsed && item.id !== 'home' && (
+              {!sidebarCollapsed && (
                 upcoming ? (
-                  <span className="text-[9px] text-muted-foreground/60 px-1 flex-shrink-0">
-                    待开发
-                  </span>
+                  <span className="text-[9px] text-muted-foreground/60 flex-shrink-0">待开发</span>
                 ) : (
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      toggleToolEnabled(item.id)
-                    }}
+                    onClick={(e) => { e.stopPropagation(); toggleToolEnabled(plugin.id) }}
                     className={cn(
-                      'w-7 h-4 rounded-full transition-colors duration-200 flex-shrink-0 mx-0.5',
+                      'w-7 h-4 rounded-full transition-colors duration-200 flex-shrink-0',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      enabled
-                        ? 'bg-primary'
-                        : 'bg-muted-foreground/30'
+                      enabled ? 'bg-primary' : 'bg-muted-foreground/30'
                     )}
-                    aria-label={`${enabled ? 'Disable' : 'Enable'} ${item.label}`}
-                    title={enabled ? `禁用 ${item.label}` : `启用 ${item.label}`}
+                    aria-label={`${enabled ? 'Disable' : 'Enable'} ${plugin.name}`}
                   >
                     <div
                       className={cn(
@@ -149,15 +120,13 @@ function Sidebar(): React.JSX.Element {
         })}
       </nav>
 
-      <div className="flex flex-col gap-0.5 px-1 pb-1.5">
+      {/* Bottom: AI Chat + Settings */}
+      <div className="flex flex-col gap-0.5 px-1.5 pb-2">
         <button
-          className={cn(
-            'flex items-center gap-[5px] px-2 py-1.5 rounded-md text-xs transition-all duration-150 hover:bg-muted min-w-0',
-            sidebarCollapsed && 'justify-center px-1'
-          )}
+          className={cn(btnCls(false, true), 'min-w-0')}
           title={sidebarCollapsed ? 'AI 聊天' : undefined}
         >
-          <MessageSquare size={15} className="flex-shrink-0" />
+          <span className="w-5 flex-shrink-0 flex justify-center"><MessageSquare size={15} /></span>
           <span className="truncate">AI 聊天</span>
         </button>
 
@@ -167,15 +136,12 @@ function Sidebar(): React.JSX.Element {
             navigate('/settings')
           }}
           className={cn(
-            'flex items-center gap-[5px] px-2 py-1.5 rounded-md text-xs transition-all duration-150 min-w-0',
-            location.pathname === '/settings'
-              ? 'bg-primary text-primary-foreground'
-              : 'text-foreground hover:bg-muted',
-            sidebarCollapsed && 'justify-center px-1'
+            btnCls(isActive('/settings'), true),
+            'min-w-0'
           )}
           title={sidebarCollapsed ? '设置' : undefined}
         >
-          <Settings size={15} className="flex-shrink-0" />
+          <span className="w-5 flex-shrink-0 flex justify-center"><Settings size={15} /></span>
           <span className="truncate">设置</span>
         </button>
       </div>

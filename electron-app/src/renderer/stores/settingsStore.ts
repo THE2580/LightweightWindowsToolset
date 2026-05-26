@@ -2,6 +2,7 @@ import { create } from 'zustand'
 
 type ThemeMode = 'system' | 'light' | 'dark'
 type AiChatPosition = 'left' | 'right'
+type CloseBehavior = 'quit' | 'tray'
 
 interface SettingsState {
   theme: ThemeMode
@@ -10,6 +11,7 @@ interface SettingsState {
   backendUrl: string
   deepseekModel: string
   windowTitle: string
+  closeBehavior: CloseBehavior
   isLoaded: boolean
 
   load: () => Promise<void>
@@ -19,6 +21,7 @@ interface SettingsState {
   setBackendUrl: (url: string) => Promise<void>
   setDeepseekModel: (model: string) => Promise<void>
   setWindowTitle: (title: string) => Promise<void>
+  setCloseBehavior: (behavior: CloseBehavior) => Promise<void>
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -28,6 +31,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   backendUrl: 'http://100.70.198.102:8000',
   deepseekModel: 'deepseek-v4-flash',
   windowTitle: '轻量化工具集',
+  closeBehavior: 'quit',
   isLoaded: false,
 
   load: async () => {
@@ -41,6 +45,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         backendUrl: (all.backendUrl as string) || 'http://100.70.198.102:8000',
         deepseekModel: (all.deepseekModel as string) || 'deepseek-v4-flash',
         windowTitle: (all.windowTitle as string) || '轻量化工具集',
+        closeBehavior: (all.closeBehavior as CloseBehavior) || 'quit',
         isLoaded: true
       })
     } catch {
@@ -77,5 +82,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     await window.api.settings.set('windowTitle', title)
     await window.api.window.setTitle(title)
     set({ windowTitle: title })
+  },
+
+  setCloseBehavior: async (behavior) => {
+    await window.api.settings.set('closeBehavior', behavior)
+    set({ closeBehavior: behavior })
   }
 }))

@@ -8,7 +8,7 @@ import { registerCaptureIpc } from './ipc/capture'
 
 let isQuitting = false
 
-// Single instance lock — prevent multiple app instances
+// Single instance lock
 const gotTheLock = app.requestSingleInstanceLock()
 if (!gotTheLock) {
   app.quit()
@@ -47,10 +47,14 @@ function createWindow(): BrowserWindow {
   })
 
   mainWindow.on('close', (event) => {
-    if (!isQuitting) {
+    if (isQuitting) return
+
+    const closeBehavior = getStore().get('closeBehavior', 'quit') as string
+    if (closeBehavior === 'tray') {
       event.preventDefault()
       mainWindow.hide()
     }
+    // 'quit' — let the window close normally, which triggers app quit
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -100,7 +104,11 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  // Don't quit on window close; stay in tray
+  // Only quit when closeBehavior is 'quit' — tray mode keeps process alive
+  const closeBehavior = getStore().get('closeBehavior', 'quit') as string
+  if (closeBehavior === 'quit') {
+    app.quit()
+  }
 })
 
 export {}

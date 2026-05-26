@@ -8,7 +8,8 @@ const store = new Store({
     aiChatPosition: 'right',
     backendUrl: 'http://100.70.198.102:8000',
     deepseekModel: 'deepseek-v4-flash',
-    windowTitle: '轻量化工具集'
+    windowTitle: '轻量化工具集',
+    closeBehavior: 'quit'
   }
 })
 

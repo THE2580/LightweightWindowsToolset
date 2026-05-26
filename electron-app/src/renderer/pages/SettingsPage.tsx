@@ -20,8 +20,8 @@ const DEFAULT_TITLE = '轻量化工具集'
 
 function SettingsPage(): React.JSX.Element {
   const {
-    theme, autoStart, aiChatPosition, backendUrl, deepseekModel, windowTitle,
-    setTheme, setAutoStart, setAiChatPosition, setBackendUrl, setDeepseekModel, setWindowTitle,
+    theme, autoStart, aiChatPosition, backendUrl, deepseekModel, windowTitle, closeBehavior,
+    setTheme, setAutoStart, setAiChatPosition, setBackendUrl, setDeepseekModel, setWindowTitle, setCloseBehavior,
     load
   } = useSettingsStore()
 
@@ -163,6 +163,22 @@ function SettingsPage(): React.JSX.Element {
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="flex items-center justify-between py-3 border-b border-border/60">
+              <div>
+                <Label className="text-sm">关闭应用时</Label>
+                <p className="text-[11px] text-muted-foreground mt-0.5">点击关闭按钮的行为</p>
+              </div>
+              <select
+                value={closeBehavior}
+                onChange={(e) => setCloseBehavior(e.target.value as 'quit' | 'tray')}
+                className="h-8 w-28 rounded-md border border-border bg-background px-2 text-xs
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="quit">直接退出</option>
+                <option value="tray">缩小到托盘</option>
+              </select>
             </div>
 
             <div className="flex items-center justify-between py-3 border-b border-border/60">
