@@ -54,10 +54,12 @@ function createWindow(): BrowserWindow {
       event.preventDefault()
       mainWindow.hide()
     } else {
-      // 'quit' mode: let the window close naturally
-      // window-all-closed will trigger app.quit() which calls before-quit for cleanup
+      // 'quit' mode: prevent default close and trigger standard app.quit() sequence
+      // isQuitting flag ensures the re-entrant close event (from quit sequence) passes through
+      event.preventDefault()
       isQuitting = true
       destroyTray()
+      app.quit()
     }
   })
 
