@@ -12,10 +12,10 @@ function createWindow(): BrowserWindow {
   const storedTitle = (getStore().get('windowTitle') as string) || '轻量化工具集'
 
   const mainWindow = new BrowserWindow({
-    width: 883,
-    height: 580,
-    minWidth: 883,
-    minHeight: 580,
+    width: 795,
+    height: 522,
+    minWidth: 795,
+    minHeight: 522,
     frame: false,
     show: false,
     icon: join(__dirname, '../../resources/tray-icon.png'),
