@@ -54,10 +54,10 @@ function createWindow(): BrowserWindow {
       event.preventDefault()
       mainWindow.hide()
     } else {
-      // 'quit' mode: destroy tray, then quit
+      // 'quit' mode: destroy tray and force exit immediately
       isQuitting = true
       destroyTray()
-      // Let the window close — will trigger window-all-closed
+      app.exit(0)
     }
   })
 
@@ -82,7 +82,6 @@ app.whenReady().then(() => {
     destroyTray()
   })
 
-  // Focus existing instance when second launch attempted
   app.on('second-instance', () => {
     const win = BrowserWindow.getAllWindows()[0]
     if (win) {
