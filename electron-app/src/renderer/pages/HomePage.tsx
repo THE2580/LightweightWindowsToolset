@@ -48,7 +48,8 @@ const STATUS_LABEL: Record<string, string> = {
 
 function HomePage(): React.JSX.Element {
   const navigate = useNavigate()
-  const { isToolEnabled, toggleToolEnabled } = usePluginStore()
+  const disabledTools = usePluginStore((s) => s.disabledTools)
+  const isToolEnabled = usePluginStore((s) => s.isToolEnabled)
 
   const getIsClickable = (tool: ToolCard): boolean => {
     if (tool.status === 'upcoming') return false
@@ -70,8 +71,13 @@ function HomePage(): React.JSX.Element {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-2">LightweightWindowsToolset</h1>
-      <p className="text-muted-foreground mb-10">轻量化 Windows 桌面工具集</p>
+      {/* Title: Chinese large on top, English small underneath */}
+      <div className="mb-10">
+        <h1 className="text-3xl font-bold tracking-tight">轻量化工具集</h1>
+        <p className="text-sm text-muted-foreground mt-1 font-medium">
+          Lightweight Windows Toolset
+        </p>
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {TOOLS.map((tool) => {
@@ -93,13 +99,10 @@ function HomePage(): React.JSX.Element {
             >
               {/* Status badge */}
               {statusLabel && (
-                <span className={`
+                <span className="
                   absolute top-3 right-3 px-2 py-0.5 rounded text-[10px] font-medium
-                  ${tool.status === 'disabled'
-                    ? 'bg-muted text-muted-foreground'
-                    : 'bg-muted text-muted-foreground'
-                  }
-                `}>
+                  bg-muted text-muted-foreground
+                ">
                   {statusLabel}
                 </span>
               )}

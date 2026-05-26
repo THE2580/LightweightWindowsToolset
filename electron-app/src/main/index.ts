@@ -14,7 +14,8 @@ function createWindow(): BrowserWindow {
     minHeight: 600,
     frame: false,
     show: false,
-    title: 'LightweightWindowsToolset',
+    icon: join(__dirname, '../../resources/tray-icon.png'),
+    title: '轻量化工具集',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,

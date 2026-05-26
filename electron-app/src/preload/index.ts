@@ -20,6 +20,12 @@ const api = {
   tray: {
     onTrayCapture: (callback: () => void): void => {
       ipcRenderer.on('tray:capture', () => callback())
+    },
+    onNavigate: (callback: (path: string) => void): void => {
+      ipcRenderer.on('navigate', (_event, path: string) => callback(path))
+    },
+    onToolToggle: (callback: (toolId: string) => void): void => {
+      ipcRenderer.on('tray:toggle-tool', (_event, toolId: string) => callback(toolId))
     }
   }
 }

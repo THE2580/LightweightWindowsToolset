@@ -13,7 +13,7 @@ function TitleBar(): React.JSX.Element {
     <div className="titlebar-drag flex items-center justify-between h-8 bg-secondary border-b border-border select-none flex-shrink-0">
       <div className="flex items-center pl-3">
         <span className="text-xs font-medium text-muted-foreground">
-          LightweightWindowsToolset
+          轻量化工具集
         </span>
       </div>
       <div className="titlebar-no-drag flex items-center h-full">

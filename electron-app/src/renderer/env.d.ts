@@ -3,8 +3,10 @@
 interface Window {
   api: {
     window: {
-      minimize: () => void
-      close: () => void
+      minimize: () => Promise<void>
+      close: () => Promise<void>
+      isMaximized: () => Promise<boolean>
+      toggleMaximize: () => Promise<void>
     }
     settings: {
       get: (key: string) => Promise<unknown>
@@ -16,6 +18,8 @@ interface Window {
     }
     tray: {
       onTrayCapture: (callback: () => void) => void
+      onNavigate: (callback: (path: string) => void) => void
+      onToolToggle: (callback: (toolId: string) => void) => void
     }
   }
 }
