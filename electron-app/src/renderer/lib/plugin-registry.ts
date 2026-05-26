@@ -33,14 +33,6 @@ export const BUILTIN_PLUGINS: BuiltinPlugin[] = [
     icon: 'pin',
     status: 'upcoming',
     entry: './WindowPinner.tsx'
-  },
-  {
-    id: 'ai-chat',
-    name: 'AI 聊天',
-    description: 'DeepSeek AI 对话助手',
-    icon: 'message-square',
-    status: 'stable',
-    entry: './ChatSidebar.tsx'
   }
 ]
 

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Zap, Pin, Clock, MessageSquare } from 'lucide-react'
+import { Zap, Pin, Clock } from 'lucide-react'
 import { usePluginStore } from '@/stores/pluginStore'
 import { BUILTIN_PLUGINS } from '@/lib/plugin-registry'
 import type { LucideIcon } from 'lucide-react'
@@ -7,27 +7,29 @@ import type { LucideIcon } from 'lucide-react'
 const ICON_MAP: Record<string, LucideIcon> = {
   'zap': Zap,
   'pin': Pin,
-  'message-square': MessageSquare,
   'clock': Clock
 }
 
 function HomePage(): React.JSX.Element {
   const navigate = useNavigate()
-  const isToolEnabled = usePluginStore((s) => s.isToolEnabled)
+  const disabledTools = usePluginStore((s) => s.disabledTools)
+  const isToolUpcoming = usePluginStore((s) => s.isToolUpcoming)
+
+  const isEnabled = (id: string): boolean => !disabledTools.has(id)
 
   const isGrayed = (plugin: (typeof BUILTIN_PLUGINS)[number]): boolean => {
     if (plugin.status === 'upcoming') return true
-    return !isToolEnabled(plugin.id)
+    return !isEnabled(plugin.id)
   }
 
   const isClickable = (plugin: (typeof BUILTIN_PLUGINS)[number]): boolean => {
     if (plugin.status === 'upcoming') return false
-    return isToolEnabled(plugin.id)
+    return isEnabled(plugin.id)
   }
 
   const getBadge = (plugin: (typeof BUILTIN_PLUGINS)[number]): string | null => {
     if (plugin.status === 'upcoming') return '即将推出'
-    if (plugin.status === 'stable' && !isToolEnabled(plugin.id)) return '已禁用'
+    if (plugin.status === 'stable' && !isEnabled(plugin.id)) return '已禁用'
     return null
   }
 

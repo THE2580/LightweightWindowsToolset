@@ -68,21 +68,21 @@ function Sidebar(): React.JSX.Element {
   return (
     <div
       className={cn(
-        'flex flex-col bg-secondary border-r border-border flex-shrink-0 transition-all duration-200',
-        sidebarCollapsed ? 'w-12' : 'w-[180px]'
+        'flex flex-col bg-secondary border-r border-border flex-shrink-0 transition-all duration-200 overflow-hidden',
+        sidebarCollapsed ? 'w-11' : 'w-[155px]'
       )}
     >
-      <div className="flex justify-end p-1.5">
+      <div className="flex justify-end p-1">
         <button
           onClick={toggleSidebar}
           className="p-1 rounded-md hover:bg-muted transition-colors"
           aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          {sidebarCollapsed ? <PanelLeft size={14} /> : <PanelLeftClose size={14} />}
+          {sidebarCollapsed ? <PanelLeft size={13} /> : <PanelLeftClose size={13} />}
         </button>
       </div>
 
-      <nav className="flex-1 flex flex-col gap-0.5 px-1.5">
+      <nav className="flex-1 flex flex-col gap-0.5 px-1">
         {navItems.map((item) => {
           const upcoming = isToolUpcoming(item.id)
           const enabled = item.id === 'home' || isToolEnabled(item.id)
@@ -101,22 +101,22 @@ function Sidebar(): React.JSX.Element {
                 onClick={() => handleToolClick(item)}
                 disabled={!enabled}
                 className={cn(
-                  'flex items-center gap-[5px] flex-1 px-2.5 py-2 rounded-md text-xs',
+                  'flex items-center gap-[5px] flex-1 px-2 py-1.5 rounded-md text-xs min-w-0',
                   active && enabled
                     ? 'bg-primary text-primary-foreground'
                     : 'text-foreground hover:bg-muted',
                   !enabled && 'cursor-not-allowed',
-                  sidebarCollapsed && 'justify-center px-1.5'
+                  sidebarCollapsed && 'justify-center px-1'
                 )}
                 title={sidebarCollapsed ? item.label : undefined}
               >
-                <item.icon size={16} />
-                {!sidebarCollapsed && <span>{item.label}</span>}
+                <item.icon size={15} className="flex-shrink-0" />
+                <span className="truncate">{item.label}</span>
               </button>
 
               {!sidebarCollapsed && item.id !== 'home' && (
                 upcoming ? (
-                  <span className="text-[9px] text-muted-foreground/60 px-1.5 flex-shrink-0">
+                  <span className="text-[9px] text-muted-foreground/60 px-1 flex-shrink-0">
                     待开发
                   </span>
                 ) : (
@@ -149,16 +149,16 @@ function Sidebar(): React.JSX.Element {
         })}
       </nav>
 
-      <div className="flex flex-col gap-0.5 px-1.5 pb-2">
+      <div className="flex flex-col gap-0.5 px-1 pb-1.5">
         <button
           className={cn(
-            'flex items-center gap-[5px] px-2.5 py-2 rounded-md text-xs transition-all duration-150 hover:bg-muted',
-            sidebarCollapsed && 'justify-center px-1.5'
+            'flex items-center gap-[5px] px-2 py-1.5 rounded-md text-xs transition-all duration-150 hover:bg-muted min-w-0',
+            sidebarCollapsed && 'justify-center px-1'
           )}
           title={sidebarCollapsed ? 'AI 聊天' : undefined}
         >
-          <MessageSquare size={16} />
-          {!sidebarCollapsed && <span>AI 聊天</span>}
+          <MessageSquare size={15} className="flex-shrink-0" />
+          <span className="truncate">AI 聊天</span>
         </button>
 
         <button
@@ -167,16 +167,16 @@ function Sidebar(): React.JSX.Element {
             navigate('/settings')
           }}
           className={cn(
-            'flex items-center gap-[5px] px-2.5 py-2 rounded-md text-xs transition-all duration-150',
+            'flex items-center gap-[5px] px-2 py-1.5 rounded-md text-xs transition-all duration-150 min-w-0',
             location.pathname === '/settings'
               ? 'bg-primary text-primary-foreground'
               : 'text-foreground hover:bg-muted',
-            sidebarCollapsed && 'justify-center px-1.5'
+            sidebarCollapsed && 'justify-center px-1'
           )}
           title={sidebarCollapsed ? '设置' : undefined}
         >
-          <Settings size={16} />
-          {!sidebarCollapsed && <span>设置</span>}
+          <Settings size={15} className="flex-shrink-0" />
+          <span className="truncate">设置</span>
         </button>
       </div>
     </div>
