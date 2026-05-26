@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { BUILTIN_PLUGINS } from '@/lib/plugin-registry'
 
 interface PluginInfo {
   id: string
@@ -14,7 +15,9 @@ interface PluginInfo {
 export type ToolStatus = 'stable' | 'upcoming'
 
 // Tools that are not yet implemented — cannot be enabled
-const UPCOMING_TOOLS = new Set<string>(['window-pinner'])
+const UPCOMING_TOOLS = new Set<string>(
+  BUILTIN_PLUGINS.filter((p) => p.status === 'upcoming').map((p) => p.id)
+)
 
 interface PluginState {
   plugins: PluginInfo[]
@@ -68,3 +71,22 @@ export const usePluginStore = create<PluginState>((set, get) => ({
 
   getToolStatus: (id) => UPCOMING_TOOLS.has(id) ? 'upcoming' : 'stable'
 }))
+
+// Initialize plugin list from built-in registry
+export function initPluginStore(): void {
+  const store = usePluginStore.getState()
+  if (store.plugins.length > 0) return // already initialized
+
+  store.setPlugins(
+    BUILTIN_PLUGINS.filter((p) => p.status === 'stable').map((p) => ({
+      id: p.id,
+      name: p.name,
+      version: '1.0.0',
+      description: p.description,
+      icon: p.icon,
+      entry: p.entry,
+      source: 'features' as const,
+      dirPath: ''
+    }))
+  )
+}

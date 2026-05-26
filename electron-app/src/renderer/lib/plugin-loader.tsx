@@ -1,38 +1,39 @@
-import { useEffect, useState } from 'react'
+import { Suspense } from 'react'
 import { useParams, Navigate } from 'react-router-dom'
+import { getPluginById } from '@/lib/plugin-registry'
 import { usePluginStore } from '@/stores/pluginStore'
 
-// Placeholder for dynamic component loading
 function PluginRoute(): React.JSX.Element {
   const { pluginId } = useParams<{ pluginId: string }>()
-  const plugins = usePluginStore((s) => s.plugins)
-  const [Component, setComponent] = useState<React.ComponentType | null>(null)
-  const [error, setError] = useState(false)
+  const isToolEnabled = usePluginStore((s) => s.isToolEnabled)
 
-  useEffect(() => {
-    const plugin = plugins.find((p) => p.id === pluginId)
-    if (!plugin) {
-      setError(true)
-      return
-    }
-    // Dynamic import will be wired after plugin system is fully implemented
-    // For now, route to known plugin pages
-    setError(true) // placeholder - will be replaced with dynamic import
-  }, [pluginId, plugins])
-
-  if (error || !pluginId) {
+  if (!pluginId) {
     return <Navigate to="/" replace />
   }
 
-  if (!Component) {
-    return (
-      <div className="flex items-center justify-center h-full text-muted-foreground">
-        Loading...
-      </div>
-    )
+  // Check if tool is enabled
+  if (!isToolEnabled(pluginId)) {
+    return <Navigate to="/" replace />
   }
 
-  return <Component />
+  const plugin = getPluginById(pluginId)
+  if (!plugin || !plugin.component) {
+    return <Navigate to="/" replace />
+  }
+
+  const Component = plugin.component
+
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center h-full text-muted-foreground">
+          Loading...
+        </div>
+      }
+    >
+      <Component />
+    </Suspense>
+  )
 }
 
 export default PluginRoute

@@ -3,13 +3,44 @@ import {
   Home, Zap, Pin, MessageSquare, Settings, PanelLeftClose, PanelLeft
 } from 'lucide-react'
 import { usePluginStore } from '@/stores/pluginStore'
+import { BUILTIN_PLUGINS } from '@/lib/plugin-registry'
 import { cn } from '@/lib/utils'
+import type { LucideIcon } from 'lucide-react'
 
-const NAV_ITEMS = [
-  { id: 'home', label: '首页', icon: Home, path: '/' },
-  { id: 'stamina-capture', label: '体力捕获', icon: Zap, path: '/tool/stamina-capture' },
-  { id: 'window-pinner', label: '置顶窗口', icon: Pin, path: '/tool/window-pinner' },
-]
+// Map icon string names to Lucide components
+const ICON_MAP: Record<string, LucideIcon> = {
+  'home': Home,
+  'zap': Zap,
+  'pin': Pin,
+  'message-square': MessageSquare,
+  'clock': Home, // fallback
+  'settings': Settings
+}
+
+interface NavItem {
+  id: string
+  label: string
+  icon: LucideIcon
+  path: string
+}
+
+function getNavItems(): NavItem[] {
+  const items: NavItem[] = [
+    { id: 'home', label: '首页', icon: Home, path: '/' }
+  ]
+
+  // Add all built-in plugins
+  for (const plugin of BUILTIN_PLUGINS) {
+    items.push({
+      id: plugin.id,
+      label: plugin.name,
+      icon: ICON_MAP[plugin.icon] || Zap,
+      path: `/tool/${plugin.id}`
+    })
+  }
+
+  return items
+}
 
 function Sidebar(): React.JSX.Element {
   const navigate = useNavigate()
@@ -18,12 +49,14 @@ function Sidebar(): React.JSX.Element {
     sidebarCollapsed, toggleSidebar, isToolEnabled, toggleToolEnabled, isToolUpcoming
   } = usePluginStore()
 
-  const isActive = (item: (typeof NAV_ITEMS)[number]): boolean => {
+  const navItems = getNavItems()
+
+  const isActive = (item: NavItem): boolean => {
     if (item.id === 'home') return location.pathname === '/'
     return location.pathname === item.path
   }
 
-  const handleToolClick = (item: (typeof NAV_ITEMS)[number]): void => {
+  const handleToolClick = (item: NavItem): void => {
     if (item.id === 'home') {
       usePluginStore.getState().activatePlugin('home')
       navigate('/')
@@ -52,7 +85,7 @@ function Sidebar(): React.JSX.Element {
       </div>
 
       <nav className="flex-1 flex flex-col gap-1 px-2">
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const upcoming = isToolUpcoming(item.id)
           const enabled = item.id === 'home' || isToolEnabled(item.id)
           const active = isActive(item)

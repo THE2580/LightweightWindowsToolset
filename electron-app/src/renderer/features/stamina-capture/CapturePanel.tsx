@@ -1,6 +1,8 @@
 import { useCaptureStore } from '@/stores/captureStore'
 import { Button } from '@/components/ui/button'
 import { Camera, Loader2 } from 'lucide-react'
+import { parseStaminaViaAI } from './api/deepseek'
+import { postStaminaRecord, setBackendUrl } from './api/backend'
 
 const STATE_LABELS: Record<string, string> = {
   idle: '截图捕获体力',
@@ -13,24 +15,73 @@ const STATE_LABELS: Record<string, string> = {
 }
 
 function CapturePanel(): React.JSX.Element {
-  const { captureState, setCaptureState } = useCaptureStore()
+  const {
+    captureState, setCaptureState, selectedGame,
+    setStamina, setOcrText, setTodayRecords, getGameConfig
+  } = useCaptureStore()
   const isLoading = captureState !== 'idle' && captureState !== 'done' && captureState !== 'error'
 
   const handleCapture = async (): Promise<void> => {
     if (isLoading) return
 
+    const gameConfig = getGameConfig(selectedGame)
+    if (!gameConfig) return
+
     try {
+      // Step 1: Screenshot
       setCaptureState('capturing')
-      await new Promise((r) => setTimeout(r, 400))
-      setCaptureState('ocr')
-      await new Promise((r) => setTimeout(r, 600))
+      const result = await window.api.capture.trigger()
+
+      if (!result.ocrText && !result.imageBase64) {
+        throw new Error('Screenshot failed: empty result')
+      }
+
+      setOcrText(result.ocrText)
+
+      // Step 2: AI parse (if we have OCR text)
       setCaptureState('parsing')
-      await new Promise((r) => setTimeout(r, 500))
-      setCaptureState('posting')
-      await new Promise((r) => setTimeout(r, 300))
+      const aiResult = await parseStaminaViaAI(
+        result.ocrText || 'no text recognized',
+        gameConfig.name,
+        gameConfig.staminaName || '体力'
+      )
+
+      if (aiResult.remaining_stamina !== null && aiResult.max_stamina !== null) {
+        setStamina({
+          remaining: aiResult.remaining_stamina,
+          max: aiResult.max_stamina
+        })
+      }
+
+      // Step 3: Post to backend (if stamina was parsed)
+      if (aiResult.remaining_stamina !== null && aiResult.max_stamina !== null) {
+        setCaptureState('posting')
+
+        // Sync backend URL from settings
+        const backendUrl = await window.api.settings.get('backendUrl')
+        if (backendUrl && typeof backendUrl === 'string') {
+          setBackendUrl(backendUrl)
+        }
+
+        try {
+          const record = await postStaminaRecord({
+            game_name: gameConfig.name,
+            package_name: gameConfig.processName,
+            remaining_stamina: aiResult.remaining_stamina,
+            max_stamina: aiResult.max_stamina,
+            capture_time: new Date().toISOString(),
+            source: 'windows'
+          })
+          setTodayRecords([record])
+        } catch (backendErr) {
+          console.warn('[Capture] Backend post failed (non-blocking):', backendErr)
+        }
+      }
+
       setCaptureState('done')
       setTimeout(() => setCaptureState('idle'), 2000)
-    } catch {
+    } catch (err) {
+      console.error('[Capture] Pipeline error:', err)
       setCaptureState('error')
     }
   }
