@@ -25,6 +25,7 @@ interface Window {
     }
     hotkey: {
       onHotkey: (callback: (action: string) => void) => (() => void)
+      updateHotkey: (action: string, accelerator: string) => Promise<void>
     }
   }
 }

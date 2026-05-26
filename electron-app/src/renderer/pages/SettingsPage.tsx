@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useDeepseekStore } from '@/stores/deepseekStore'
 import { applyTheme } from '@/lib/theme'
@@ -18,10 +18,16 @@ const TABS: { id: TabId; label: string; icon: React.ComponentType<{ size?: numbe
 
 const DEFAULT_TITLE = '轻量化工具集'
 
+function parseAccelerator(acc: string): string[] {
+  return acc.split('+')
+}
+
 function SettingsPage(): React.JSX.Element {
   const {
-    theme, autoStart, aiChatPosition, backendUrl, deepseekModel, windowTitle, closeBehavior,
-    setTheme, setAutoStart, setAiChatPosition, setBackendUrl, setDeepseekModel, setWindowTitle, setCloseBehavior,
+    theme, autoStart, chatClickOutsideToClose, backendUrl, deepseekModel, windowTitle, closeBehavior,
+    captureHotkey, chatHotkey,
+    setTheme, setAutoStart, setChatClickOutsideToClose, setBackendUrl, setDeepseekModel,
+    setWindowTitle, setCloseBehavior, setCaptureHotkey, setChatHotkey,
     load
   } = useSettingsStore()
 
@@ -30,6 +36,10 @@ function SettingsPage(): React.JSX.Element {
   const [showKey, setShowKey] = useState(false)
   const [activeTab, setActiveTab] = useState<TabId>('general')
   const [titleDraft, setTitleDraft] = useState(windowTitle)
+
+  // Hotkey recording state
+  const [recordingCapture, setRecordingCapture] = useState(false)
+  const [recordingChat, setRecordingChat] = useState(false)
 
   useEffect(() => {
     load()
@@ -66,6 +76,36 @@ function SettingsPage(): React.JSX.Element {
     setTitleDraft(DEFAULT_TITLE)
     await setWindowTitle(DEFAULT_TITLE)
   }
+
+  const handleHotkeyKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLButtonElement>, forAction: 'capture' | 'chat') => {
+      e.preventDefault()
+      e.stopPropagation()
+
+      const parts: string[] = []
+      if (e.ctrlKey || e.metaKey) parts.push('CommandOrControl')
+      if (e.shiftKey) parts.push('Shift')
+      if (e.altKey) parts.push('Alt')
+
+      const key = e.key
+      // Skip modifier-only keys
+      if (['Control', 'Shift', 'Alt', 'Meta'].includes(key)) return
+
+      const upperKey = key.length === 1 ? key.toUpperCase() : key
+      parts.push(upperKey)
+
+      const accelerator = parts.join('+')
+
+      if (forAction === 'capture') {
+        setRecordingCapture(false)
+        setCaptureHotkey(accelerator)
+      } else {
+        setRecordingChat(false)
+        setChatHotkey(accelerator)
+      }
+    },
+    [setCaptureHotkey, setChatHotkey]
+  )
 
   return (
     <div className="max-w-xl">
@@ -183,18 +223,25 @@ function SettingsPage(): React.JSX.Element {
 
             <div className="flex items-center justify-between py-3 border-b border-border/60">
               <div>
-                <Label className="text-sm">AI 聊天面板位置</Label>
-                <p className="text-[11px] text-muted-foreground mt-0.5">聊天侧边栏从哪侧滑出</p>
+                <Label className="text-sm">AI 聊天点击外部关闭</Label>
+                <p className="text-[11px] text-muted-foreground mt-0.5">点击聊天面板外区域自动折叠</p>
               </div>
-              <select
-                value={aiChatPosition}
-                onChange={(e) => setAiChatPosition(e.target.value as 'left' | 'right')}
-                className="h-8 w-24 rounded-md border border-border bg-background px-2 text-xs
-                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              <button
+                onClick={() => setChatClickOutsideToClose(!chatClickOutsideToClose)}
+                className={cn(
+                  'w-10 h-5 rounded-full transition-colors duration-200 flex-shrink-0',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  chatClickOutsideToClose ? 'bg-primary' : 'bg-muted-foreground/25'
+                )}
+                aria-label={chatClickOutsideToClose ? '禁用外部点击关闭' : '启用外部点击关闭'}
               >
-                <option value="right">右侧</option>
-                <option value="left">左侧</option>
-              </select>
+                <div
+                  className={cn(
+                    'w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200',
+                    chatClickOutsideToClose ? 'translate-x-5.5' : 'translate-x-0.5'
+                  )}
+                />
+              </button>
             </div>
           </div>
         )}
@@ -253,52 +300,70 @@ function SettingsPage(): React.JSX.Element {
 
         {activeTab === 'hotkey' && (
           <div className="space-y-4">
+            {/* Capture hotkey */}
             <div className="py-3 border-b border-border/60">
               <div className="flex items-center justify-between">
                 <div>
                   <Label className="text-sm">体力捕获</Label>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">快速截图识别体力值</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">后台截图识别体力值</p>
                 </div>
-                <div className="flex items-center gap-1">
-                  <kbd className="px-1.5 py-0.5 text-[11px] bg-muted rounded border border-border font-mono">
-                    Ctrl
-                  </kbd>
-                  <span className="text-muted-foreground text-[11px]">+</span>
-                  <kbd className="px-1.5 py-0.5 text-[11px] bg-muted rounded border border-border font-mono">
-                    Shift
-                  </kbd>
-                  <span className="text-muted-foreground text-[11px]">+</span>
-                  <kbd className="px-1.5 py-0.5 text-[11px] bg-muted rounded border border-border font-mono">
-                    D
-                  </kbd>
-                </div>
+                <button
+                  onClick={() => { setRecordingCapture(true); setRecordingChat(false) }}
+                  onKeyDown={(e) => { if (recordingCapture) handleHotkeyKeyDown(e, 'capture') }}
+                  className={cn(
+                    'flex items-center gap-1 h-7 px-2 rounded border text-[11px] font-mono transition-colors',
+                    recordingCapture
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border bg-muted hover:border-muted-foreground/30'
+                  )}
+                >
+                  {recordingCapture ? (
+                    <span className="animate-pulse">按下组合键...</span>
+                  ) : (
+                    parseAccelerator(captureHotkey).map((part, i) => (
+                      <span key={i}>
+                        {i > 0 && <span className="text-muted-foreground mx-0.5">+</span>}
+                        <kbd className="px-1 py-0.5 rounded border border-border bg-background">{part}</kbd>
+                      </span>
+                    ))
+                  )}
+                </button>
               </div>
             </div>
 
+            {/* Chat hotkey */}
             <div className="py-3 border-b border-border/60">
               <div className="flex items-center justify-between">
                 <div>
                   <Label className="text-sm">AI 聊天</Label>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">呼出 AI 聊天面板</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">呼出或折叠 AI 聊天面板</p>
                 </div>
-                <div className="flex items-center gap-1">
-                  <kbd className="px-1.5 py-0.5 text-[11px] bg-muted rounded border border-border font-mono">
-                    Ctrl
-                  </kbd>
-                  <span className="text-muted-foreground text-[11px]">+</span>
-                  <kbd className="px-1.5 py-0.5 text-[11px] bg-muted rounded border border-border font-mono">
-                    Shift
-                  </kbd>
-                  <span className="text-muted-foreground text-[11px]">+</span>
-                  <kbd className="px-1.5 py-0.5 text-[11px] bg-muted rounded border border-border font-mono">
-                    A
-                  </kbd>
-                </div>
+                <button
+                  onClick={() => { setRecordingChat(true); setRecordingCapture(false) }}
+                  onKeyDown={(e) => { if (recordingChat) handleHotkeyKeyDown(e, 'chat') }}
+                  className={cn(
+                    'flex items-center gap-1 h-7 px-2 rounded border text-[11px] font-mono transition-colors',
+                    recordingChat
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border bg-muted hover:border-muted-foreground/30'
+                  )}
+                >
+                  {recordingChat ? (
+                    <span className="animate-pulse">按下组合键...</span>
+                  ) : (
+                    parseAccelerator(chatHotkey).map((part, i) => (
+                      <span key={i}>
+                        {i > 0 && <span className="text-muted-foreground mx-0.5">+</span>}
+                        <kbd className="px-1 py-0.5 rounded border border-border bg-background">{part}</kbd>
+                      </span>
+                    ))
+                  )}
+                </button>
               </div>
             </div>
 
             <p className="text-[11px] text-muted-foreground pt-1">
-              自定义快捷键配置即将上线。点击快捷键区域可重新绑定按键。
+              点击快捷键区域进入录制模式，然后按下组合键完成绑定。
             </p>
           </div>
         )}
