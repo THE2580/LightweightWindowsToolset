@@ -39,13 +39,13 @@ function SettingsPage(): React.JSX.Element {
   }
 
   return (
-    <div className="p-8 max-w-2xl mx-auto space-y-8">
+    <div className="max-w-2xl mx-auto space-y-10">
       <h1 className="text-2xl font-bold">设置</h1>
 
       {/* General Settings */}
       <Card>
         <CardHeader><CardTitle>通用</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-5">
           <div className="flex items-center justify-between">
             <Label>开机自启</Label>
             <input
@@ -88,7 +88,7 @@ function SettingsPage(): React.JSX.Element {
       {/* API Settings */}
       <Card>
         <CardHeader><CardTitle>API 设置</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-5">
           <div className="space-y-2">
             <Label>DeepSeek API Key</Label>
             <div className="flex gap-2">

@@ -21,7 +21,6 @@ function CapturePanel(): React.JSX.Element {
 
     try {
       setCaptureState('capturing')
-      // Simulate pipeline steps — real implementation in Phase 2
       await new Promise((r) => setTimeout(r, 400))
       setCaptureState('ocr')
       await new Promise((r) => setTimeout(r, 600))
@@ -37,9 +36,9 @@ function CapturePanel(): React.JSX.Element {
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card p-6">
-      <h3 className="text-sm font-semibold mb-4">捕获控制</h3>
-      <p className="text-sm text-muted-foreground mb-4">
+    <div className="rounded-lg border border-border bg-card shadow-sm p-8">
+      <h3 className="text-sm font-semibold mb-5">捕获控制</h3>
+      <p className="text-sm text-muted-foreground mb-6">
         按快捷键或点击按钮截图当前游戏窗口，自动识别体力值
       </p>
       <Button
@@ -57,7 +56,7 @@ function CapturePanel(): React.JSX.Element {
         {STATE_LABELS[captureState]}
       </Button>
       {captureState === 'error' && (
-        <p className="text-xs text-red-500 mt-2">捕获过程中出现错误，请检查游戏窗口是否打开</p>
+        <p className="text-xs text-red-500 mt-3">捕获过程中出现错误，请检查游戏窗口是否打开</p>
       )}
     </div>
   )

@@ -15,17 +15,21 @@ interface PluginState {
   plugins: PluginInfo[]
   activePluginId: string | null
   sidebarCollapsed: boolean
+  disabledTools: Set<string>
 
   setPlugins: (plugins: PluginInfo[]) => void
   activatePlugin: (id: string) => void
   toggleSidebar: () => void
   setSidebarCollapsed: (collapsed: boolean) => void
+  toggleToolEnabled: (id: string) => void
+  isToolEnabled: (id: string) => boolean
 }
 
-export const usePluginStore = create<PluginState>((set) => ({
+export const usePluginStore = create<PluginState>((set, get) => ({
   plugins: [],
   activePluginId: null,
   sidebarCollapsed: false,
+  disabledTools: new Set<string>(['window-pinner']),
 
   setPlugins: (plugins) => set({ plugins }),
 
@@ -33,5 +37,17 @@ export const usePluginStore = create<PluginState>((set) => ({
 
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 
-  setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed })
+  setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
+
+  toggleToolEnabled: (id) => {
+    const next = new Set(get().disabledTools)
+    if (next.has(id)) {
+      next.delete(id)
+    } else {
+      next.add(id)
+    }
+    set({ disabledTools: next })
+  },
+
+  isToolEnabled: (id) => !get().disabledTools.has(id)
 }))

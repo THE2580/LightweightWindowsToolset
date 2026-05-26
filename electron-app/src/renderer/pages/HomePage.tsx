@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Zap, Pin, Settings } from 'lucide-react'
+import { Zap, Pin } from 'lucide-react'
 
 const TOOLS = [
   {
@@ -21,18 +21,18 @@ function HomePage(): React.JSX.Element {
   const navigate = useNavigate()
 
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold mb-2">LightweightWindowsToolset</h1>
-      <p className="text-muted-foreground mb-8">轻量化 Windows 桌面工具集</p>
+    <div>
+      <h1 className="text-2xl font-bold mb-3">LightweightWindowsToolset</h1>
+      <p className="text-muted-foreground mb-10">轻量化 Windows 桌面工具集</p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {TOOLS.map((tool) => (
           <button
             key={tool.id}
             onClick={() => !tool.disabled && navigate(`/tool/${tool.id}`)}
             disabled={tool.disabled}
             className={`
-              group p-6 rounded-lg border border-border text-left
+              group p-8 rounded-lg border border-border text-left
               transition-all duration-150
               ${tool.disabled
                 ? 'opacity-40 cursor-not-allowed'
@@ -40,11 +40,11 @@ function HomePage(): React.JSX.Element {
               }
             `}
           >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 rounded-md bg-primary/10 text-primary">
-                <tool.icon size={20} />
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2.5 rounded-md bg-primary/10 text-primary">
+                <tool.icon size={22} />
               </div>
-              <span className="font-semibold">
+              <span className="font-semibold text-base">
                 {tool.name}
                 {tool.disabled && (
                   <span className="ml-2 text-xs text-muted-foreground font-normal">待定</span>
