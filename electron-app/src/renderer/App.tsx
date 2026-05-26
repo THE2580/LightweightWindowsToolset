@@ -5,11 +5,13 @@ import HomePage from './pages/HomePage'
 import SettingsPage from './pages/SettingsPage'
 import PluginRoute from './lib/plugin-loader.tsx'
 import { usePluginStore } from './stores/pluginStore'
+import { useCaptureStore } from './stores/captureStore'
 
 function AppListeners(): null {
   const navigate = useNavigate()
   const toggleToolEnabled = usePluginStore((s) => s.toggleToolEnabled)
   const toggleChat = usePluginStore((s) => s.toggleChat)
+  const triggerBackgroundCapture = useCaptureStore((s) => s.triggerBackgroundCapture)
 
   useEffect(() => {
     const unsubNav = window.api.tray.onNavigate((path) => {
@@ -20,7 +22,7 @@ function AppListeners(): null {
     })
     const unsubHotkey = window.api.hotkey.onHotkey((action) => {
       if (action === 'stamina-capture') {
-        navigate('/tool/stamina-capture')
+        triggerBackgroundCapture()
       } else if (action === 'ai-chat') {
         toggleChat()
       }
@@ -30,7 +32,7 @@ function AppListeners(): null {
       unsubTool()
       unsubHotkey()
     }
-  }, [navigate, toggleToolEnabled, toggleChat])
+  }, [navigate, toggleToolEnabled, toggleChat, triggerBackgroundCapture])
 
   return null
 }
