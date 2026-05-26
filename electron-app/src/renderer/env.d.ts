@@ -17,6 +17,11 @@ interface Window {
     capture: {
       trigger: () => Promise<{ ocrText: string; imageBase64: string }>
     }
+    queue: {
+      add: (payload: unknown) => Promise<void>
+      getCount: () => Promise<number>
+      flush: () => Promise<{ flushed: number; remaining: number }>
+    }
     tray: {
       onTrayCapture: (callback: () => void) => (() => void)
       onNavigate: (callback: (path: string) => void) => (() => void)

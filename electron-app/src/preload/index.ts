@@ -18,6 +18,12 @@ const api = {
     trigger: (): Promise<{ ocrText: string; imageBase64: string }> =>
       ipcRenderer.invoke('capture:trigger')
   },
+  queue: {
+    add: (payload: unknown): Promise<void> => ipcRenderer.invoke('queue:add', payload),
+    getCount: (): Promise<number> => ipcRenderer.invoke('queue:getCount'),
+    flush: (): Promise<{ flushed: number; remaining: number }> =>
+      ipcRenderer.invoke('queue:flush')
+  },
   tray: {
     onTrayCapture: (callback: () => void): (() => void) => {
       ipcRenderer.on('tray:capture', () => callback())

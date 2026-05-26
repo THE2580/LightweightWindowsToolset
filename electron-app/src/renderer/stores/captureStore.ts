@@ -103,8 +103,11 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
             source: 'windows'
           })
           set({ todayRecords: [record] })
+
+          // Flush any previously queued records now that backend is reachable
+          window.api.queue.flush().catch(() => {})
         } catch (backendErr) {
-          console.warn('[Capture] Backend post failed (non-blocking):', backendErr)
+          console.warn('[Capture] Backend post failed, queued for retry:', backendErr)
         }
       }
 

@@ -5,6 +5,7 @@ import { createTray, destroyTray } from './tray'
 import { registerIpcHandlers } from './ipc/window'
 import { registerSettingsIpc, getStore } from './ipc/settings'
 import { registerCaptureIpc } from './ipc/capture'
+import { registerQueueIpc, loadQueue, saveQueue } from './ipc/queue'
 
 let isQuitting = false
 
@@ -92,6 +93,35 @@ function createWindow(): BrowserWindow {
   return mainWindow
 }
 
+async function flushPendingQueue(): Promise<{ flushed: number; remaining: number }> {
+  const queue = loadQueue()
+  if (queue.length === 0) return { flushed: 0, remaining: 0 }
+
+  const backendUrl = (getStore().get('backendUrl') as string) || 'http://100.70.198.102:8000'
+  const remaining: typeof queue = []
+  let flushed = 0
+
+  for (const item of queue) {
+    try {
+      const resp = await fetch(`${backendUrl}/api/stamina/record`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item)
+      })
+      if (resp.ok) {
+        flushed++
+      } else {
+        remaining.push(item)
+      }
+    } catch {
+      remaining.push(item)
+    }
+  }
+
+  saveQueue(remaining)
+  return { flushed, remaining: remaining.length }
+}
+
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.lightweight.toolset')
 
@@ -174,6 +204,25 @@ app.whenReady().then(() => {
   registerIpcHandlers(mainWindow)
   registerSettingsIpc()
   registerCaptureIpc()
+  registerQueueIpc()
+
+  // queue:flush handler — invoked by renderer after a successful capture
+  ipcMain.handle('queue:flush', async () => {
+    return flushPendingQueue()
+  })
+
+  // Startup flush: attempt to send queued records from a previous (offline) session
+  setTimeout(() => {
+    flushPendingQueue()
+      .then((result) => {
+        if (result.flushed > 0) {
+          console.log(`[Queue] Startup flush: ${result.flushed} sent, ${result.remaining} remain`)
+        }
+      })
+      .catch((e) => {
+        console.error('[Queue] Startup flush error:', e)
+      })
+  }, 3000)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

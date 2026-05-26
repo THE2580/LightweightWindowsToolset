@@ -26,15 +26,8 @@ export interface StaminaRecord {
   source: string
 }
 
-// In-memory cache for offline mode
-const pendingQueue: StaminaRecordPayload[] = []
-
-export function getPendingCount(): number {
-  return pendingQueue.length
-}
-
-export function drainPendingQueue(): StaminaRecordPayload[] {
-  return pendingQueue.splice(0, pendingQueue.length)
+export async function getPendingCount(): Promise<number> {
+  return window.api.queue.getCount()
 }
 
 async function fetchWithRetry(
@@ -67,9 +60,9 @@ export async function postStaminaRecord(payload: StaminaRecordPayload): Promise<
     }
     return response.json()
   } catch {
-    // Queue locally when backend is unreachable
-    pendingQueue.push(payload)
-    throw new Error('Backend unreachable — record queued locally')
+    // Persist to electron-store via IPC so records survive app restart
+    await window.api.queue.add(payload)
+    throw new Error('Backend unreachable — record queued for retry')
   }
 }
 
