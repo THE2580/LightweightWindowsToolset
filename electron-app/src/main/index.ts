@@ -6,6 +6,8 @@ import { registerIpcHandlers } from './ipc/window'
 import { registerSettingsIpc, getStore } from './ipc/settings'
 import { registerCaptureIpc } from './ipc/capture'
 
+let isQuitting = false
+
 function createWindow(): BrowserWindow {
   const storedTitle = (getStore().get('windowTitle') as string) || '轻量化工具集'
 
@@ -36,8 +38,10 @@ function createWindow(): BrowserWindow {
   })
 
   mainWindow.on('close', (event) => {
-    event.preventDefault()
-    mainWindow.hide()
+    if (!isQuitting) {
+      event.preventDefault()
+      mainWindow.hide()
+    }
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -54,6 +58,10 @@ app.whenReady().then(() => {
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
+  })
+
+  app.on('before-quit', () => {
+    isQuitting = true
   })
 
   const mainWindow = createWindow()
