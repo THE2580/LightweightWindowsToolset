@@ -32,6 +32,19 @@ const api = {
       const handler = (_event: Electron.IpcRendererEvent, toolId: string) => callback(toolId)
       ipcRenderer.on('tray:toggle-tool', handler)
       return () => { ipcRenderer.removeListener('tray:toggle-tool', handler) }
+    },
+    notifyToolState: (toolId: string, enabled: boolean): Promise<void> =>
+      ipcRenderer.invoke('tray:update-tool-state', toolId, enabled)
+  },
+  hotkey: {
+    onHotkey: (callback: (action: string) => void): (() => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, action: string) => callback(action)
+      ipcRenderer.on('hotkey:stamina-capture', () => handler(null as any, 'stamina-capture'))
+      ipcRenderer.on('hotkey:ai-chat', () => handler(null as any, 'ai-chat'))
+      return () => {
+        ipcRenderer.removeAllListeners('hotkey:stamina-capture')
+        ipcRenderer.removeAllListeners('hotkey:ai-chat')
+      }
     }
   }
 }

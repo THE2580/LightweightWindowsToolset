@@ -24,11 +24,14 @@ interface PluginState {
   activePluginId: string | null
   sidebarCollapsed: boolean
   disabledTools: Set<string>
+  chatOpen: boolean
 
   setPlugins: (plugins: PluginInfo[]) => void
   activatePlugin: (id: string) => void
   toggleSidebar: () => void
   setSidebarCollapsed: (collapsed: boolean) => void
+  toggleChat: () => void
+  setChatOpen: (open: boolean) => void
   toggleToolEnabled: (id: string) => void
   isToolEnabled: (id: string) => boolean
   isToolUpcoming: (id: string) => boolean
@@ -40,6 +43,7 @@ export const usePluginStore = create<PluginState>((set, get) => ({
   activePluginId: null,
   sidebarCollapsed: false,
   disabledTools: new Set<string>([]),
+  chatOpen: false,
 
   setPlugins: (plugins) => set({ plugins }),
 
@@ -49,8 +53,10 @@ export const usePluginStore = create<PluginState>((set, get) => ({
 
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
 
+  toggleChat: () => set((s) => ({ chatOpen: !s.chatOpen })),
+  setChatOpen: (open) => set({ chatOpen: open }),
+
   toggleToolEnabled: (id) => {
-    // Upcoming tools cannot be toggled
     if (UPCOMING_TOOLS.has(id)) return
     const next = new Set(get().disabledTools)
     if (next.has(id)) {
@@ -59,10 +65,11 @@ export const usePluginStore = create<PluginState>((set, get) => ({
       next.add(id)
     }
     set({ disabledTools: next })
+    const enabled = !next.has(id)
+    window.api.tray.notifyToolState(id, enabled)
   },
 
   isToolEnabled: (id) => {
-    // Upcoming tools are never enabled
     if (UPCOMING_TOOLS.has(id)) return false
     return !get().disabledTools.has(id)
   },
@@ -72,10 +79,9 @@ export const usePluginStore = create<PluginState>((set, get) => ({
   getToolStatus: (id) => UPCOMING_TOOLS.has(id) ? 'upcoming' : 'stable'
 }))
 
-// Initialize plugin list from built-in registry
 export function initPluginStore(): void {
   const store = usePluginStore.getState()
-  if (store.plugins.length > 0) return // already initialized
+  if (store.plugins.length > 0) return
 
   store.setPlugins(
     BUILTIN_PLUGINS.filter((p) => p.status === 'stable').map((p) => ({

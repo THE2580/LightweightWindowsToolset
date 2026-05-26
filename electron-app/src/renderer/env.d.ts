@@ -21,6 +21,10 @@ interface Window {
       onTrayCapture: (callback: () => void) => (() => void)
       onNavigate: (callback: (path: string) => void) => (() => void)
       onToolToggle: (callback: (toolId: string) => void) => (() => void)
+      notifyToolState: (toolId: string, enabled: boolean) => Promise<void>
+    }
+    hotkey: {
+      onHotkey: (callback: (action: string) => void) => (() => void)
     }
   }
 }
