@@ -1,5 +1,6 @@
-// Backend API client for stamina records
 const DEFAULT_BACKEND_URL = 'http://100.70.198.102:8000'
+const MAX_RETRIES = 3
+const RETRY_BASE_DELAY_MS = 1000
 
 let backendUrl = DEFAULT_BACKEND_URL
 
@@ -25,20 +26,57 @@ export interface StaminaRecord {
   source: string
 }
 
-export async function postStaminaRecord(payload: StaminaRecordPayload): Promise<StaminaRecord> {
-  const response = await fetch(`${backendUrl}/api/stamina/record`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-  if (!response.ok) {
-    throw new Error(`Backend error: ${response.status}`)
+// In-memory cache for offline mode
+const pendingQueue: StaminaRecordPayload[] = []
+
+export function getPendingCount(): number {
+  return pendingQueue.length
+}
+
+export function drainPendingQueue(): StaminaRecordPayload[] {
+  return pendingQueue.splice(0, pendingQueue.length)
+}
+
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  retries = MAX_RETRIES
+): Promise<Response> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url, options)
+      return response
+    } catch (err) {
+      if (attempt === retries) throw err
+      const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1)
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
   }
-  return response.json()
+  throw new Error('Max retries exceeded')
+}
+
+export async function postStaminaRecord(payload: StaminaRecordPayload): Promise<StaminaRecord> {
+  try {
+    const response = await fetchWithRetry(`${backendUrl}/api/stamina/record`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    if (!response.ok) {
+      throw new Error(`Backend error: ${response.status}`)
+    }
+    return response.json()
+  } catch {
+    // Queue locally when backend is unreachable
+    pendingQueue.push(payload)
+    throw new Error('Backend unreachable — record queued locally')
+  }
 }
 
 export async function getTodayRecord(gameName: string): Promise<StaminaRecord | null> {
-  const response = await fetch(`${backendUrl}/api/stamina/today/${encodeURIComponent(gameName)}`)
+  const response = await fetchWithRetry(
+    `${backendUrl}/api/stamina/today/${encodeURIComponent(gameName)}`
+  )
   if (response.status === 204) return null
   if (!response.ok) {
     throw new Error(`Backend error: ${response.status}`)
@@ -47,7 +85,7 @@ export async function getTodayRecord(gameName: string): Promise<StaminaRecord | 
 }
 
 export async function getAllTodayRecords(): Promise<StaminaRecord[]> {
-  const response = await fetch(`${backendUrl}/api/stamina/today`)
+  const response = await fetchWithRetry(`${backendUrl}/api/stamina/today`)
   if (!response.ok) {
     throw new Error(`Backend error: ${response.status}`)
   }

@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, safeStorage } from 'electron'
 import Store from 'electron-store'
 
 const store = new Store({
@@ -13,21 +13,55 @@ const store = new Store({
   }
 })
 
+const ENCRYPTED_KEYS = new Set(['deepseekApiKey'])
+
 export function getStore(): Store {
   return store
 }
 
 export function registerSettingsIpc(): void {
   ipcMain.handle('settings:get', (_event, key: string) => {
-    return store.get(key)
+    const value = store.get(key)
+    if (ENCRYPTED_KEYS.has(key) && typeof value === 'string' && value) {
+      try {
+        const buffer = Buffer.from(value, 'hex')
+        if (safeStorage.isEncryptionAvailable()) {
+          return safeStorage.decryptString(buffer)
+        }
+      } catch {
+        // fall through to return raw value
+      }
+    }
+    return value
   })
 
   ipcMain.handle('settings:set', (_event, key: string, value: unknown) => {
+    if (ENCRYPTED_KEYS.has(key) && typeof value === 'string' && value) {
+      if (safeStorage.isEncryptionAvailable()) {
+        const encrypted = safeStorage.encryptString(value)
+        store.set(key, encrypted.toString('hex'))
+        return
+      }
+    }
     store.set(key, value)
   })
 
   ipcMain.handle('settings:getAll', () => {
-    return store.store
+    const all = { ...store.store }
+    for (const key of ENCRYPTED_KEYS) {
+      const value = all[key]
+      if (typeof value === 'string' && value) {
+        try {
+          const buffer = Buffer.from(value, 'hex')
+          if (safeStorage.isEncryptionAvailable()) {
+            all[key] = safeStorage.decryptString(buffer)
+          }
+        } catch {
+          // keep as-is
+        }
+      }
+    }
+    return all
   })
 
   ipcMain.handle('settings:delete', (_event, key: string) => {
