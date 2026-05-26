@@ -16,7 +16,11 @@ const ICON_MAP: Record<string, LucideIcon> = {
   'settings': Settings
 }
 
-function Sidebar(): React.JSX.Element {
+interface SidebarProps {
+  onToggleChat: () => void
+}
+
+function Sidebar({ onToggleChat }: SidebarProps): React.JSX.Element {
   const navigate = useNavigate()
   const location = useLocation()
   const {
@@ -123,6 +127,7 @@ function Sidebar(): React.JSX.Element {
       {/* Bottom: AI Chat + Settings */}
       <div className="flex flex-col gap-0.5 px-1.5 pb-2">
         <button
+          onClick={onToggleChat}
           className={cn(btnCls(false, true), 'min-w-0')}
           title={sidebarCollapsed ? 'AI 聊天' : undefined}
         >
