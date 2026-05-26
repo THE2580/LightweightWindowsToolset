@@ -8,10 +8,10 @@ import { registerCaptureIpc } from './ipc/capture'
 
 function createWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
-    width: 960,
-    height: 680,
-    minWidth: 800,
-    minHeight: 600,
+    width: 1265,
+    height: 815,
+    minWidth: 1265,
+    minHeight: 815,
     frame: false,
     show: false,
     icon: join(__dirname, '../../resources/tray-icon.png'),

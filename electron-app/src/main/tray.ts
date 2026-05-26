@@ -1,10 +1,9 @@
 import { Tray, Menu, nativeImage, BrowserWindow, app } from 'electron'
 import { join } from 'path'
 
+// Only stable (implemented) tools appear in tray tool management
 const TOOLS = [
   { id: 'stamina-capture', label: '体力捕获' },
-  { id: 'window-pinner', label: '置顶窗口' },
-  { id: 'ai-chat', label: 'AI 聊天' },
 ]
 
 let tray: Tray | null = null
@@ -13,7 +12,7 @@ function buildToolSubmenu(mainWindow: BrowserWindow): Electron.MenuItemConstruct
   return TOOLS.map((tool) => ({
     label: tool.label,
     type: 'checkbox' as const,
-    checked: true, // default; will be overridden by the renderer if needed
+    checked: true,
     click: (): void => {
       mainWindow.webContents.send('tray:toggle-tool', tool.id)
     }
@@ -56,7 +55,6 @@ export function createTray(mainWindow: BrowserWindow): Tray {
         click: (): void => {
           mainWindow.show()
           mainWindow.focus()
-          // Small delay to ensure window is ready before navigating
           setTimeout(() => {
             mainWindow.webContents.send('navigate', '/settings')
           }, 100)

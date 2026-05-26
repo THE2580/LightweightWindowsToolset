@@ -7,7 +7,7 @@ interface ToolCard {
   name: string
   description: string
   icon: React.ComponentType<{ size?: number }>
-  status: 'active' | 'disabled' | 'upcoming'
+  status: 'stable' | 'upcoming'
 }
 
 const TOOLS: ToolCard[] = [
@@ -16,14 +16,14 @@ const TOOLS: ToolCard[] = [
     name: '体力捕获',
     description: '截图识别游戏体力值，自动记录并同步',
     icon: Zap,
-    status: 'active',
+    status: 'stable',
   },
   {
     id: 'window-pinner',
     name: '置顶窗口',
     description: '将任意窗口固定在屏幕最上层',
     icon: Pin,
-    status: 'disabled',
+    status: 'upcoming',
   },
   {
     id: 'future-1',
@@ -41,32 +41,27 @@ const TOOLS: ToolCard[] = [
   },
 ]
 
-const STATUS_LABEL: Record<string, string> = {
-  disabled: '已禁用',
-  upcoming: '即将推出',
-}
-
 function HomePage(): React.JSX.Element {
   const navigate = useNavigate()
   const disabledTools = usePluginStore((s) => s.disabledTools)
   const isToolEnabled = usePluginStore((s) => s.isToolEnabled)
 
-  const getIsClickable = (tool: ToolCard): boolean => {
-    if (tool.status === 'upcoming') return false
-    if (tool.status === 'disabled') return isToolEnabled(tool.id)
-    return true
-  }
-
-  const getStatusLabel = (tool: ToolCard): string | null => {
-    if (tool.status === 'upcoming') return STATUS_LABEL.upcoming
-    if (tool.status === 'disabled' && !isToolEnabled(tool.id)) return STATUS_LABEL.disabled
-    return null
-  }
-
+  // Tool is grayed if: upcoming (never implemented) OR stable but disabled by user
   const isGrayed = (tool: ToolCard): boolean => {
     if (tool.status === 'upcoming') return true
-    if (tool.status === 'disabled' && !isToolEnabled(tool.id)) return true
-    return false
+    // stable tools: grayed only if user has disabled them
+    return !isToolEnabled(tool.id)
+  }
+
+  const isClickable = (tool: ToolCard): boolean => {
+    if (tool.status === 'upcoming') return false
+    return isToolEnabled(tool.id)
+  }
+
+  const getBadge = (tool: ToolCard): string | null => {
+    if (tool.status === 'upcoming') return '即将推出'
+    if (tool.status === 'stable' && !isToolEnabled(tool.id)) return '已禁用'
+    return null
   }
 
   return (
@@ -81,9 +76,9 @@ function HomePage(): React.JSX.Element {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {TOOLS.map((tool) => {
-          const clickable = getIsClickable(tool)
-          const statusLabel = getStatusLabel(tool)
+          const clickable = isClickable(tool)
           const grayed = isGrayed(tool)
+          const badge = getBadge(tool)
 
           return (
             <div
@@ -97,13 +92,12 @@ function HomePage(): React.JSX.Element {
                 }
               `}
             >
-              {/* Status badge */}
-              {statusLabel && (
+              {badge && (
                 <span className="
                   absolute top-3 right-3 px-2 py-0.5 rounded text-[10px] font-medium
                   bg-muted text-muted-foreground
                 ">
-                  {statusLabel}
+                  {badge}
                 </span>
               )}
 
