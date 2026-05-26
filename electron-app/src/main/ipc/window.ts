@@ -6,7 +6,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   })
 
   ipcMain.handle('window:close', () => {
-    mainWindow.hide()
+    mainWindow.close()
   })
 
   ipcMain.handle('window:isMaximized', () => {
