@@ -70,7 +70,7 @@ function Sidebar(): React.JSX.Element {
                 onClick={() => handleToolClick(item)}
                 disabled={!enabled}
                 className={cn(
-                  'flex items-center gap-[5px] flex-1 px-3 py-2.5 rounded-md',
+                  'flex items-center gap-[5px] flex-1 px-3 py-2.5 rounded-md text-sm',
                   active && enabled
                     ? 'bg-primary text-primary-foreground'
                     : 'text-foreground hover:bg-muted',
@@ -80,9 +80,7 @@ function Sidebar(): React.JSX.Element {
                 title={sidebarCollapsed ? item.label : undefined}
               >
                 <item.icon size={18} />
-                {!sidebarCollapsed && (
-                  <span className="truncate flex-1">{item.label}</span>
-                )}
+                {!sidebarCollapsed && <span>{item.label}</span>}
               </button>
 
               {!sidebarCollapsed && item.id !== 'home' && (

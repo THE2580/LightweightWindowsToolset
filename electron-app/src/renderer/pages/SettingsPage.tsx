@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { Eye, EyeOff, Monitor, Sun, Moon, Wrench, Keyboard } from 'lucide-react'
+import { Eye, EyeOff, Monitor, Sun, Moon, Wrench, Keyboard, RotateCcw } from 'lucide-react'
 
 type TabId = 'general' | 'api' | 'hotkey'
 
@@ -15,6 +15,8 @@ const TABS: { id: TabId; label: string; icon: React.ComponentType<{ size?: numbe
   { id: 'api', label: 'API 设置', icon: Wrench },
   { id: 'hotkey', label: '快捷键', icon: Keyboard },
 ]
+
+const DEFAULT_TITLE = '轻量化工具集'
 
 function SettingsPage(): React.JSX.Element {
   const {
@@ -60,6 +62,11 @@ function SettingsPage(): React.JSX.Element {
     await setWindowTitle(trimmed)
   }
 
+  const handleResetTitle = async (): Promise<void> => {
+    setTitleDraft(DEFAULT_TITLE)
+    await setWindowTitle(DEFAULT_TITLE)
+  }
+
   return (
     <div className="max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold mb-8">设置</h1>
@@ -94,10 +101,18 @@ function SettingsPage(): React.JSX.Element {
                 <Input
                   value={titleDraft}
                   onChange={(e) => setTitleDraft(e.target.value)}
-                  placeholder="轻量化工具集"
+                  placeholder={DEFAULT_TITLE}
                   className="max-w-xs"
                 />
                 <Button onClick={handleSaveTitle} size="sm">保存</Button>
+                <Button
+                  onClick={handleResetTitle}
+                  size="sm"
+                  variant="outline"
+                  title="重置为默认标题"
+                >
+                  <RotateCcw size={14} />
+                </Button>
               </div>
             </div>
 
