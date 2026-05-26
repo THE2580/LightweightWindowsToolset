@@ -8,6 +8,12 @@ import { registerCaptureIpc } from './ipc/capture'
 
 let isQuitting = false
 
+// Single instance lock — prevent multiple app instances
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  app.quit()
+}
+
 function createWindow(): BrowserWindow {
   const storedTitle = (getStore().get('windowTitle') as string) || '轻量化工具集'
 
@@ -16,6 +22,9 @@ function createWindow(): BrowserWindow {
     height: 444,
     minWidth: 676,
     minHeight: 444,
+    maxWidth: 676,
+    maxHeight: 444,
+    resizable: false,
     frame: false,
     show: false,
     icon: join(__dirname, '../../resources/tray-icon.png'),
@@ -62,6 +71,16 @@ app.whenReady().then(() => {
 
   app.on('before-quit', () => {
     isQuitting = true
+  })
+
+  // Focus existing instance when second launch attempted
+  app.on('second-instance', () => {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.show()
+      win.focus()
+    }
   })
 
   const mainWindow = createWindow()

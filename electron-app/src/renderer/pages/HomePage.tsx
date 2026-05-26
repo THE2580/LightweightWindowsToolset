@@ -33,15 +33,14 @@ function HomePage(): React.JSX.Element {
 
   return (
     <div>
-      {/* Title: Chinese large on top, English small underneath */}
-      <div className="mb-10">
-        <h1 className="text-3xl font-bold tracking-tight">轻量化工具集</h1>
-        <p className="text-sm text-muted-foreground mt-1 font-medium">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold tracking-tight">轻量化工具集</h1>
+        <p className="text-xs text-muted-foreground mt-0.5 font-medium">
           Lightweight Windows Toolset
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-2 gap-4">
         {BUILTIN_PLUGINS.map((plugin) => {
           const clickable = isClickable(plugin)
           const grayed = isGrayed(plugin)
@@ -62,7 +61,7 @@ function HomePage(): React.JSX.Element {
             >
               {badge && (
                 <span className="
-                  absolute top-3 right-3 px-2 py-0.5 rounded text-[10px] font-medium
+                  absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-medium
                   bg-muted text-muted-foreground
                 ">
                   {badge}
@@ -72,21 +71,21 @@ function HomePage(): React.JSX.Element {
               <button
                 onClick={() => clickable && navigate(`/tool/${plugin.id}`)}
                 disabled={!clickable}
-                className="w-full p-7 text-left disabled:cursor-default"
+                className="w-full p-5 text-left disabled:cursor-default"
               >
-                <div className="flex items-center gap-3 mb-3">
+                <div className="flex items-center gap-2.5 mb-2">
                   <div className={`
-                    p-2.5 rounded-md transition-colors
+                    p-2 rounded-md transition-colors
                     ${grayed
                       ? 'bg-muted text-muted-foreground'
                       : 'bg-primary/10 text-primary'
                     }
                   `}>
-                    <Icon size={22} />
+                    <Icon size={18} />
                   </div>
-                  <span className="font-semibold text-base">{plugin.name}</span>
+                  <span className="font-semibold text-sm">{plugin.name}</span>
                 </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">
+                <p className="text-xs text-muted-foreground leading-relaxed">
                   {plugin.description}
                 </p>
               </button>

@@ -7,13 +7,12 @@ import { BUILTIN_PLUGINS } from '@/lib/plugin-registry'
 import { cn } from '@/lib/utils'
 import type { LucideIcon } from 'lucide-react'
 
-// Map icon string names to Lucide components
 const ICON_MAP: Record<string, LucideIcon> = {
   'home': Home,
   'zap': Zap,
   'pin': Pin,
   'message-square': MessageSquare,
-  'clock': Home, // fallback
+  'clock': Home,
   'settings': Settings
 }
 
@@ -29,7 +28,6 @@ function getNavItems(): NavItem[] {
     { id: 'home', label: '首页', icon: Home, path: '/' }
   ]
 
-  // Add all built-in plugins
   for (const plugin of BUILTIN_PLUGINS) {
     items.push({
       id: plugin.id,
@@ -71,20 +69,20 @@ function Sidebar(): React.JSX.Element {
     <div
       className={cn(
         'flex flex-col bg-secondary border-r border-border flex-shrink-0 transition-all duration-200',
-        sidebarCollapsed ? 'w-14' : 'w-[220px]'
+        sidebarCollapsed ? 'w-12' : 'w-[180px]'
       )}
     >
-      <div className="flex justify-end p-2">
+      <div className="flex justify-end p-1.5">
         <button
           onClick={toggleSidebar}
-          className="p-1.5 rounded-md hover:bg-muted transition-colors"
+          className="p-1 rounded-md hover:bg-muted transition-colors"
           aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          {sidebarCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
+          {sidebarCollapsed ? <PanelLeft size={14} /> : <PanelLeftClose size={14} />}
         </button>
       </div>
 
-      <nav className="flex-1 flex flex-col gap-1 px-2">
+      <nav className="flex-1 flex flex-col gap-0.5 px-1.5">
         {navItems.map((item) => {
           const upcoming = isToolUpcoming(item.id)
           const enabled = item.id === 'home' || isToolEnabled(item.id)
@@ -94,7 +92,7 @@ function Sidebar(): React.JSX.Element {
             <div
               key={item.id}
               className={cn(
-                'flex items-center rounded-md text-sm transition-all duration-150',
+                'flex items-center rounded-md text-xs transition-all duration-150',
                 sidebarCollapsed && 'justify-center',
                 !enabled && 'opacity-40'
               )}
@@ -103,22 +101,22 @@ function Sidebar(): React.JSX.Element {
                 onClick={() => handleToolClick(item)}
                 disabled={!enabled}
                 className={cn(
-                  'flex items-center gap-[5px] flex-1 px-3 py-2.5 rounded-md text-sm',
+                  'flex items-center gap-[5px] flex-1 px-2.5 py-2 rounded-md text-xs',
                   active && enabled
                     ? 'bg-primary text-primary-foreground'
                     : 'text-foreground hover:bg-muted',
                   !enabled && 'cursor-not-allowed',
-                  sidebarCollapsed && 'justify-center px-2'
+                  sidebarCollapsed && 'justify-center px-1.5'
                 )}
                 title={sidebarCollapsed ? item.label : undefined}
               >
-                <item.icon size={18} />
+                <item.icon size={16} />
                 {!sidebarCollapsed && <span>{item.label}</span>}
               </button>
 
               {!sidebarCollapsed && item.id !== 'home' && (
                 upcoming ? (
-                  <span className="text-[10px] text-muted-foreground/60 px-2 flex-shrink-0">
+                  <span className="text-[9px] text-muted-foreground/60 px-1.5 flex-shrink-0">
                     待开发
                   </span>
                 ) : (
@@ -128,7 +126,7 @@ function Sidebar(): React.JSX.Element {
                       toggleToolEnabled(item.id)
                     }}
                     className={cn(
-                      'w-8 h-5 rounded-full transition-colors duration-200 flex-shrink-0 mx-1',
+                      'w-7 h-4 rounded-full transition-colors duration-200 flex-shrink-0 mx-0.5',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       enabled
                         ? 'bg-primary'
@@ -139,8 +137,8 @@ function Sidebar(): React.JSX.Element {
                   >
                     <div
                       className={cn(
-                        'w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200',
-                        enabled ? 'translate-x-3.5' : 'translate-x-0.5'
+                        'w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-200',
+                        enabled ? 'translate-x-3' : 'translate-x-0.5'
                       )}
                     />
                   </button>
@@ -151,15 +149,15 @@ function Sidebar(): React.JSX.Element {
         })}
       </nav>
 
-      <div className="flex flex-col gap-1 px-2 pb-3">
+      <div className="flex flex-col gap-0.5 px-1.5 pb-2">
         <button
           className={cn(
-            'flex items-center gap-[5px] px-3 py-2.5 rounded-md text-sm transition-all duration-150 hover:bg-muted',
-            sidebarCollapsed && 'justify-center px-2'
+            'flex items-center gap-[5px] px-2.5 py-2 rounded-md text-xs transition-all duration-150 hover:bg-muted',
+            sidebarCollapsed && 'justify-center px-1.5'
           )}
           title={sidebarCollapsed ? 'AI 聊天' : undefined}
         >
-          <MessageSquare size={18} />
+          <MessageSquare size={16} />
           {!sidebarCollapsed && <span>AI 聊天</span>}
         </button>
 
@@ -169,15 +167,15 @@ function Sidebar(): React.JSX.Element {
             navigate('/settings')
           }}
           className={cn(
-            'flex items-center gap-[5px] px-3 py-2.5 rounded-md text-sm transition-all duration-150',
+            'flex items-center gap-[5px] px-2.5 py-2 rounded-md text-xs transition-all duration-150',
             location.pathname === '/settings'
               ? 'bg-primary text-primary-foreground'
               : 'text-foreground hover:bg-muted',
-            sidebarCollapsed && 'justify-center px-2'
+            sidebarCollapsed && 'justify-center px-1.5'
           )}
           title={sidebarCollapsed ? '设置' : undefined}
         >
-          <Settings size={18} />
+          <Settings size={16} />
           {!sidebarCollapsed && <span>设置</span>}
         </button>
       </div>

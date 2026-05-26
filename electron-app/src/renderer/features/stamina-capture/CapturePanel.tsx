@@ -28,7 +28,6 @@ function CapturePanel(): React.JSX.Element {
     if (!gameConfig) return
 
     try {
-      // Step 1: Screenshot
       setCaptureState('capturing')
       const result = await window.api.capture.trigger()
 
@@ -38,7 +37,6 @@ function CapturePanel(): React.JSX.Element {
 
       setOcrText(result.ocrText)
 
-      // Step 2: AI parse (if we have OCR text)
       setCaptureState('parsing')
       const aiResult = await parseStaminaViaAI(
         result.ocrText || 'no text recognized',
@@ -53,11 +51,9 @@ function CapturePanel(): React.JSX.Element {
         })
       }
 
-      // Step 3: Post to backend (if stamina was parsed)
       if (aiResult.remaining_stamina !== null && aiResult.max_stamina !== null) {
         setCaptureState('posting')
 
-        // Sync backend URL from settings
         const backendUrl = await window.api.settings.get('backendUrl')
         if (backendUrl && typeof backendUrl === 'string') {
           setBackendUrl(backendUrl)
@@ -87,27 +83,27 @@ function CapturePanel(): React.JSX.Element {
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card shadow-sm p-8">
-      <h3 className="text-sm font-semibold mb-5">捕获控制</h3>
-      <p className="text-sm text-muted-foreground mb-6">
+    <div className="rounded-lg border border-border bg-card shadow-sm p-5">
+      <h3 className="text-sm font-semibold mb-3">捕获控制</h3>
+      <p className="text-xs text-muted-foreground mb-4">
         按快捷键或点击按钮截图当前游戏窗口，自动识别体力值
       </p>
       <Button
         onClick={handleCapture}
         disabled={isLoading}
-        size="lg"
+        size="sm"
         className="w-full"
         variant={captureState === 'error' ? 'destructive' : 'default'}
       >
         {isLoading ? (
-          <Loader2 size={18} className="animate-spin" />
+          <Loader2 size={16} className="animate-spin" />
         ) : (
-          <Camera size={18} />
+          <Camera size={16} />
         )}
         {STATE_LABELS[captureState]}
       </Button>
       {captureState === 'error' && (
-        <p className="text-xs text-red-500 mt-3">捕获过程中出现错误，请检查游戏窗口是否打开</p>
+        <p className="text-[11px] text-red-500 mt-2">捕获过程中出现错误，请检查游戏窗口是否打开</p>
       )}
     </div>
   )
