@@ -9,7 +9,10 @@ const store = new Store({
     backendUrl: 'http://100.70.198.102:8000',
     deepseekModel: 'deepseek-v4-flash',
     windowTitle: '轻量化工具集',
-    closeBehavior: 'quit'
+    closeBehavior: 'quit',
+    captureHotkey: 'CommandOrControl+Shift+D',
+    chatHotkey: 'CommandOrControl+Shift+A',
+    chatClickOutsideToClose: false,
   }
 })
 

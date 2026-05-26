@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, shell, globalShortcut, ipcMain } from 'electron'
 import { registerHotkeys, unregisterAllHotkeys } from './utils/hotkey'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -13,6 +13,31 @@ let isQuitting = false
 const gotTheLock = app.requestSingleInstanceLock()
 if (!gotTheLock) {
   app.quit()
+}
+
+// Track current hotkey accelerators for dynamic updates
+const hotkeyActions = new Map<string, { accelerator: string; pluginId: string }>()
+
+function registerDynamicHotkey(action: string, accelerator: string, mainWindow: BrowserWindow): void {
+  try {
+    // Unregister old accelerator if exists
+    const existing = hotkeyActions.get(action)
+    if (existing) {
+      globalShortcut.unregister(existing.accelerator)
+    }
+
+    const registered = globalShortcut.register(accelerator, () => {
+      mainWindow.webContents.send(`hotkey:${action}`, action)
+    })
+
+    if (registered) {
+      hotkeyActions.set(action, { accelerator, pluginId: action })
+    } else {
+      console.warn(`Failed to register hotkey: ${accelerator}`)
+    }
+  } catch (e) {
+    console.error(`Error registering hotkey ${accelerator}:`, e)
+  }
 }
 
 function createWindow(): BrowserWindow {
@@ -55,8 +80,6 @@ function createWindow(): BrowserWindow {
       event.preventDefault()
       mainWindow.hide()
     } else {
-      // 'quit' mode: prevent default close and trigger standard app.quit() sequence
-      // isQuitting flag ensures the re-entrant close event (from quit sequence) passes through
       event.preventDefault()
       isQuitting = true
       destroyTray()
@@ -98,11 +121,16 @@ app.whenReady().then(() => {
   const mainWindow = createWindow()
   createTray(mainWindow)
 
-  // Register global hotkeys
-  registerHotkeys(mainWindow, [
-    { accelerator: 'CommandOrControl+Shift+D', action: 'stamina-capture', pluginId: 'stamina-capture' },
-    { accelerator: 'CommandOrControl+Shift+A', action: 'ai-chat', pluginId: 'ai-chat' }
-  ])
+  // Register default hotkeys (also stored for dynamic updates)
+  const captureHk = (getStore().get('captureHotkey') as string) || 'CommandOrControl+Shift+D'
+  const chatHk = (getStore().get('chatHotkey') as string) || 'CommandOrControl+Shift+A'
+  registerDynamicHotkey('stamina-capture', captureHk, mainWindow)
+  registerDynamicHotkey('ai-chat', chatHk, mainWindow)
+
+  // IPC handler for dynamic hotkey updates from renderer
+  ipcMain.handle('hotkey:update', (_event, action: string, accelerator: string) => {
+    registerDynamicHotkey(action, accelerator, mainWindow)
+  })
 
   registerIpcHandlers(mainWindow)
   registerSettingsIpc()

@@ -45,7 +45,9 @@ const api = {
         ipcRenderer.removeAllListeners('hotkey:stamina-capture')
         ipcRenderer.removeAllListeners('hotkey:ai-chat')
       }
-    }
+    },
+    updateHotkey: (action: string, accelerator: string): Promise<void> =>
+      ipcRenderer.invoke('hotkey:update', action, accelerator)
   }
 }
 
