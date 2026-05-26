@@ -71,7 +71,7 @@ function SettingsPage(): React.JSX.Element {
     <div className="max-w-xl">
       <h1 className="text-xl font-bold mb-4">设置</h1>
 
-      <div className="flex border-b border-border mb-5 sticky -top-5 z-10 bg-background -mx-5 px-5 pt-3 pb-3">
+      <div className="flex border-b border-border mb-5 sticky -top-5 z-10 bg-background -mx-5 px-5 pt-2 pb-2">
         {TABS.map((tab) => (
           <button
             key={tab.id}
