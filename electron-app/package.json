@@ -8,8 +8,8 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "package": "npm run build && electron-builder --win",
-    "package:portable": "npm run build && electron-builder --win --dir"
+    "package": "npm run build && electron-builder --win --dir",
+    "package:nsis": "npm run build && electron-builder --win"
   },
   "build": {
     "appId": "com.lightweight.toolset",
