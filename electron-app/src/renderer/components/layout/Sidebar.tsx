@@ -41,7 +41,6 @@ function Sidebar(): React.JSX.Element {
         sidebarCollapsed ? 'w-14' : 'w-[220px]'
       )}
     >
-      {/* Collapse toggle */}
       <div className="flex justify-end p-2">
         <button
           onClick={toggleSidebar}
@@ -52,7 +51,6 @@ function Sidebar(): React.JSX.Element {
         </button>
       </div>
 
-      {/* Nav items */}
       <nav className="flex-1 flex flex-col gap-1 px-2">
         {NAV_ITEMS.map((item) => {
           const upcoming = isToolUpcoming(item.id)
@@ -68,12 +66,11 @@ function Sidebar(): React.JSX.Element {
                 !enabled && 'opacity-40'
               )}
             >
-              {/* Main button area */}
               <button
                 onClick={() => handleToolClick(item)}
                 disabled={!enabled}
                 className={cn(
-                  'flex items-center gap-3 flex-1 px-3 py-2.5 rounded-md',
+                  'flex items-center gap-[5px] flex-1 px-3 py-2.5 rounded-md',
                   active && enabled
                     ? 'bg-primary text-primary-foreground'
                     : 'text-foreground hover:bg-muted',
@@ -88,7 +85,6 @@ function Sidebar(): React.JSX.Element {
                 )}
               </button>
 
-              {/* Toggle or upcoming badge */}
               {!sidebarCollapsed && item.id !== 'home' && (
                 upcoming ? (
                   <span className="text-[10px] text-muted-foreground/60 px-2 flex-shrink-0">
@@ -124,11 +120,10 @@ function Sidebar(): React.JSX.Element {
         })}
       </nav>
 
-      {/* Bottom actions */}
       <div className="flex flex-col gap-1 px-2 pb-3">
         <button
           className={cn(
-            'flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-all duration-150 hover:bg-muted',
+            'flex items-center gap-[5px] px-3 py-2.5 rounded-md text-sm transition-all duration-150 hover:bg-muted',
             sidebarCollapsed && 'justify-center px-2'
           )}
           title={sidebarCollapsed ? 'AI 聊天' : undefined}
@@ -143,7 +138,7 @@ function Sidebar(): React.JSX.Element {
             navigate('/settings')
           }}
           className={cn(
-            'flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-all duration-150',
+            'flex items-center gap-[5px] px-3 py-2.5 rounded-md text-sm transition-all duration-150',
             location.pathname === '/settings'
               ? 'bg-primary text-primary-foreground'
               : 'text-foreground hover:bg-muted',

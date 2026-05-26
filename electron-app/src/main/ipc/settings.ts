@@ -7,9 +7,14 @@ const store = new Store({
     autoStart: false,
     aiChatPosition: 'right',
     backendUrl: 'http://100.70.198.102:8000',
-    deepseekModel: 'deepseek-v4-flash'
+    deepseekModel: 'deepseek-v4-flash',
+    windowTitle: '轻量化工具集'
   }
 })
+
+export function getStore(): Store {
+  return store
+}
 
 export function registerSettingsIpc(): void {
   ipcMain.handle('settings:get', (_event, key: string) => {

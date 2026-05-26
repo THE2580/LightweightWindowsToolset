@@ -7,6 +7,7 @@ interface Window {
       close: () => Promise<void>
       isMaximized: () => Promise<boolean>
       toggleMaximize: () => Promise<void>
+      setTitle: (title: string) => Promise<void>
     }
     settings: {
       get: (key: string) => Promise<unknown>

@@ -9,6 +9,7 @@ interface SettingsState {
   aiChatPosition: AiChatPosition
   backendUrl: string
   deepseekModel: string
+  windowTitle: string
   isLoaded: boolean
 
   load: () => Promise<void>
@@ -17,6 +18,7 @@ interface SettingsState {
   setAiChatPosition: (pos: AiChatPosition) => Promise<void>
   setBackendUrl: (url: string) => Promise<void>
   setDeepseekModel: (model: string) => Promise<void>
+  setWindowTitle: (title: string) => Promise<void>
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -25,6 +27,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   aiChatPosition: 'right',
   backendUrl: 'http://100.70.198.102:8000',
   deepseekModel: 'deepseek-v4-flash',
+  windowTitle: '轻量化工具集',
   isLoaded: false,
 
   load: async () => {
@@ -37,6 +40,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         aiChatPosition: (all.aiChatPosition as AiChatPosition) || 'right',
         backendUrl: (all.backendUrl as string) || 'http://100.70.198.102:8000',
         deepseekModel: (all.deepseekModel as string) || 'deepseek-v4-flash',
+        windowTitle: (all.windowTitle as string) || '轻量化工具集',
         isLoaded: true
       })
     } catch {
@@ -67,5 +71,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setDeepseekModel: async (model) => {
     await window.api.settings.set('deepseekModel', model)
     set({ deepseekModel: model })
+  },
+
+  setWindowTitle: async (title) => {
+    await window.api.settings.set('windowTitle', title)
+    await window.api.window.setTitle(title)
+    set({ windowTitle: title })
   }
 }))

@@ -20,4 +20,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       mainWindow.maximize()
     }
   })
+
+  ipcMain.handle('window:setTitle', (_event, title: string) => {
+    mainWindow.setTitle(title)
+  })
 }

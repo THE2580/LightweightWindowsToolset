@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { Eye, EyeOff, Monitor, Sun, Moon, Wrench, Keyboard, Globe } from 'lucide-react'
+import { Eye, EyeOff, Monitor, Sun, Moon, Wrench, Keyboard } from 'lucide-react'
 
 type TabId = 'general' | 'api' | 'hotkey'
 
@@ -18,8 +18,8 @@ const TABS: { id: TabId; label: string; icon: React.ComponentType<{ size?: numbe
 
 function SettingsPage(): React.JSX.Element {
   const {
-    theme, autoStart, aiChatPosition, backendUrl, deepseekModel,
-    setTheme, setAutoStart, setAiChatPosition, setBackendUrl, setDeepseekModel,
+    theme, autoStart, aiChatPosition, backendUrl, deepseekModel, windowTitle,
+    setTheme, setAutoStart, setAiChatPosition, setBackendUrl, setDeepseekModel, setWindowTitle,
     load
   } = useSettingsStore()
 
@@ -27,6 +27,7 @@ function SettingsPage(): React.JSX.Element {
   const [apiKeyInput, setApiKeyInput] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [activeTab, setActiveTab] = useState<TabId>('general')
+  const [titleDraft, setTitleDraft] = useState(windowTitle)
 
   useEffect(() => {
     load()
@@ -41,16 +42,28 @@ function SettingsPage(): React.JSX.Element {
     if (apiKey) setApiKeyInput(apiKey)
   }, [apiKey])
 
+  useEffect(() => {
+    setTitleDraft(windowTitle)
+  }, [windowTitle])
+
   const handleSaveApiKey = async (): Promise<void> => {
     useDeepseekStore.getState().setApiKey(apiKeyInput)
     await window.api.settings.set('deepseekApiKey', apiKeyInput)
+  }
+
+  const handleSaveTitle = async (): Promise<void> => {
+    const trimmed = titleDraft.trim()
+    if (!trimmed) {
+      setTitleDraft(windowTitle)
+      return
+    }
+    await setWindowTitle(trimmed)
   }
 
   return (
     <div className="max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold mb-8">设置</h1>
 
-      {/* Tab Navigation */}
       <div className="flex border-b border-border mb-8">
         {TABS.map((tab) => (
           <button
@@ -70,10 +83,24 @@ function SettingsPage(): React.JSX.Element {
         ))}
       </div>
 
-      {/* Tab Content */}
       <div className="min-h-[400px]">
         {activeTab === 'general' && (
           <div className="space-y-6">
+            {/* Window Title */}
+            <div className="py-4 border-b border-border/60">
+              <Label className="text-base">主窗口标题</Label>
+              <p className="text-xs text-muted-foreground mt-0.5 mb-3">显示在窗口标题栏的文字</p>
+              <div className="flex gap-2">
+                <Input
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  placeholder="轻量化工具集"
+                  className="max-w-xs"
+                />
+                <Button onClick={handleSaveTitle} size="sm">保存</Button>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between py-4 border-b border-border/60">
               <div>
                 <Label className="text-base">开机自启</Label>

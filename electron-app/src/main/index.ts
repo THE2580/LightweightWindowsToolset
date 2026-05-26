@@ -3,19 +3,21 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { createTray } from './tray'
 import { registerIpcHandlers } from './ipc/window'
-import { registerSettingsIpc } from './ipc/settings'
+import { registerSettingsIpc, getStore } from './ipc/settings'
 import { registerCaptureIpc } from './ipc/capture'
 
 function createWindow(): BrowserWindow {
+  const storedTitle = (getStore().get('windowTitle') as string) || '轻量化工具集'
+
   const mainWindow = new BrowserWindow({
-    width: 1265,
-    height: 815,
-    minWidth: 1265,
-    minHeight: 815,
+    width: 960,
+    height: 680,
+    minWidth: 800,
+    minHeight: 600,
     frame: false,
     show: false,
     icon: join(__dirname, '../../resources/tray-icon.png'),
-    title: '轻量化工具集',
+    title: storedTitle,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -33,7 +35,6 @@ function createWindow(): BrowserWindow {
     return { action: 'deny' }
   })
 
-  // Close to tray, not quit
   mainWindow.on('close', (event) => {
     event.preventDefault()
     mainWindow.hide()

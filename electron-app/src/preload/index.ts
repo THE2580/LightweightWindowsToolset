@@ -5,7 +5,8 @@ const api = {
     minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
     close: (): Promise<void> => ipcRenderer.invoke('window:close'),
     isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:isMaximized'),
-    toggleMaximize: (): Promise<void> => ipcRenderer.invoke('window:toggleMaximize')
+    toggleMaximize: (): Promise<void> => ipcRenderer.invoke('window:toggleMaximize'),
+    setTitle: (title: string): Promise<void> => ipcRenderer.invoke('window:setTitle', title)
   },
   settings: {
     get: (key: string): Promise<unknown> => ipcRenderer.invoke('settings:get', key),
