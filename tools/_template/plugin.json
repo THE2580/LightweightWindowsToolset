@@ -1,0 +1,1 @@
+{ "id": "_template", "name": "模板工具", "version": "1.0.0", "description": "新工具模板", "icon": "box", "entry": "./index.tsx", "settings": [], "permissions": [] }

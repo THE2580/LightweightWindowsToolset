@@ -1,0 +1,1 @@
+{ "id": "ai-chat", "name": "AI 聊天", "version": "1.0.0", "description": "通用 AI 对话助手", "icon": "message-square", "entry": "./ChatSidebar.tsx", "settings": [ { "key": "chatHotkey", "label": "聊天快捷键", "type": "hotkey", "default": "Ctrl+Shift+A" } ], "permissions": ["http-api"], "minWindow": { "width": 360, "height": 400 } }

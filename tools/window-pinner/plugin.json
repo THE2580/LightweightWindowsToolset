@@ -1,0 +1,1 @@
+{ "id": "window-pinner", "name": "置顶焦点窗口", "version": "1.0.0", "description": "将任意窗口固定在屏幕最上层", "icon": "pin", "entry": "./PinnerPage.tsx", "settings": [], "permissions": ["window-management"], "minWindow": { "width": 800, "height": 600 } }
