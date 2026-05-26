@@ -5,7 +5,6 @@ const store = new Store({
   defaults: {
     theme: 'system',
     autoStart: false,
-    aiChatPosition: 'right',
     backendUrl: 'http://100.70.198.102:8000',
     deepseekModel: 'deepseek-v4-flash',
     windowTitle: '轻量化工具集',
@@ -13,6 +12,12 @@ const store = new Store({
     captureHotkey: 'CommandOrControl+Shift+D',
     chatHotkey: 'CommandOrControl+Shift+A',
     chatClickOutsideToClose: false,
+    chatAutoExpand: false,
+    chatExpandZoneVisible: false,
+    chatExpandZoneWidth: 20,
+    chatExpandZoneHeight: 100,
+    captureHotkeyEnabled: true,
+    chatHotkeyEnabled: true,
   }
 })
 
@@ -31,9 +36,7 @@ export function registerSettingsIpc(): void {
         if (safeStorage.isEncryptionAvailable()) {
           return safeStorage.decryptString(buffer)
         }
-      } catch {
-        // fall through to return raw value
-      }
+      } catch { /* fall through */ }
     }
     return value
   })
@@ -59,9 +62,7 @@ export function registerSettingsIpc(): void {
           if (safeStorage.isEncryptionAvailable()) {
             all[key] = safeStorage.decryptString(buffer)
           }
-        } catch {
-          // keep as-is
-        }
+        } catch { /* keep as-is */ }
       }
     }
     return all

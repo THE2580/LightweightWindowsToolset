@@ -26,6 +26,10 @@ interface Window {
     hotkey: {
       onHotkey: (callback: (action: string) => void) => (() => void)
       updateHotkey: (action: string, accelerator: string) => Promise<void>
+      setHotkeyEnabled: (action: string, enabled: boolean) => Promise<void>
+      disableAllHotkeys: () => Promise<void>
+      enableAllHotkeys: () => Promise<void>
+      checkConflict: (accelerator: string, excludeAction: string) => Promise<string | null>
     }
   }
 }

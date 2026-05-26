@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import {
   Eye, EyeOff, Monitor, Sun, Moon, Wrench, Keyboard, RotateCcw,
-  Plus, AlertTriangle
+  Plus, Minus, AlertTriangle
 } from 'lucide-react'
 
 type TabId = 'general' | 'api' | 'hotkey'
@@ -33,11 +33,12 @@ function keysToAccelerator(keys: string[]): string {
 function SettingsPage(): React.JSX.Element {
   const {
     theme, autoStart, chatClickOutsideToClose, chatAutoExpand,
-    chatExpandZoneWidth, chatExpandZoneHeight,
+    chatExpandZoneVisible, chatExpandZoneWidth, chatExpandZoneHeight,
     backendUrl, deepseekModel, windowTitle, closeBehavior,
     captureHotkey, chatHotkey, captureHotkeyEnabled, chatHotkeyEnabled,
     setTheme, setAutoStart, setChatClickOutsideToClose, setChatAutoExpand,
-    setChatExpandZoneWidth, setChatExpandZoneHeight, setChatExpandZonePreview,
+    setChatExpandZoneVisible, setChatExpandZoneWidth, setChatExpandZoneHeight,
+    setChatExpandZonePreview,
     setBackendUrl, setDeepseekModel, setWindowTitle, setCloseBehavior,
     setCaptureHotkey, setChatHotkey, setCaptureHotkeyEnabled, setChatHotkeyEnabled,
     load
@@ -48,13 +49,11 @@ function SettingsPage(): React.JSX.Element {
   const [showKey, setShowKey] = useState(false)
   const [activeTab, setActiveTab] = useState<TabId>('general')
   const [titleDraft, setTitleDraft] = useState(windowTitle)
-
   const [recordingCapture, setRecordingCapture] = useState(false)
   const [recordingChat, setRecordingChat] = useState(false)
   const [captureKeys, setCaptureKeys] = useState<string[]>([])
   const [chatKeys, setChatKeys] = useState<string[]>([])
   const [conflictMsg, setConflictMsg] = useState<string | null>(null)
-
   const [zoneWDraft, setZoneWDraft] = useState(chatExpandZoneWidth)
   const [zoneHDraft, setZoneHDraft] = useState(chatExpandZoneHeight)
 
@@ -67,248 +66,109 @@ function SettingsPage(): React.JSX.Element {
   useEffect(() => { if (chatHotkey) setChatKeys(parseAccelerator(chatHotkey)) }, [chatHotkey])
   useEffect(() => { if (conflictMsg) { const t = setTimeout(() => setConflictMsg(null), 3000); return () => clearTimeout(t) } }, [conflictMsg])
 
-  const handleSaveApiKey = async () => {
-    useDeepseekStore.getState().setApiKey(apiKeyInput)
-    await window.api.settings.set('deepseekApiKey', apiKeyInput)
-  }
-
-  const handleSaveTitle = async () => {
-    const trimmed = titleDraft.trim()
-    if (!trimmed) { setTitleDraft(windowTitle); return }
-    await setWindowTitle(trimmed)
-  }
-
+  const handleSaveApiKey = async () => { useDeepseekStore.getState().setApiKey(apiKeyInput); await window.api.settings.set('deepseekApiKey', apiKeyInput) }
+  const handleSaveTitle = async () => { const t = titleDraft.trim(); if (!t) { setTitleDraft(windowTitle); return }; await setWindowTitle(t) }
   const handleResetTitle = async () => { setTitleDraft(DEFAULT_TITLE); await setWindowTitle(DEFAULT_TITLE) }
 
   const startRecording = useCallback(async (which: 'capture' | 'chat') => {
-    await window.api.hotkey.disableAllHotkeys()
+    try { await window.api.hotkey.disableAllHotkeys() } catch { /* ok */ }
     if (which === 'capture') { setRecordingCapture(true); setRecordingChat(false); setCaptureKeys([]) }
     else { setRecordingChat(true); setRecordingCapture(false); setChatKeys([]) }
   }, [])
 
-  const getIncompleteKeys = (keys: string[], eMod: boolean, eShift: boolean, eAlt: boolean): string[] => {
-    const result = [...keys]
-    if (eMod && !result.includes('CommandOrControl')) result.push('CommandOrControl')
-    if (eShift && !result.includes('Shift')) result.push('Shift')
-    if (eAlt && !result.includes('Alt')) result.push('Alt')
-    return result
-  }
+  const removeLastKey = useCallback((which: 'capture' | 'chat') => {
+    if (which === 'capture') setCaptureKeys((prev) => prev.slice(0, -1))
+    else setChatKeys((prev) => prev.slice(0, -1))
+  }, [])
 
   const handleRecordKey = useCallback(async (e: React.KeyboardEvent, which: 'capture' | 'chat') => {
     e.preventDefault(); e.stopPropagation()
     const key = e.key
     if (['Control', 'Shift', 'Alt', 'Meta'].includes(key)) return
-    const currentKeys = which === 'capture' ? [...captureKeys] : [...chatKeys]
-    const keys = getIncompleteKeys(currentKeys, e.ctrlKey || e.metaKey, e.shiftKey, e.altKey)
-    const upperKey = key.length === 1 ? key.toUpperCase() : key
-    if (!keys.includes(upperKey)) keys.push(upperKey)
-    if (which === 'capture') setCaptureKeys(keys)
-    else setChatKeys(keys)
+    const prev = which === 'capture' ? [...captureKeys] : [...chatKeys]
+    const keys = [...prev]
+    if ((e.ctrlKey || e.metaKey) && !keys.includes('CommandOrControl')) keys.push('CommandOrControl')
+    if (e.shiftKey && !keys.includes('Shift')) keys.push('Shift')
+    if (e.altKey && !keys.includes('Alt')) keys.push('Alt')
+    const uk = key.length === 1 ? key.toUpperCase() : key
+    if (!keys.includes(uk)) keys.push(uk)
+    if (which === 'capture') setCaptureKeys(keys); else setChatKeys(keys)
   }, [captureKeys, chatKeys])
 
   const confirmRecording = useCallback(async (which: 'capture' | 'chat') => {
     const keys = which === 'capture' ? captureKeys : chatKeys
     if (keys.length === 0) return
-    const accelerator = keysToAccelerator(keys)
-    const excludeAction = which === 'capture' ? 'ai-chat' : 'stamina-capture'
-    const conflictAction = await window.api.hotkey.checkConflict(accelerator, excludeAction)
-    if (conflictAction) {
-      setConflictMsg('当前快捷键与"' + (conflictAction === 'stamina-capture' ? '体力捕获' : 'AI 聊天') + '"冲突，快捷键无法操作')
-      await window.api.hotkey.enableAllHotkeys()
+    const acc = keysToAccelerator(keys)
+    const exclude = which === 'capture' ? 'ai-chat' : 'stamina-capture'
+    let ca: string | null = null
+    try { ca = await window.api.hotkey.checkConflict(acc, exclude) } catch { /* ok */ }
+    if (ca) {
+      setConflictMsg('当前快捷键与"' + (ca === 'stamina-capture' ? '体力捕获' : 'AI 聊天') + '"冲突，快捷键无法操作')
+      try { await window.api.hotkey.enableAllHotkeys() } catch { /* ok */ }
       if (which === 'capture') setRecordingCapture(false); else setRecordingChat(false)
       return
     }
-    if (which === 'capture') { await setCaptureHotkey(accelerator); setRecordingCapture(false) }
-    else { await setChatHotkey(accelerator); setRecordingChat(false) }
-    await window.api.hotkey.enableAllHotkeys()
+    if (which === 'capture') { await setCaptureHotkey(acc); setRecordingCapture(false) }
+    else { await setChatHotkey(acc); setRecordingChat(false) }
+    try { await window.api.hotkey.enableAllHotkeys() } catch { /* ok */ }
   }, [captureKeys, chatKeys, setCaptureHotkey, setChatHotkey])
 
   const cancelRecording = useCallback(async (which: 'capture' | 'chat') => {
     if (which === 'capture') { setRecordingCapture(false); setCaptureKeys(parseAccelerator(captureHotkey)) }
     else { setRecordingChat(false); setChatKeys(parseAccelerator(chatHotkey)) }
-    await window.api.hotkey.enableAllHotkeys()
+    try { await window.api.hotkey.enableAllHotkeys() } catch { /* ok */ }
   }, [captureHotkey, chatHotkey])
 
-  const getKeyConflictClass = (key: string, otherKeys: string[]): string => {
-    if (otherKeys.includes(key)) return 'bg-yellow-500/20 border-yellow-500'
-    return ''
-  }
-
+  const getKeyConflictClass = (key: string, otherKeys: string[]): string => otherKeys.includes(key) ? 'bg-yellow-500/20 border-yellow-500' : ''
   const getRecordingConflictClass = (keys: string[], otherAcc: string): string => {
     if (keys.length === 0) return ''
-    if (keysToAccelerator(keys) === otherAcc) return 'ring-2 ring-red-500 rounded'
-    return ''
+    return keysToAccelerator(keys) === otherAcc ? 'ring-2 ring-red-500 rounded' : ''
   }
-
   const getOtherConflictClass = (recordingKeys: string[], otherAcc: string): string => {
     if (recordingKeys.length === 0) return ''
     const acc = keysToAccelerator(recordingKeys)
     if (acc === otherAcc) return 'border-red-500 bg-red-500/10'
     const otherParts = parseAccelerator(otherAcc)
-    if (recordingKeys.some((k) => otherParts.includes(k))) return 'border-yellow-500 bg-yellow-500/10'
-    return ''
+    return recordingKeys.some((k) => otherParts.includes(k)) ? 'border-yellow-500 bg-yellow-500/10' : ''
   }
 
-  const handleZoneWChange = (w: number) => { setZoneWDraft(w); setChatExpandZonePreview({ w, h: zoneHDraft }) }
-  const handleZoneHChange = (h: number) => { setZoneHDraft(h); setChatExpandZonePreview({ w: zoneWDraft, h }) }
+  const handleZoneWChange = (w: number) => { setZoneWDraft(w); if (!chatExpandZoneVisible) setChatExpandZonePreview({ w, h: zoneHDraft }) }
+  const handleZoneHChange = (h: number) => { setZoneHDraft(h); if (!chatExpandZoneVisible) setChatExpandZonePreview({ w: zoneWDraft, h }) }
   const handleZoneWCommit = async () => { await setChatExpandZoneWidth(zoneWDraft); setChatExpandZonePreview(null) }
   const handleZoneHCommit = async () => { await setChatExpandZoneHeight(zoneHDraft); setChatExpandZonePreview(null) }
 
-  // --- RENDER ---
-
-  const renderGeneral = () => (
-    <div className="space-y-4">
-      <div className="py-3 border-b border-border/60">
-        <Label className="text-sm">主窗口标题</Label>
-        <p className="text-[11px] text-muted-foreground mt-0.5 mb-2">显示在窗口标题栏的文字</p>
-        <div className="flex gap-2">
-          <Input value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)} placeholder={DEFAULT_TITLE} className="max-w-[200px] h-8 text-xs" />
-          <Button onClick={handleSaveTitle} size="sm" className="h-8 text-xs">保存</Button>
-          <Button onClick={handleResetTitle} size="sm" variant="outline" className="h-8" title="重置"><RotateCcw size={12} /></Button>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between py-3 border-b border-border/60">
-        <div><Label className="text-sm">开机自启</Label><p className="text-[11px] text-muted-foreground mt-0.5">应用启动时自动运行</p></div>
-        <button onClick={() => setAutoStart(!autoStart)} className={cn('w-10 h-5 rounded-full transition-colors duration-200 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', autoStart ? 'bg-primary' : 'bg-muted-foreground/25')}>
-          <div className={cn('w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200', autoStart ? 'translate-x-5.5' : 'translate-x-0.5')} />
+  const renderHK = (label: string, desc: string, enabled: boolean, setEn: (v: boolean) => Promise<void>,
+    saved: string, rec: boolean, keys: string[],
+    sr: () => void, cf: () => void, cx: () => void, rm: () => void,
+    otherKeys: string[], otherAcc: string
+  ) => (
+    <div className={cn('py-3 border-b border-border/60 transition-colors rounded px-2 -mx-2',
+      rec ? '' : getOtherConflictClass(keys.length > 0 ? keys : parseAccelerator(saved), otherAcc))}>
+      <div className="flex items-center justify-between mb-1.5">
+        <div><Label className="text-sm">{label}</Label><p className="text-[11px] text-muted-foreground mt-0.5">{desc}</p></div>
+        <button onClick={() => setEn(!enabled)} className={cn('w-10 h-5 rounded-full transition-colors duration-200 flex-shrink-0', enabled ? 'bg-primary' : 'bg-muted-foreground/25')}>
+          <div className={cn('w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200', enabled ? 'translate-x-5.5' : 'translate-x-0.5')} />
         </button>
       </div>
-
-      <div className="flex items-center justify-between py-3 border-b border-border/60">
-        <div><Label className="text-sm">主题模式</Label><p className="text-[11px] text-muted-foreground mt-0.5">切换深色/浅色外观</p></div>
-        <div className="flex items-center gap-0.5 bg-muted rounded-md p-0.5">
-          {(['system', 'light', 'dark'] as const).map((mode) => (
-            <button key={mode} onClick={() => setTheme(mode)} className={cn('px-2.5 py-1 rounded text-[11px] font-medium transition-all', theme === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
-              {mode === 'system' && <Monitor size={12} className="inline mr-0.5" />}{mode === 'light' && <Sun size={12} className="inline mr-0.5" />}{mode === 'dark' && <Moon size={12} className="inline mr-0.5" />}{mode === 'system' ? '跟随系统' : mode === 'light' ? '浅色' : '深色'}
-            </button>
-          ))}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <div className={cn('flex items-center gap-0.5 flex-1 min-w-0', getRecordingConflictClass(keys, otherAcc))}>
+          {enabled ? (rec ? keys : parseAccelerator(saved)).map((p, i) => (
+            <span key={i} className="flex items-center gap-0.5">
+              {i > 0 && <span className="text-muted-foreground text-[11px]">+</span>}
+              <kbd className={cn('px-1.5 py-0.5 text-[11px] rounded border bg-background font-mono', rec ? getKeyConflictClass(p, otherKeys) : '')}>{p}</kbd>
+            </span>
+          )) : <span className="text-[11px] text-muted-foreground italic">已禁用</span>}
         </div>
+        {enabled && (rec ? (
+          <>
+            <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={rm} disabled={keys.length === 0}><Minus size={10} /></Button>
+            <Button size="sm" className="h-6 text-[10px] px-2" onClick={cf}>确认</Button>
+            <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={cx}>取消</Button>
+          </>
+        ) : (
+          <button onClick={sr} className="p-0.5 rounded hover:bg-muted transition-colors" title="追加快捷键"><Plus size={14} /></button>
+        ))}
       </div>
-
-      <div className="flex items-center justify-between py-3 border-b border-border/60">
-        <div><Label className="text-sm">关闭应用时</Label><p className="text-[11px] text-muted-foreground mt-0.5">点击关闭按钮的行为</p></div>
-        <select value={closeBehavior} onChange={(e) => setCloseBehavior(e.target.value as 'quit' | 'tray')} className="h-8 w-28 rounded-md border border-border bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          <option value="quit">直接退出</option>
-          <option value="tray">缩小到托盘</option>
-        </select>
-      </div>
-
-      <div className="flex items-center justify-between py-3 border-b border-border/60">
-        <div><Label className="text-sm">AI 聊天点击外部关闭</Label><p className="text-[11px] text-muted-foreground mt-0.5">点击聊天面板外区域自动折叠</p></div>
-        <button onClick={() => setChatClickOutsideToClose(!chatClickOutsideToClose)} className={cn('w-10 h-5 rounded-full transition-colors duration-200 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', chatClickOutsideToClose ? 'bg-primary' : 'bg-muted-foreground/25')}>
-          <div className={cn('w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200', chatClickOutsideToClose ? 'translate-x-5.5' : 'translate-x-0.5')} />
-        </button>
-      </div>
-
-      <div className="py-3 border-b border-border/60">
-        <div className="flex items-center justify-between">
-          <div><Label className="text-sm">AI 聊天自动展开</Label><p className="text-[11px] text-muted-foreground mt-0.5">鼠标移入窗口右侧检测区域自动滑出</p></div>
-          <button onClick={() => setChatAutoExpand(!chatAutoExpand)} className={cn('w-10 h-5 rounded-full transition-colors duration-200 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', chatAutoExpand ? 'bg-primary' : 'bg-muted-foreground/25')}>
-            <div className={cn('w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200', chatAutoExpand ? 'translate-x-5.5' : 'translate-x-0.5')} />
-          </button>
-        </div>
-        {chatAutoExpand && (
-          <div className="mt-3 space-y-3 pl-1">
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[11px] text-muted-foreground">水平检测宽度</span>
-                <span className="text-[11px] font-mono text-muted-foreground">{zoneWDraft}px</span>
-              </div>
-              <input type="range" min={5} max={60} step={1} value={zoneWDraft} onChange={(e) => handleZoneWChange(Number(e.target.value))} onMouseUp={handleZoneWCommit} onTouchEnd={handleZoneWCommit} className="w-full h-1.5 accent-primary" />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[11px] text-muted-foreground">竖直检测高度</span>
-                <span className="text-[11px] font-mono text-muted-foreground">{zoneHDraft}%</span>
-              </div>
-              <input type="range" min={10} max={100} step={5} value={zoneHDraft} onChange={(e) => handleZoneHChange(Number(e.target.value))} onMouseUp={handleZoneHCommit} onTouchEnd={handleZoneHCommit} className="w-full h-1.5 accent-primary" />
-            </div>
-            <p className="text-[10px] text-muted-foreground">拖动滑块实时预览检测区域（半透明蓝色），松开鼠标保存。</p>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-
-  const renderApi = () => (
-    <div className="space-y-4">
-      <div className="py-3 border-b border-border/60">
-        <div className="flex items-end justify-between mb-2">
-          <div><Label className="text-sm">DeepSeek API Key</Label><p className="text-[11px] text-muted-foreground mt-0.5">用于 AI 解析和聊天功能</p></div>
-          <Button onClick={handleSaveApiKey} size="sm" className="h-8 text-xs">保存</Button>
-        </div>
-        <div className="relative">
-          <Input type={showKey ? 'text' : 'password'} value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} placeholder="sk-..." className="pr-8 h-8 text-xs" />
-          <button onClick={() => setShowKey(!showKey)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" tabIndex={-1}>
-            {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
-        </div>
-      </div>
-      <div className="py-3 border-b border-border/60">
-        <Label className="text-sm">AI 模型</Label><p className="text-[11px] text-muted-foreground mt-0.5 mb-2">DeepSeek 模型名称</p>
-        <Input value={deepseekModel} onChange={(e) => setDeepseekModel(e.target.value)} placeholder="deepseek-v4-flash" className="max-w-[240px] h-8 text-xs" />
-      </div>
-      <div className="py-3 border-b border-border/60">
-        <Label className="text-sm">后端 API 地址</Label><p className="text-[11px] text-muted-foreground mt-0.5 mb-2">体力数据后端服务</p>
-        <Input value={backendUrl} onChange={(e) => setBackendUrl(e.target.value)} placeholder="http://100.70.198.102:8000" className="max-w-[240px] h-8 text-xs" />
-      </div>
-    </div>
-  )
-
-  const renderHotkey = () => (
-    <div className="space-y-4" onKeyDown={(e) => { if (recordingCapture) handleRecordKey(e, 'capture'); else if (recordingChat) handleRecordKey(e, 'chat') }}>
-      {/* Capture hotkey */}
-      <div className={cn('py-3 border-b border-border/60 transition-colors rounded px-2 -mx-2', recordingChat ? getOtherConflictClass(chatKeys, captureHotkey) : '')}>
-        <div className="flex items-center justify-between mb-1.5">
-          <div><Label className="text-sm">体力捕获</Label><p className="text-[11px] text-muted-foreground mt-0.5">后台截图识别体力值</p></div>
-          <button onClick={() => setCaptureHotkeyEnabled(!captureHotkeyEnabled)} className={cn('w-10 h-5 rounded-full transition-colors duration-200 flex-shrink-0', captureHotkeyEnabled ? 'bg-primary' : 'bg-muted-foreground/25')}>
-            <div className={cn('w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200', captureHotkeyEnabled ? 'translate-x-5.5' : 'translate-x-0.5')} />
-          </button>
-        </div>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <div className={cn('flex items-center gap-0.5 flex-1 min-w-0', getRecordingConflictClass(captureKeys, chatHotkey))}>
-            {captureHotkeyEnabled ? (recordingCapture ? captureKeys : parseAccelerator(captureHotkey)).map((part, i) => (
-              <span key={i} className="flex items-center gap-0.5">
-                {i > 0 && <span className="text-muted-foreground text-[11px]">+</span>}
-                <kbd className={cn('px-1.5 py-0.5 text-[11px] rounded border bg-background font-mono', recordingCapture ? getKeyConflictClass(part, chatKeys) : '')}>{part}</kbd>
-              </span>
-            )) : <span className="text-[11px] text-muted-foreground italic">已禁用</span>}
-          </div>
-          {captureHotkeyEnabled && (recordingCapture ? (
-            <><Button size="sm" className="h-6 text-[10px] px-2" onClick={() => confirmRecording('capture')}>确认</Button><Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => cancelRecording('capture')}>取消</Button></>
-          ) : (
-            <button onClick={() => startRecording('capture')} disabled={recordingChat} className="p-0.5 rounded hover:bg-muted transition-colors disabled:opacity-30" title="追加快捷键"><Plus size={14} /></button>
-          ))}
-        </div>
-      </div>
-
-      {/* Chat hotkey */}
-      <div className={cn('py-3 border-b border-border/60 transition-colors rounded px-2 -mx-2', recordingCapture ? getOtherConflictClass(captureKeys, chatHotkey) : '')}>
-        <div className="flex items-center justify-between mb-1.5">
-          <div><Label className="text-sm">AI 聊天</Label><p className="text-[11px] text-muted-foreground mt-0.5">呼出或折叠 AI 聊天面板</p></div>
-          <button onClick={() => setChatHotkeyEnabled(!chatHotkeyEnabled)} className={cn('w-10 h-5 rounded-full transition-colors duration-200 flex-shrink-0', chatHotkeyEnabled ? 'bg-primary' : 'bg-muted-foreground/25')}>
-            <div className={cn('w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200', chatHotkeyEnabled ? 'translate-x-5.5' : 'translate-x-0.5')} />
-          </button>
-        </div>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <div className={cn('flex items-center gap-0.5 flex-1 min-w-0', getRecordingConflictClass(chatKeys, captureHotkey))}>
-            {chatHotkeyEnabled ? (recordingChat ? chatKeys : parseAccelerator(chatHotkey)).map((part, i) => (
-              <span key={i} className="flex items-center gap-0.5">
-                {i > 0 && <span className="text-muted-foreground text-[11px]">+</span>}
-                <kbd className={cn('px-1.5 py-0.5 text-[11px] rounded border bg-background font-mono', recordingChat ? getKeyConflictClass(part, captureKeys) : '')}>{part}</kbd>
-              </span>
-            )) : <span className="text-[11px] text-muted-foreground italic">已禁用</span>}
-          </div>
-          {chatHotkeyEnabled && (recordingChat ? (
-            <><Button size="sm" className="h-6 text-[10px] px-2" onClick={() => confirmRecording('chat')}>确认</Button><Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => cancelRecording('chat')}>取消</Button></>
-          ) : (
-            <button onClick={() => startRecording('chat')} disabled={recordingCapture} className="p-0.5 rounded hover:bg-muted transition-colors disabled:opacity-30" title="追加快捷键"><Plus size={14} /></button>
-          ))}
-        </div>
-      </div>
-
-      <p className="text-[10px] text-muted-foreground pt-1">点击 + 进入追加模式，按下组合键逐键追加。冲突时弹窗提示，组合冲突标红，单个按键重叠标黄。</p>
     </div>
   )
 
@@ -328,9 +188,83 @@ function SettingsPage(): React.JSX.Element {
         ))}
       </div>
       <div className="min-h-[300px]">
-        {activeTab === 'general' && renderGeneral()}
-        {activeTab === 'api' && renderApi()}
-        {activeTab === 'hotkey' && renderHotkey()}
+        {activeTab === 'general' && (
+          <div className="space-y-4">
+            <div className="py-3 border-b border-border/60">
+              <Label className="text-sm">主窗口标题</Label>
+              <p className="text-[11px] text-muted-foreground mt-0.5 mb-2">显示在窗口标题栏的文字</p>
+              <div className="flex gap-2">
+                <Input value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)} placeholder={DEFAULT_TITLE} className="max-w-[200px] h-8 text-xs" />
+                <Button onClick={handleSaveTitle} size="sm" className="h-8 text-xs">保存</Button>
+                <Button onClick={handleResetTitle} size="sm" variant="outline" className="h-8" title="重置"><RotateCcw size={12} /></Button>
+              </div>
+            </div>
+            <div className="flex items-center justify-between py-3 border-b border-border/60">
+              <div><Label className="text-sm">开机自启</Label><p className="text-[11px] text-muted-foreground mt-0.5">应用启动时自动运行</p></div>
+              <button onClick={() => setAutoStart(!autoStart)} className={cn('w-10 h-5 rounded-full transition-colors duration-200 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', autoStart ? 'bg-primary' : 'bg-muted-foreground/25')}><div className={cn('w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200', autoStart ? 'translate-x-5.5' : 'translate-x-0.5')} /></button>
+            </div>
+            <div className="flex items-center justify-between py-3 border-b border-border/60">
+              <div><Label className="text-sm">主题模式</Label><p className="text-[11px] text-muted-foreground mt-0.5">切换深色/浅色外观</p></div>
+              <div className="flex items-center gap-0.5 bg-muted rounded-md p-0.5">
+                {(['system', 'light', 'dark'] as const).map((mode) => (
+                  <button key={mode} onClick={() => setTheme(mode)} className={cn('px-2.5 py-1 rounded text-[11px] font-medium transition-all', theme === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+                    {mode === 'system' && <Monitor size={12} className="inline mr-0.5" />}{mode === 'light' && <Sun size={12} className="inline mr-0.5" />}{mode === 'dark' && <Moon size={12} className="inline mr-0.5" />}{mode === 'system' ? '跟随系统' : mode === 'light' ? '浅色' : '深色'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center justify-between py-3 border-b border-border/60">
+              <div><Label className="text-sm">关闭应用时</Label><p className="text-[11px] text-muted-foreground mt-0.5">点击关闭按钮的行为</p></div>
+              <select value={closeBehavior} onChange={(e) => setCloseBehavior(e.target.value as 'quit' | 'tray')} className="h-8 w-28 rounded-md border border-border bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="quit">直接退出</option><option value="tray">缩小到托盘</option></select>
+            </div>
+            <div className="flex items-center justify-between py-3 border-b border-border/60">
+              <div><Label className="text-sm">AI 聊天点击外部关闭</Label><p className="text-[11px] text-muted-foreground mt-0.5">点击聊天面板外区域自动折叠</p></div>
+              <button onClick={() => setChatClickOutsideToClose(!chatClickOutsideToClose)} className={cn('w-10 h-5 rounded-full transition-colors duration-200 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', chatClickOutsideToClose ? 'bg-primary' : 'bg-muted-foreground/25')}><div className={cn('w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200', chatClickOutsideToClose ? 'translate-x-5.5' : 'translate-x-0.5')} /></button>
+            </div>
+            <div className="py-3 border-b border-border/60">
+              <div className="flex items-center justify-between">
+                <div><Label className="text-sm">AI 聊天自动展开</Label><p className="text-[11px] text-muted-foreground mt-0.5">鼠标移入窗口右侧检测区域自动滑出</p></div>
+                <button onClick={() => setChatAutoExpand(!chatAutoExpand)} className={cn('w-10 h-5 rounded-full transition-colors duration-200 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', chatAutoExpand ? 'bg-primary' : 'bg-muted-foreground/25')}><div className={cn('w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200', chatAutoExpand ? 'translate-x-5.5' : 'translate-x-0.5')} /></button>
+              </div>
+              {chatAutoExpand && (
+                <div className="mt-3 space-y-3 pl-1">
+                  <div className="flex items-center justify-between">
+                    <div><span className="text-[11px]">检测区域全局显示</span><p className="text-[10px] text-muted-foreground">始终展示检测区域位置</p></div>
+                    <button onClick={() => { setChatExpandZoneVisible(!chatExpandZoneVisible); setChatExpandZonePreview(null) }} className={cn('w-10 h-5 rounded-full transition-colors duration-200 flex-shrink-0', chatExpandZoneVisible ? 'bg-primary' : 'bg-muted-foreground/25')}><div className={cn('w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200', chatExpandZoneVisible ? 'translate-x-5.5' : 'translate-x-0.5')} /></button>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1"><span className="text-[11px] text-muted-foreground">水平检测宽度</span><span className="text-[11px] font-mono text-muted-foreground">{zoneWDraft}px</span></div>
+                    <input type="range" min={5} max={60} step={1} value={zoneWDraft} onChange={(e) => handleZoneWChange(Number(e.target.value))} onMouseUp={handleZoneWCommit} onTouchEnd={handleZoneWCommit} className="w-full h-1.5 accent-primary" />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1"><span className="text-[11px] text-muted-foreground">竖直检测高度</span><span className="text-[11px] font-mono text-muted-foreground">{zoneHDraft}%</span></div>
+                    <input type="range" min={10} max={100} step={5} value={zoneHDraft} onChange={(e) => handleZoneHChange(Number(e.target.value))} onMouseUp={handleZoneHCommit} onTouchEnd={handleZoneHCommit} className="w-full h-1.5 accent-primary" />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">{chatExpandZoneVisible ? '检测区域全局显示已开启，调整时无需预览。' : '检测区域全局显示关闭，拖动滑块时显示蓝色预览。'}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'api' && (
+          <div className="space-y-4">
+            <div className="py-3 border-b border-border/60">
+              <div className="flex items-end justify-between mb-2"><div><Label className="text-sm">DeepSeek API Key</Label><p className="text-[11px] text-muted-foreground mt-0.5">用于 AI 解析和聊天功能</p></div><Button onClick={handleSaveApiKey} size="sm" className="h-8 text-xs">保存</Button></div>
+              <div className="relative"><Input type={showKey ? 'text' : 'password'} value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} placeholder="sk-..." className="pr-8 h-8 text-xs" /><button onClick={() => setShowKey(!showKey)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" tabIndex={-1}>{showKey ? <EyeOff size={14} /> : <Eye size={14} />}</button></div>
+            </div>
+            <div className="py-3 border-b border-border/60"><Label className="text-sm">AI 模型</Label><p className="text-[11px] text-muted-foreground mt-0.5 mb-2">DeepSeek 模型名称</p><Input value={deepseekModel} onChange={(e) => setDeepseekModel(e.target.value)} placeholder="deepseek-v4-flash" className="max-w-[240px] h-8 text-xs" /></div>
+            <div className="py-3 border-b border-border/60"><Label className="text-sm">后端 API 地址</Label><p className="text-[11px] text-muted-foreground mt-0.5 mb-2">体力数据后端服务</p><Input value={backendUrl} onChange={(e) => setBackendUrl(e.target.value)} placeholder="http://100.70.198.102:8000" className="max-w-[240px] h-8 text-xs" /></div>
+          </div>
+        )}
+
+        {activeTab === 'hotkey' && (
+          <div className="space-y-4" onKeyDown={(e) => { if (recordingCapture) handleRecordKey(e, 'capture'); else if (recordingChat) handleRecordKey(e, 'chat') }}>
+            {renderHK('体力捕获', '后台截图识别体力值', captureHotkeyEnabled, setCaptureHotkeyEnabled, captureHotkey, recordingCapture, captureKeys, () => startRecording('capture'), () => confirmRecording('capture'), () => cancelRecording('capture'), () => removeLastKey('capture'), chatKeys, chatHotkey)}
+            {renderHK('AI 聊天', '呼出或折叠 AI 聊天面板', chatHotkeyEnabled, setChatHotkeyEnabled, chatHotkey, recordingChat, chatKeys, () => startRecording('chat'), () => confirmRecording('chat'), () => cancelRecording('chat'), () => removeLastKey('chat'), captureKeys, captureHotkey)}
+            <p className="text-[10px] text-muted-foreground pt-1">点击 + 进入追加模式，逐键追加组合键。减号按钮从右往左移除按键。冲突时弹窗提示，组合冲突标红，单个按键重叠标黄。</p>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -47,7 +47,15 @@ const api = {
       }
     },
     updateHotkey: (action: string, accelerator: string): Promise<void> =>
-      ipcRenderer.invoke('hotkey:update', action, accelerator)
+      ipcRenderer.invoke('hotkey:update', action, accelerator),
+    setHotkeyEnabled: (action: string, enabled: boolean): Promise<void> =>
+      ipcRenderer.invoke('hotkey:set-enabled', action, enabled),
+    disableAllHotkeys: (): Promise<void> =>
+      ipcRenderer.invoke('hotkey:disable-all'),
+    enableAllHotkeys: (): Promise<void> =>
+      ipcRenderer.invoke('hotkey:enable-all'),
+    checkConflict: (accelerator: string, excludeAction: string): Promise<string | null> =>
+      ipcRenderer.invoke('hotkey:check-conflict', accelerator, excludeAction)
   }
 }
 
