@@ -9,6 +9,7 @@ import { usePluginStore } from './stores/pluginStore'
 function AppListeners(): null {
   const navigate = useNavigate()
   const toggleToolEnabled = usePluginStore((s) => s.toggleToolEnabled)
+  const toggleChat = usePluginStore((s) => s.toggleChat)
 
   useEffect(() => {
     const unsubNav = window.api.tray.onNavigate((path) => {
@@ -17,11 +18,19 @@ function AppListeners(): null {
     const unsubTool = window.api.tray.onToolToggle((toolId) => {
       toggleToolEnabled(toolId)
     })
+    const unsubHotkey = window.api.hotkey.onHotkey((action) => {
+      if (action === 'stamina-capture') {
+        navigate('/tool/stamina-capture')
+      } else if (action === 'ai-chat') {
+        toggleChat()
+      }
+    })
     return () => {
       unsubNav()
       unsubTool()
+      unsubHotkey()
     }
-  }, [navigate, toggleToolEnabled])
+  }, [navigate, toggleToolEnabled, toggleChat])
 
   return null
 }

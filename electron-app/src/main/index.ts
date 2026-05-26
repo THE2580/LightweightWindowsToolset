@@ -1,4 +1,5 @@
 import { app, BrowserWindow, shell } from 'electron'
+import { registerHotkeys, unregisterAllHotkeys } from './utils/hotkey'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { createTray, destroyTray } from './tray'
@@ -82,6 +83,7 @@ app.whenReady().then(() => {
   app.on('before-quit', () => {
     isQuitting = true
     destroyTray()
+    unregisterAllHotkeys()
   })
 
   app.on('second-instance', () => {
@@ -95,6 +97,12 @@ app.whenReady().then(() => {
 
   const mainWindow = createWindow()
   createTray(mainWindow)
+
+  // Register global hotkeys
+  registerHotkeys(mainWindow, [
+    { accelerator: 'CommandOrControl+Shift+D', action: 'stamina-capture', pluginId: 'stamina-capture' },
+    { accelerator: 'CommandOrControl+Shift+A', action: 'ai-chat', pluginId: 'ai-chat' }
+  ])
 
   registerIpcHandlers(mainWindow)
   registerSettingsIpc()
