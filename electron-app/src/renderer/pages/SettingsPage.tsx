@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useDeepseekStore } from '@/stores/deepseekStore'
 import { applyTheme } from '@/lib/theme'
@@ -71,7 +71,7 @@ function SettingsPage(): React.JSX.Element {
     <div className="max-w-xl">
       <h1 className="text-xl font-bold mb-4">设置</h1>
 
-      <div className="flex border-b border-border mb-5">
+      <div className="flex border-b border-border mb-5 sticky top-0 z-10 bg-background">
         {TABS.map((tab) => (
           <button
             key={tab.id}

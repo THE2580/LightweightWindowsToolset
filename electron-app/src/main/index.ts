@@ -1,7 +1,7 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import { createTray } from './tray'
+import { createTray, destroyTray } from './tray'
 import { registerIpcHandlers } from './ipc/window'
 import { registerSettingsIpc, getStore } from './ipc/settings'
 import { registerCaptureIpc } from './ipc/capture'
@@ -53,8 +53,12 @@ function createWindow(): BrowserWindow {
     if (closeBehavior === 'tray') {
       event.preventDefault()
       mainWindow.hide()
+    } else {
+      // 'quit' mode: destroy tray, then quit
+      isQuitting = true
+      destroyTray()
+      // Let the window close — will trigger window-all-closed
     }
-    // 'quit' — let the window close normally, which triggers app quit
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -75,6 +79,7 @@ app.whenReady().then(() => {
 
   app.on('before-quit', () => {
     isQuitting = true
+    destroyTray()
   })
 
   // Focus existing instance when second launch attempted
@@ -104,11 +109,7 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  // Only quit when closeBehavior is 'quit' — tray mode keeps process alive
-  const closeBehavior = getStore().get('closeBehavior', 'quit') as string
-  if (closeBehavior === 'quit') {
-    app.quit()
-  }
+  app.quit()
 })
 
 export {}

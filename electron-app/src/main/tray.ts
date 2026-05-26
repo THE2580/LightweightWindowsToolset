@@ -73,3 +73,10 @@ export function createTray(mainWindow: BrowserWindow): Tray {
   tray.setContextMenu(buildMenu())
   return tray
 }
+
+export function destroyTray(): void {
+  if (tray) {
+    tray.destroy()
+    tray = null
+  }
+}
