@@ -51,8 +51,8 @@ function Sidebar(): React.JSX.Element {
         sidebarCollapsed ? 'w-11' : 'w-[155px]'
       )}
     >
-      {/* Collapse toggle */}
-      <div className="flex justify-center px-1.5 pt-1.5 pb-0.5">
+      {/* Collapse toggle - right-aligned when expanded, slides toward center on collapse */}
+      <div className="flex justify-end px-1.5 pt-1.5 pb-0.5">
         <button
           onClick={toggleSidebar}
           className="p-1 rounded-md hover:bg-muted transition-colors"
