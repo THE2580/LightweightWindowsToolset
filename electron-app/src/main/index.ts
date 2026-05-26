@@ -1,5 +1,4 @@
 import { app, BrowserWindow, shell, globalShortcut, ipcMain } from 'electron'
-import { registerHotkeys, unregisterAllHotkeys } from './utils/hotkey'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { createTray, destroyTray } from './tray'
@@ -9,34 +8,32 @@ import { registerCaptureIpc } from './ipc/capture'
 
 let isQuitting = false
 
-// Single instance lock
 const gotTheLock = app.requestSingleInstanceLock()
 if (!gotTheLock) {
   app.quit()
 }
 
-// Track current hotkey accelerators for dynamic updates
-const hotkeyActions = new Map<string, { accelerator: string; pluginId: string }>()
+const hotkeyActions = new Map<string, { accelerator: string; enabled: boolean }>()
 
-function registerDynamicHotkey(action: string, accelerator: string, mainWindow: BrowserWindow): void {
+function registerSingleHotkey(action: string, accelerator: string, mainWindow: BrowserWindow): boolean {
   try {
-    // Unregister old accelerator if exists
-    const existing = hotkeyActions.get(action)
-    if (existing) {
-      globalShortcut.unregister(existing.accelerator)
-    }
-
     const registered = globalShortcut.register(accelerator, () => {
       mainWindow.webContents.send(`hotkey:${action}`, action)
     })
-
     if (registered) {
-      hotkeyActions.set(action, { accelerator, pluginId: action })
-    } else {
-      console.warn(`Failed to register hotkey: ${accelerator}`)
+      hotkeyActions.set(action, { accelerator, enabled: true })
     }
+    return registered
   } catch (e) {
     console.error(`Error registering hotkey ${accelerator}:`, e)
+    return false
+  }
+}
+
+function unregisterSingleHotkey(action: string): void {
+  const existing = hotkeyActions.get(action)
+  if (existing) {
+    globalShortcut.unregister(existing.accelerator)
   }
 }
 
@@ -74,7 +71,6 @@ function createWindow(): BrowserWindow {
 
   mainWindow.on('close', (event) => {
     if (isQuitting) return
-
     const closeBehavior = getStore().get('closeBehavior', 'quit') as string
     if (closeBehavior === 'tray') {
       event.preventDefault()
@@ -106,7 +102,7 @@ app.whenReady().then(() => {
   app.on('before-quit', () => {
     isQuitting = true
     destroyTray()
-    unregisterAllHotkeys()
+    globalShortcut.unregisterAll()
   })
 
   app.on('second-instance', () => {
@@ -121,15 +117,58 @@ app.whenReady().then(() => {
   const mainWindow = createWindow()
   createTray(mainWindow)
 
-  // Register default hotkeys (also stored for dynamic updates)
   const captureHk = (getStore().get('captureHotkey') as string) || 'CommandOrControl+Shift+D'
   const chatHk = (getStore().get('chatHotkey') as string) || 'CommandOrControl+Shift+A'
-  registerDynamicHotkey('stamina-capture', captureHk, mainWindow)
-  registerDynamicHotkey('ai-chat', chatHk, mainWindow)
+  const captureEnabled = (getStore().get('captureHotkeyEnabled') as boolean) ?? true
+  const chatEnabled = (getStore().get('chatHotkeyEnabled') as boolean) ?? true
 
-  // IPC handler for dynamic hotkey updates from renderer
+  if (captureEnabled) registerSingleHotkey('stamina-capture', captureHk, mainWindow)
+  else hotkeyActions.set('stamina-capture', { accelerator: captureHk, enabled: false })
+
+  if (chatEnabled) registerSingleHotkey('ai-chat', chatHk, mainWindow)
+  else hotkeyActions.set('ai-chat', { accelerator: chatHk, enabled: false })
+
   ipcMain.handle('hotkey:update', (_event, action: string, accelerator: string) => {
-    registerDynamicHotkey(action, accelerator, mainWindow)
+    unregisterSingleHotkey(action)
+    const info = hotkeyActions.get(action)
+    if (info?.enabled !== false) {
+      registerSingleHotkey(action, accelerator, mainWindow)
+    } else {
+      hotkeyActions.set(action, { accelerator, enabled: false })
+    }
+  })
+
+  ipcMain.handle('hotkey:set-enabled', (_event, action: string, enabled: boolean) => {
+    const info = hotkeyActions.get(action)
+    if (enabled) {
+      const acc = info?.accelerator || (action === 'stamina-capture' ? 'CommandOrControl+Shift+D' : 'CommandOrControl+Shift+A')
+      registerSingleHotkey(action, acc, mainWindow)
+    } else {
+      unregisterSingleHotkey(action)
+      hotkeyActions.set(action, { accelerator: info?.accelerator || '', enabled: false })
+    }
+  })
+
+  ipcMain.handle('hotkey:disable-all', () => {
+    for (const [action] of hotkeyActions) {
+      unregisterSingleHotkey(action)
+    }
+  })
+
+  ipcMain.handle('hotkey:enable-all', () => {
+    for (const [action, info] of hotkeyActions) {
+      if (info.enabled !== false) {
+        registerSingleHotkey(action, info.accelerator, mainWindow)
+      }
+    }
+  })
+
+  ipcMain.handle('hotkey:check-conflict', (_event, accelerator: string, excludeAction: string) => {
+    for (const [action, info] of hotkeyActions) {
+      if (action === excludeAction) continue
+      if (info.accelerator === accelerator) return action
+    }
+    return null
   })
 
   registerIpcHandlers(mainWindow)
