@@ -1,0 +1,21 @@
+﻿请先阅读 E:\codex_agent_project\LightweightWindowsToolset\PROJECT_SUMMARY.md 充分理解项目全貌后再着手工作。
+
+注意事项：
+1. 所有网络操作（npm install、git push/pull、npx 下载）必须通过代理 socks5://127.0.0.1:7897，操作前先用 curl.exe -I --socks5-hostname 127.0.0.1:7897 https://github.com 验证代理可用
+2. 每完成一个可独立运行的子功能做原子化 commit，使用中文 commit message (feat:/fix:/chore: 格式)
+3. 每次提交前完成三项强制验证：代理可用、应用无崩溃（npm run dev 启动无白屏/无报错弹窗/无未处理异常）、本轮问题已修复
+4. TypeScript 严格模式 (strict: true)，构建命令: cd electron-app && npx electron-vite build
+5. 开发前先运行 git status 确认工作区状态
+6. 所有窗口关闭行为默认直接退出，设置中可选缩小到托盘；托盘右键"退出"必须能终止进程
+7. 禁止 UI 卡片嵌套卡片、禁止渐变球/光晕装饰、禁止负 letter-spacing
+8. 主色调严格遵循蓝白灰 (light: primary #2563EB / dark: primary #3B82F6)
+9. 默认打包为便携版 EXE：cd electron-app && npm run package （已配置 CSC_IDENTITY_AUTO_DISCOVERY=false signAndEditExecutable=false），每次任务完成后主动打包
+10. 打包前清理 dist 目录并确保无 轻量化工具集.exe 进程残留（taskkill /F /IM "轻量化工具集.exe"）
+11. 窗口尺寸 676x444 固定不可调，侧边栏 155px/44px
+12. AI 聊天属于内置功能不是工具，不在工具列表和开关中出现
+13. 所有中文字符串必须在源代码中以有效 UTF-8 存储，严禁使用 PowerShell 管道传中文给 Python（会导致字节损坏为 ASCII ?）。如需 Python 写中文，使用显式 UTF-8 十六进制字节数组或 apply_patch 工具
+14. git 历史中已删除的文件（如 tavily.ts）不要恢复，已移除的功能（联网搜索）不要重新实现，除非明确要求
+15. 设置页所有输入框保存逻辑：编辑时显示保存按钮 → 保存成功后隐藏保存按钮（不允许自动保存）
+16. 每次回复末尾必须包含中文总结 (## 本次总结)
+
+优先处理 PROJECT_SUMMARY.md 第五章「现存问题」P1 中标记 ⚠️ 的项目。
