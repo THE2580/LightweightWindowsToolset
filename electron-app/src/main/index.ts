@@ -37,7 +37,7 @@ function registerSingleHotkey(action: string, accelerator: string, mainWindow: B
 
 function unregisterSingleHotkey(action: string): void {
   const existing = hotkeyActions.get(action)
-  if (existing) {
+  if (existing && existing.accelerator) {
     globalShortcut.unregister(existing.accelerator)
   }
 }
