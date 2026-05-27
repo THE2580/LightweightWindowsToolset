@@ -1,4 +1,4 @@
-﻿请先阅读 E:\codex_agent_project\LightweightWindowsToolset\PROJECT_SUMMARY.md 充分理解项目全貌后再着手工作。
+请先阅读 E:\codex_agent_project\LightweightWindowsToolset\PROJECT_SUMMARY.md 充分理解项目全貌后再着手工作。
 
 注意事项：
 1. 所有网络操作（npm install、git push/pull、npx 下载）必须通过代理 socks5://127.0.0.1:7897，操作前先用 curl.exe -I --socks5-hostname 127.0.0.1:7897 https://github.com 验证代理可用
