@@ -135,10 +135,6 @@ function ChatSidebar(): React.JSX.Element {
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-        {messages.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-8">
-            发送消息与 AI 开始对话          </p>
-        )}
         {messages.map((msg) => (
           <div
             key={msg.id}
