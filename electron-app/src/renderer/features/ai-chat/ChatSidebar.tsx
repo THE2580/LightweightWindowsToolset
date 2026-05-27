@@ -65,6 +65,7 @@ function ChatSidebar(): React.JSX.Element {
         const tavilyKey = configuredKey || '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'
         const results = await window.api.tavily.search(text, tavilyKey) as any
         searchContext = formatSearchContext(results)
+        useDeepseekStore.getState().setLastSearchRaw(searchContext)
         console.log('[Chat] Search context length:', searchContext.length, 'preview:', searchContext.substring(0, 120))
       } catch (e) {
         console.error('[Chat] Web search failed:', e)

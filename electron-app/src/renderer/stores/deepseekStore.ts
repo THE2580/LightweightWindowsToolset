@@ -5,11 +5,13 @@ interface DeepSeekState {
   apiKeyLoaded: boolean
   webSearchEnabled: boolean
   tavilyApiKeyLoaded: boolean
+  lastSearchRaw: string | null
 
   setApiKey: (key: string) => void
   loadApiKey: () => Promise<void>
   setWebSearchEnabled: (enabled: boolean) => void
   loadTavilyApiKey: () => Promise<void>
+  setLastSearchRaw: (raw: string | null) => void
 }
 
 export const useDeepseekStore = create<DeepSeekState>((set, get) => ({
@@ -17,6 +19,7 @@ export const useDeepseekStore = create<DeepSeekState>((set, get) => ({
   apiKeyLoaded: false,
   webSearchEnabled: false,
   tavilyApiKeyLoaded: false,
+  lastSearchRaw: null,
 
   setApiKey: (key) => {
     set({ apiKey: key })
@@ -50,5 +53,9 @@ export const useDeepseekStore = create<DeepSeekState>((set, get) => ({
       set({ tavilyApiKeyLoaded: true })
       return null
     }
+  },
+
+  setLastSearchRaw: (raw) => {
+    set({ lastSearchRaw: raw })
   }
 }))
