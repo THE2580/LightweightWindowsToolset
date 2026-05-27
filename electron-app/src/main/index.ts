@@ -151,9 +151,17 @@ app.whenReady().then(() => {
   const mainWindow = createWindow()
   createTray(mainWindow)
 
-  // Register hotkeys from saved config (no defaults 鈥?tools start without hotkeys)
-  const captureHk = (getStore().get('captureHotkey') as string) || ''
-  const chatHk = (getStore().get('chatHotkey') as string) || ''
+  // Convert stored JSON-array (or legacy +-separated string) to Electron accelerator
+  const storedToAccelerator = (stored: string): string => {
+    if (!stored) return ''
+    if (stored.startsWith('[')) {
+      try { const keys: string[] = JSON.parse(stored); return keys.join('+') } catch { return stored }
+    }
+    return stored // backward compat: old +-separated format
+  }
+
+  const captureHk = storedToAccelerator((getStore().get('captureHotkey') as string) || '')
+  const chatHk = storedToAccelerator((getStore().get('chatHotkey') as string) || '')
   const captureEnabled = (getStore().get('captureHotkeyEnabled') as boolean) ?? true
   const chatEnabled = (getStore().get('chatHotkeyEnabled') as boolean) ?? true
 
@@ -164,7 +172,7 @@ app.whenReady().then(() => {
   if (chatEnabled && chatHk) registerSingleHotkey('ai-chat', chatHk, mainWindow)
   else hotkeyActions.set('ai-chat', { accelerator: chatHk, enabled: false })
 
-  // Tool disable/enable 鈥?directly controls hotkey registration
+  // Tool disable/enable — directly controls hotkey registration
   ipcMain.handle('tool:set-enabled', (_event, toolId: string, enabled: boolean) => {
     if (enabled) {
       disabledTools.delete(toolId)
@@ -259,7 +267,7 @@ app.whenReady().then(() => {
   registerCaptureIpc()
   registerQueueIpc()
 
-  // queue:flush handler 鈥?invoked by renderer after a successful capture
+  // queue:flush handler — invoked by renderer after a successful capture
   ipcMain.handle('queue:flush', async () => {
     return flushPendingQueue()
   })

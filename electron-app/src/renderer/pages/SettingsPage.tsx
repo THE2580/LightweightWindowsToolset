@@ -54,9 +54,13 @@ function keysToAccelerator(keys: string[]): string {
   return keys.join('+')
 }
 
+/** Parse stored hotkey string. Supports JSON array (new) and +-separated (legacy). */
 function parseAccelerator(acc: string): string[] {
   if (!acc) return []
-  return acc.split('+')
+  if (acc.startsWith('[')) {
+    try { return JSON.parse(acc) } catch { return [] }
+  }
+  return acc.split('+') // backward compat: legacy +-separated format
 }
 
 function SettingsPage(): React.JSX.Element {
@@ -128,6 +132,8 @@ function SettingsPage(): React.JSX.Element {
   // --- Hotkey helpers ---
 
   const startEdit = useCallback((which: HotkeyAction) => {
+    // Disable global hotkeys so key presses reach the capture input
+    try { window.api.hotkey.disableAllHotkeys() } catch { /* ok */ }
     const saved = which === 'capture' ? captureHotkey : chatHotkey
     if (which === 'capture') {
       setEditingCapture(true)
@@ -148,6 +154,8 @@ function SettingsPage(): React.JSX.Element {
   }, [captureHotkey, chatHotkey])
 
   const cancelEdit = useCallback((which: HotkeyAction) => {
+    // Re-enable global hotkeys on cancel
+    try { window.api.hotkey.enableAllHotkeys() } catch { /* ok */ }
     if (which === 'capture') {
       setEditingCapture(false)
       setCaptureKeys(parseAccelerator(captureHotkey))
@@ -218,9 +226,6 @@ function SettingsPage(): React.JSX.Element {
     const deduped = nonEmpty.filter((k, i) => nonEmpty.indexOf(k) === i)
     const acc = deduped.length > 0 ? keysToAccelerator(deduped) : ''
 
-    // Disable all hotkeys during recording mode
-    try { await window.api.hotkey.disableAllHotkeys() } catch { /* ok */ }
-
     // Check conflict
     const exclude = actionToIPC(which)
     try {
@@ -235,11 +240,11 @@ function SettingsPage(): React.JSX.Element {
     } catch { /* ok */ }
 
     if (which === 'capture') {
-      await setCaptureHotkey(acc)
+      await setCaptureHotkey(deduped)
       setEditingCapture(false)
       setCaptureConflict(false)
     } else {
-      await setChatHotkey(acc)
+      await setChatHotkey(deduped)
       setEditingChat(false)
       setChatConflict(false)
     }
