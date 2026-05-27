@@ -6,7 +6,7 @@ import {
 } from 'react'
 import { Send, Loader2, Trash2, Globe } from 'lucide-react'
 import { useDeepseekStore } from '@/stores/deepseekStore'
-import { searchWeb, formatSearchContext } from './api/tavily'
+import { formatSearchContext } from './api/tavily'
 
 interface Message {
   id: string
@@ -63,7 +63,7 @@ function ChatSidebar(): React.JSX.Element {
       try {
         const configuredKey = await window.api.settings.get('tavilyApiKey') as string | null
         const tavilyKey = configuredKey || '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'
-        const results = await searchWeb(text, tavilyKey)
+        const results = await window.api.tavily.search(text, tavilyKey) as any
         searchContext = formatSearchContext(results)
       } catch (e) {
         console.error('[Chat] Web search failed:', e)
@@ -72,7 +72,7 @@ function ChatSidebar(): React.JSX.Element {
           const updated = [...prev]
           const last = updated[updated.length - 1]
           if (last && last.role === 'assistant' && !last.content) {
-            updated[updated.length - 1] = { ...last, content: '???????????????' }
+            updated[updated.length - 1] = { ...last, content: '联网搜索失败，将以离线模式回复' }
           }
           return updated
         })

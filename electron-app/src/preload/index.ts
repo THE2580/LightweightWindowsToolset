@@ -24,6 +24,10 @@ const api = {
     flush: (): Promise<{ flushed: number; remaining: number }> =>
       ipcRenderer.invoke('queue:flush')
   },
+  tavily: {
+    search: (query: string, apiKey: string): Promise<unknown> =>
+      ipcRenderer.invoke('tavily:search', query, apiKey)
+  },
   tray: {
     onTrayCapture: (callback: () => void): (() => void) => {
       ipcRenderer.on('tray:capture', () => callback())
