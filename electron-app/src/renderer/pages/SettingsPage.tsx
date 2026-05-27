@@ -203,7 +203,9 @@ function SettingsPage(): React.JSX.Element {
   const saveHotkey = useCallback(async (which: HotkeyAction) => {
     const keys = which === 'capture' ? captureKeys : chatKeys
     const nonEmpty = keys.filter((k) => k)
-    const acc = nonEmpty.length > 0 ? keysToAccelerator(nonEmpty) : ''
+    // Deduplicate: keep first occurrence of each key
+    const deduped = nonEmpty.filter((k, i) => nonEmpty.indexOf(k) === i)
+    const acc = deduped.length > 0 ? keysToAccelerator(deduped) : ''
 
     // Disable all hotkeys during recording mode
     try { await window.api.hotkey.disableAllHotkeys() } catch { /* ok */ }
