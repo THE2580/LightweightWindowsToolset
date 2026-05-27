@@ -73,12 +73,17 @@ function parseAccelerator(acc: string): string[] {
 
 /**
  * Validate a hotkey key combination for Electron globalShortcut compatibility.
- * Rules: all keys except the last must be modifiers; last key must not be a modifier.
- * Empty array is valid (means clear shortcut).
+ * Rules: single key must not be a character; multi-key: all but last must
+ * be modifiers; last key must not be a modifier.
  */
 function validateHotkeyKeys(keys: string[]): string | null {
   const nonEmpty = keys.filter((k) => k)
   if (nonEmpty.length === 0) return null
+
+  // Single key must not be a bare character
+  if (nonEmpty.length === 1 && isCharacterKey(nonEmpty[0])) {
+    return '单键快捷键不能为字符键，请使用修饰键组合（如 Ctrl+C）'
+  }
 
   for (let i = 0; i < nonEmpty.length - 1; i++) {
     if (!MODIFIER_KEYS.has(nonEmpty[i])) {
@@ -95,8 +100,8 @@ function validateHotkeyKeys(keys: string[]): string | null {
 }
 
 /**
- * Check whether a new key can be accepted at the given index,
- * respecting the modifier-first / non-modifier-last rule.
+ * Check whether a new key can be accepted at the given index.
+ * Allows single modifier keys (user will add more slots via +).
  */
 function canAcceptKey(existingKeys: string[], targetIndex: number, newKey: string): boolean {
   const nonEmptyBefore = existingKeys.slice(0, targetIndex).filter((k) => k)
@@ -106,7 +111,9 @@ function canAcceptKey(existingKeys: string[], targetIndex: number, newKey: strin
 
   if (isFirstKey && isCharacterKey(newKey)) return false
   if (!isLastKey && !MODIFIER_KEYS.has(newKey)) return false
-  if (isLastKey && MODIFIER_KEYS.has(newKey)) return false
+  // Only reject modifier as last key when there are preceding keys
+  // (allows entering Control as the sole key, user will add more slots)
+  if (isLastKey && !isFirstKey && MODIFIER_KEYS.has(newKey)) return false
   return true
 }
 
