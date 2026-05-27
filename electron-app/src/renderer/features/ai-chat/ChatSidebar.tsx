@@ -93,8 +93,7 @@ function ChatSidebar(): React.JSX.Element {
           model: model || 'deepseek-v4-flash',
           messages: [
             ...messages.map((m) => ({ role: m.role, content: m.content })),
-            ...(searchContext ? [{ role: 'system', content: searchContext }] : []),
-            { role: 'user', content: text }
+            { role: 'user', content: searchContext ? text + searchContext : text }
           ],
           stream: true
         })

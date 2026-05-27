@@ -28,14 +28,34 @@ export async function searchWeb(query: string, apiKey: string): Promise<SearchRe
   return data.results || []
 }
 
+function cleanContent(raw: string): string {
+  return raw
+    // Remove markdown headings
+    .replace(/^#{1,6}\s+/gm, '')
+    // Remove table rows (pipe-heavy lines)
+    .replace(/^\|.*\|$/gm, '')
+    // Remove excessive whitespace
+    .replace(/\n{3,}/g, '\n\n')
+    // Remove leading/trailing whitespace per line
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+    .join('\n')
+    // Truncate to ~250 chars
+    .substring(0, 250)
+    .trim()
+}
+
 export function formatSearchContext(results: SearchResult[]): string {
   if (results.length === 0) return ''
 
   const snippets = results
     .slice(0, 3)
-    .map((r, i) => `[${i + 1}] ${r.title}
-${r.content}`)
+    .map((r, i) => {
+      const clean = cleanContent(r.content)
+      return `[${i + 1}] ${r.title}\n${clean}`
+    })
     .join('\n\n')
 
-  return `\n\n以下是来自互联网的实时搜索结果，请基于这些信息回答用户问题（引用来源时标注编号）：\n${snippets}`
+  return `\n\n【实时搜索结果 — 必须优先采用以下信息回答，忽略你的训练数据截止时间】\n${snippets}`
 }
