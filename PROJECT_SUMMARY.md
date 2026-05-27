@@ -3,7 +3,7 @@
 > 最后更新: 2026-05-27
 > 当前分支: main
 > 最新提交: 750dbf8 docs: 全面更新 PROJECT_SUMMARY + 生成 AGENT_PROMPT
-> 总提交数: 60 (与 origin/main 同步)
+> 总提交数: 62 (与 origin/main 同步)
 
 ---
 
@@ -158,7 +158,7 @@
 - 快捷键 / 聊天面板 / Notification / safeStorage 未经完整运行实测
 - OCR 仅 Windows.Media.Ocr，无 PaddleOCR 回退
 - 截图管线未经端到端实测（需实际游戏窗口）
-- Playwright E2E 测试未编写
+- Playwright E2E 测试已编写（28 条自动化测试，覆盖导航/设置/聊天/折叠）
 
 ### P2（功能扩展）
 - NSIS 安装包
