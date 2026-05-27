@@ -25,9 +25,12 @@
     "win": {
       "target": {
         "target": "nsis",
-        "arch": ["x64"]
+        "arch": [
+          "x64"
+        ]
       },
-      "icon": "resources/icon.ico"
+      "icon": "resources/icon.ico",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
@@ -45,7 +48,10 @@
       {
         "from": "resources/",
         "to": "resources/",
-        "filter": ["*.ico", "*.png"]
+        "filter": [
+          "*.ico",
+          "*.png"
+        ]
       }
     ]
   },
