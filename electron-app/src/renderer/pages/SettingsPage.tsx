@@ -303,16 +303,17 @@ function SettingsPage(): React.JSX.Element {
               >
                 <Plus size={12} />
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 text-xs px-2 bg-red-500/15 hover:bg-red-500/25 border-0"
-                onClick={() => removeLastKey(which)}
-                disabled={nonEmptyCount(keys) === 0 && keys.every((k) => !k)}
-                title="移除末尾按键"
-              >
-                <Minus size={12} />
-              </Button>
+              {nonEmptyCount(keys) >= 1 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs px-2 bg-red-500/15 hover:bg-red-500/25 border-0"
+                  onClick={() => removeLastKey(which)}
+                  title="移除末尾按键"
+                >
+                  <Minus size={12} />
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="ghost"
@@ -386,9 +387,9 @@ function SettingsPage(): React.JSX.Element {
                     className={cn(
                       'inline-flex items-center justify-center min-w-[36px] px-2 py-1 text-[11px] rounded border font-mono cursor-pointer transition-colors select-none',
                       (which === 'capture' ? activeCaptureSlot : activeChatSlot) === i
-                        ? 'border-orange-500 bg-orange-500/10 ring-2 ring-orange-500/30'
+                        ? 'border-orange-500 bg-orange-100 ring-2 ring-orange-500/30'
                         : key
-                          ? 'border-green-500 bg-green-500/10'
+                          ? 'border-yellow-500 bg-white'
                           : 'border-dashed border-muted-foreground/30 bg-muted/50'
                     )}
                   >
@@ -404,12 +405,20 @@ function SettingsPage(): React.JSX.Element {
           )}
         </div>
       ) : (
-        <span className={cn(
-          'text-xs font-mono',
-          saved ? 'text-foreground' : 'text-muted-foreground italic'
-        )}>
-          {saved || '未配置'}
-        </span>
+        saved ? (
+          <span className="flex items-center gap-1 flex-wrap">
+            {parseAccelerator(saved).map((k, i) => (
+              <span key={i} className="flex items-center gap-1">
+                {i > 0 && <span className="text-muted-foreground text-[11px]">+</span>}
+                <span className="inline-flex items-center justify-center min-w-[36px] px-2 py-1 text-[11px] rounded border border-green-300 bg-white font-mono">
+                  {k}
+                </span>
+              </span>
+            ))}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground italic">未配置</span>
+        )
       )}
     </div>
   )
