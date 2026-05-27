@@ -45,6 +45,7 @@ function SettingsPage(): React.JSX.Element {
   } = useSettingsStore()
 
   const { apiKey, loadApiKey } = useDeepseekStore()
+  const lastSearchRaw = useDeepseekStore((s) => s.lastSearchRaw)
   const loadTavilyKey = () => { useDeepseekStore.getState().loadTavilyApiKey() }
   const [tavilyApiKeyDraft, setTavilyApiKeyDraft] = useState('')
   const [tavilyApiKeySaved, setTavilyApiKeySaved] = useState('')
