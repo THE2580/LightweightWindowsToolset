@@ -285,65 +285,81 @@ function SettingsPage(): React.JSX.Element {
     which: HotkeyAction
   ) => (
     <div className="py-3 border-b border-border/60">
-      <div className="flex items-center justify-between mb-1.5">
+      {/* Header row: label + toggle + action buttons, all on one line */}
+      <div className="flex items-start justify-between mb-1.5">
         <div>
           <Label className="text-sm">{label}</Label>
           <p className="text-[11px] text-muted-foreground mt-0.5">{desc}</p>
         </div>
-        <button
-          onClick={() => setEn(!enabled)}
-          className={cn(
-            'w-10 h-5 rounded-full transition-colors duration-200 flex-shrink-0',
-            enabled ? 'bg-primary' : 'bg-muted-foreground/25'
-          )}
-        >
-          <div className={cn(
-            'w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200',
-            enabled ? 'translate-x-5.5' : 'translate-x-0.5'
-          )} />
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {enabled && editing ? (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs px-2 bg-green-500/15 hover:bg-green-500/25 border-0"
+                onClick={() => { appendKey(which); setActiveCaptureSlot(which === 'capture' ? null : activeSlot); setActiveChatSlot(which === 'chat' ? null : activeSlot) }}
+                title="追加按键"
+              >
+                <Plus size={12} />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs px-2 bg-red-500/15 hover:bg-red-500/25 border-0"
+                onClick={() => removeLastKey(which)}
+                disabled={nonEmptyCount(keys) === 0 && keys.every((k) => !k)}
+                title="移除末尾按键"
+              >
+                <Minus size={12} />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs px-3 bg-blue-500/15 hover:bg-blue-500/25 border-0"
+                onClick={() => saveHotkey(which)}
+              >
+                保存
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs px-3 bg-orange-500/15 hover:bg-orange-500/25 border-0"
+                onClick={cancelEditFn}
+              >
+                取消
+              </Button>
+            </>
+          ) : enabled && !editing ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs px-2"
+              onClick={startEditFn}
+            >
+              配置快捷键
+            </Button>
+          ) : null}
+          <button
+            onClick={() => setEn(!enabled)}
+            className={cn(
+              'w-10 h-5 rounded-full transition-colors duration-200 flex-shrink-0',
+              enabled ? 'bg-primary' : 'bg-muted-foreground/25'
+            )}
+          >
+            <div className={cn(
+              'w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200',
+              enabled ? 'translate-x-5.5' : 'translate-x-0.5'
+            )} />
+          </button>
+        </div>
       </div>
 
+      {/* Hotkey display row */}
       {!enabled ? (
         <span className="text-[11px] text-muted-foreground italic">已禁用</span>
       ) : editing ? (
         <div>
-          {/* +, -, Save, Cancel buttons */}
-          <div className="flex items-center gap-2 mb-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs px-2"
-              onClick={() => { appendKey(which); setActiveCaptureSlot(which === 'capture' ? null : activeSlot); setActiveChatSlot(which === 'chat' ? null : activeSlot) }}
-            >
-              <Plus size={12} />
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs px-2"
-              onClick={() => removeLastKey(which)}
-              disabled={nonEmptyCount(keys) === 0 && keys.every((k) => !k)}
-            >
-              <Minus size={12} />
-            </Button>
-            <Button
-              size="sm"
-              className="h-7 text-xs px-3"
-              onClick={() => saveHotkey(which)}
-            >
-              保存
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs px-3"
-              onClick={cancelEditFn}
-            >
-              取消
-            </Button>
-          </div>
-
           {/* Key boxes row */}
           <div className={cn(
             'flex items-center gap-1 flex-wrap p-1 rounded transition-colors',
@@ -369,12 +385,11 @@ function SettingsPage(): React.JSX.Element {
                     }}
                     className={cn(
                       'inline-flex items-center justify-center min-w-[36px] px-2 py-1 text-[11px] rounded border font-mono cursor-pointer transition-colors select-none',
-                      'hover:border-primary/50',
                       (which === 'capture' ? activeCaptureSlot : activeChatSlot) === i
-                        ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
+                        ? 'border-orange-500 bg-orange-500/10 ring-2 ring-orange-500/30'
                         : key
-                          ? 'bg-background border-border'
-                          : 'bg-muted/50 border-dashed border-muted-foreground/30'
+                          ? 'border-green-500 bg-green-500/10'
+                          : 'border-dashed border-muted-foreground/30 bg-muted/50'
                     )}
                   >
                     {key || <span className="text-muted-foreground">?</span>}
@@ -389,22 +404,12 @@ function SettingsPage(): React.JSX.Element {
           )}
         </div>
       ) : (
-        <div className="flex items-center gap-2">
-          <span className={cn(
-            'text-xs font-mono',
-            saved ? 'text-foreground' : 'text-muted-foreground italic'
-          )}>
-            {saved || '未配置'}
-          </span>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs px-2"
-            onClick={startEditFn}
-          >
-            配置快捷键
-          </Button>
-        </div>
+        <span className={cn(
+          'text-xs font-mono',
+          saved ? 'text-foreground' : 'text-muted-foreground italic'
+        )}>
+          {saved || '未配置'}
+        </span>
       )}
     </div>
   )
