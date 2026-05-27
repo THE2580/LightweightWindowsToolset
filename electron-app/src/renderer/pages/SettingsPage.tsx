@@ -80,9 +80,9 @@ function validateHotkeyKeys(keys: string[]): string | null {
   const nonEmpty = keys.filter((k) => k)
   if (nonEmpty.length === 0) return null
 
-  // Single key must not be a bare character
-  if (nonEmpty.length === 1 && isCharacterKey(nonEmpty[0])) {
-    return '单键快捷键不能为字符键，请使用修饰键组合（如 Ctrl+C）'
+  // Require at least 2 keys: modifier(s) + one non-modifier key
+  if (nonEmpty.length < 2) {
+    return '快捷键至少需要两个按键（修饰键 + 普通键），如 Ctrl+C'
   }
 
   for (let i = 0; i < nonEmpty.length - 1; i++) {
