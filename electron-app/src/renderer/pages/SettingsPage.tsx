@@ -94,6 +94,8 @@ function SettingsPage(): React.JSX.Element {
   const [activeChatSlot, setActiveChatSlot] = useState<number | null>(null)
 
   // Refs for the hidden input that captures keyboard events
+  const captureKeysRef = useRef<string[]>([])
+  const chatKeysRef = useRef<string[]>([])
   const keyCaptureRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { load(); loadApiKey() }, [load, loadApiKey])
@@ -107,6 +109,10 @@ function SettingsPage(): React.JSX.Element {
   // Sync capture hotkey to display when not editing
   useEffect(() => { if (!editingCapture) setCaptureKeys(parseAccelerator(captureHotkey)) }, [captureHotkey, editingCapture])
   useEffect(() => { if (!editingChat) setChatKeys(parseAccelerator(chatHotkey)) }, [chatHotkey, editingChat])
+
+  // Keep refs synchronized with latest keys state for saveHotkey to read
+  useEffect(() => { captureKeysRef.current = captureKeys }, [captureKeys])
+  useEffect(() => { chatKeysRef.current = chatKeys }, [chatKeys])
 
   const handleSaveApiKey = async () => { useDeepseekStore.getState().setApiKey(apiKeyInput); await window.api.settings.set('deepseekApiKey', apiKeyInput) }
   const saveModel = async () => { await setDeepseekModel(modelDraft) }
@@ -126,13 +132,17 @@ function SettingsPage(): React.JSX.Element {
     if (which === 'capture') {
       setEditingCapture(true)
       setEditingChat(false)
-      setCaptureKeys(parseAccelerator(saved))
+      // Ensure at least one empty slot exists for immediate typing
+      const parsed = parseAccelerator(saved)
+      setCaptureKeys(parsed.length > 0 ? parsed : [''])
+      // After state settles, auto-focus the first slot or hidden input
+      setTimeout(() => { keyCaptureRef.current?.focus() }, 0)
       setCaptureConflict(false)
     } else {
       setEditingChat(true)
       setEditingCapture(false)
-      setCaptureKeys([])
-      setChatKeys(parseAccelerator(saved))
+      const parsedChat = parseAccelerator(saved)
+      setChatKeys(parsedChat.length > 0 ? parsedChat : [''])
       setChatConflict(false)
     }
   }, [captureHotkey, chatHotkey])
@@ -201,7 +211,8 @@ function SettingsPage(): React.JSX.Element {
   }, [])
 
   const saveHotkey = useCallback(async (which: HotkeyAction) => {
-    const keys = which === 'capture' ? captureKeys : chatKeys
+    // Read from ref to guarantee latest values (avoids stale closure in edge cases)
+    const keys = which === 'capture' ? captureKeysRef.current : chatKeysRef.current
     const nonEmpty = keys.filter((k) => k)
     // Deduplicate: keep first occurrence of each key
     const deduped = nonEmpty.filter((k, i) => nonEmpty.indexOf(k) === i)
@@ -234,7 +245,7 @@ function SettingsPage(): React.JSX.Element {
     }
 
     try { await window.api.hotkey.enableAllHotkeys() } catch { /* ok */ }
-  }, [captureKeys, chatKeys, setCaptureHotkey, setChatHotkey])
+  }, [setCaptureHotkey, setChatHotkey])
 
   // Check conflicts on every key change (debounced via useEffect)
   useEffect(() => {
@@ -265,6 +276,19 @@ function SettingsPage(): React.JSX.Element {
       updateKey('capture', activeCaptureSlot, normalized)
     } else if (editingChat && activeChatSlot !== null) {
       updateKey('chat', activeChatSlot, normalized)
+    } else if (editingCapture) {
+      // No active slot: auto-fill first empty slot if any
+      setCaptureKeys((prev) => {
+        const idx = prev.findIndex((k) => !k)
+        if (idx >= 0) { const n = [...prev]; n[idx] = normalized; return n }
+        return prev
+      })
+    } else if (editingChat) {
+      setChatKeys((prev) => {
+        const idx = prev.findIndex((k) => !k)
+        if (idx >= 0) { const n = [...prev]; n[idx] = normalized; return n }
+        return prev
+      })
     }
   }, [editingCapture, editingChat, activeCaptureSlot, activeChatSlot, updateKey])
 
