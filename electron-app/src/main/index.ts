@@ -199,6 +199,11 @@ app.whenReady().then(() => {
 
   ipcMain.handle('hotkey:update', (_event, action: string, accelerator: string) => {
     unregisterSingleHotkey(action)
+    // Empty accelerator means clear the shortcut; update hotkeyActions so enableAllHotkeys won't re-register
+    if (!accelerator) {
+      hotkeyActions.set(action, { accelerator: '', enabled: hotkeyActions.get(action)?.enabled ?? true })
+      return
+    }
     const info = hotkeyActions.get(action)
     if (info?.enabled !== false) {
       // Check tool disabled state
