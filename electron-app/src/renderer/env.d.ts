@@ -28,6 +28,9 @@ interface Window {
       onToolToggle: (callback: (toolId: string) => void) => (() => void)
       notifyToolState: (toolId: string, enabled: boolean) => Promise<void>
     }
+    tool: {
+      setEnabled: (toolId: string, enabled: boolean) => Promise<void>
+    }
     hotkey: {
       onHotkey: (callback: (action: string) => void) => (() => void)
       updateHotkey: (action: string, accelerator: string) => Promise<void>
@@ -35,6 +38,7 @@ interface Window {
       disableAllHotkeys: () => Promise<void>
       enableAllHotkeys: () => Promise<void>
       checkConflict: (accelerator: string, excludeAction: string) => Promise<string | null>
+      getAllAccelerators: () => Promise<Record<string, string>>
     }
   }
 }

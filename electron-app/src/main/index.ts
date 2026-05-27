@@ -15,10 +15,14 @@ if (!gotTheLock) {
 }
 
 const hotkeyActions = new Map<string, { accelerator: string; enabled: boolean }>()
+const disabledTools = new Set<string>()
 
 function registerSingleHotkey(action: string, accelerator: string, mainWindow: BrowserWindow): boolean {
+  if (!accelerator) return false
   try {
     const registered = globalShortcut.register(accelerator, () => {
+      // Block if tool is disabled
+      if (action === 'stamina-capture' && disabledTools.has('stamina-capture')) return
       mainWindow.webContents.send(`hotkey:${action}`, action)
     })
     if (registered) {
@@ -147,21 +151,50 @@ app.whenReady().then(() => {
   const mainWindow = createWindow()
   createTray(mainWindow)
 
-  const captureHk = (getStore().get('captureHotkey') as string) || 'CommandOrControl+Shift+D'
-  const chatHk = (getStore().get('chatHotkey') as string) || 'CommandOrControl+Shift+A'
+  // Register hotkeys from saved config (no defaults 鈥?tools start without hotkeys)
+  const captureHk = (getStore().get('captureHotkey') as string) || ''
+  const chatHk = (getStore().get('chatHotkey') as string) || ''
   const captureEnabled = (getStore().get('captureHotkeyEnabled') as boolean) ?? true
   const chatEnabled = (getStore().get('chatHotkeyEnabled') as boolean) ?? true
 
-  if (captureEnabled) registerSingleHotkey('stamina-capture', captureHk, mainWindow)
+  // Only register if hotkey is non-empty and enabled
+  if (captureEnabled && captureHk) registerSingleHotkey('stamina-capture', captureHk, mainWindow)
   else hotkeyActions.set('stamina-capture', { accelerator: captureHk, enabled: false })
 
-  if (chatEnabled) registerSingleHotkey('ai-chat', chatHk, mainWindow)
+  if (chatEnabled && chatHk) registerSingleHotkey('ai-chat', chatHk, mainWindow)
   else hotkeyActions.set('ai-chat', { accelerator: chatHk, enabled: false })
+
+  // Tool disable/enable 鈥?directly controls hotkey registration
+  ipcMain.handle('tool:set-enabled', (_event, toolId: string, enabled: boolean) => {
+    if (enabled) {
+      disabledTools.delete(toolId)
+      // Re-register hotkey if it was previously disabled and settings allow
+      if (toolId === 'stamina-capture') {
+        const info = hotkeyActions.get('stamina-capture')
+        const enabledFlag = (getStore().get('captureHotkeyEnabled') as boolean) ?? true
+        if (enabledFlag && info?.accelerator) {
+          registerSingleHotkey('stamina-capture', info.accelerator, mainWindow)
+        }
+      }
+    } else {
+      disabledTools.add(toolId)
+      // Unregister tool's hotkey
+      if (toolId === 'stamina-capture') {
+        unregisterSingleHotkey('stamina-capture')
+        hotkeyActions.set('stamina-capture', {
+          accelerator: hotkeyActions.get('stamina-capture')?.accelerator || '',
+          enabled: false
+        })
+      }
+    }
+  })
 
   ipcMain.handle('hotkey:update', (_event, action: string, accelerator: string) => {
     unregisterSingleHotkey(action)
     const info = hotkeyActions.get(action)
     if (info?.enabled !== false) {
+      // Check tool disabled state
+      if (action === 'stamina-capture' && disabledTools.has('stamina-capture')) return
       registerSingleHotkey(action, accelerator, mainWindow)
     } else {
       hotkeyActions.set(action, { accelerator, enabled: false })
@@ -170,12 +203,18 @@ app.whenReady().then(() => {
 
   ipcMain.handle('hotkey:set-enabled', (_event, action: string, enabled: boolean) => {
     const info = hotkeyActions.get(action)
-    if (enabled) {
-      const acc = info?.accelerator || (action === 'stamina-capture' ? 'CommandOrControl+Shift+D' : 'CommandOrControl+Shift+A')
+    // Keep the saved accelerator
+    const acc = info?.accelerator || ''
+    if (enabled && acc) {
+      // Don't register if tool is disabled
+      if (action === 'stamina-capture' && disabledTools.has('stamina-capture')) {
+        hotkeyActions.set(action, { accelerator: acc, enabled: true })
+        return
+      }
       registerSingleHotkey(action, acc, mainWindow)
     } else {
       unregisterSingleHotkey(action)
-      hotkeyActions.set(action, { accelerator: info?.accelerator || '', enabled: false })
+      hotkeyActions.set(action, { accelerator: acc, enabled: false })
     }
   })
 
@@ -188,12 +227,17 @@ app.whenReady().then(() => {
   ipcMain.handle('hotkey:enable-all', () => {
     for (const [action, info] of hotkeyActions) {
       if (info.enabled !== false) {
-        registerSingleHotkey(action, info.accelerator, mainWindow)
+        // Skip if tool is disabled
+        if (action === 'stamina-capture' && disabledTools.has('stamina-capture')) continue
+        if (info.accelerator) {
+          registerSingleHotkey(action, info.accelerator, mainWindow)
+        }
       }
     }
   })
 
   ipcMain.handle('hotkey:check-conflict', (_event, accelerator: string, excludeAction: string) => {
+    if (!accelerator) return null
     for (const [action, info] of hotkeyActions) {
       if (action === excludeAction) continue
       if (info.accelerator === accelerator) return action
@@ -201,12 +245,21 @@ app.whenReady().then(() => {
     return null
   })
 
+  // Return all registered accelerators for conflict detection
+  ipcMain.handle('hotkey:get-all-accelerators', () => {
+    const result: Record<string, string> = {}
+    for (const [action, info] of hotkeyActions) {
+      result[action] = info.accelerator
+    }
+    return result
+  })
+
   registerIpcHandlers(mainWindow)
   registerSettingsIpc()
   registerCaptureIpc()
   registerQueueIpc()
 
-  // queue:flush handler — invoked by renderer after a successful capture
+  // queue:flush handler 鈥?invoked by renderer after a successful capture
   ipcMain.handle('queue:flush', async () => {
     return flushPendingQueue()
   })

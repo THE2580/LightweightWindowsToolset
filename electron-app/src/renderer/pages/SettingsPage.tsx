@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useDeepseekStore } from '@/stores/deepseekStore'
 import { applyTheme } from '@/lib/theme'
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import {
   Eye, EyeOff, Monitor, Sun, Moon, Wrench, Keyboard, RotateCcw,
-  Plus, Minus, AlertTriangle
+  Plus, Minus
 } from 'lucide-react'
 
 type TabId = 'general' | 'api' | 'hotkey'
@@ -21,13 +21,42 @@ const TABS: { id: TabId; label: string; icon: React.ComponentType<{ size?: numbe
 
 const DEFAULT_TITLE = '轻量化工具集'
 
-function parseAccelerator(acc: string): string[] {
-  if (!acc) return []
-  return acc.split('+')
+type HotkeyAction = 'capture' | 'chat'
+type HotkeyIPC = 'stamina-capture' | 'ai-chat'
+
+function actionToIPC(a: HotkeyAction): HotkeyIPC {
+  return a === 'capture' ? 'stamina-capture' : 'ai-chat'
+}
+
+/** Normalize a KeyboardEvent to a display key name */
+function normalizeKey(e: React.KeyboardEvent): string {
+  const key = e.key
+  // Single letters: uppercase
+  if (key.length === 1) return key.toUpperCase()
+  // Space
+  if (key === ' ') return 'Space'
+  // Arrow keys
+  if (key.startsWith('Arrow')) return key
+  // Function keys
+  if (key.startsWith('F') && key.length <= 3) return key
+  // Common named keys
+  const named: Record<string, string> = {
+    'Control': 'Control', 'Shift': 'Shift', 'Alt': 'Alt', 'Meta': 'CommandOrControl',
+    'Enter': 'Enter', 'Escape': 'Escape', 'Tab': 'Tab', 'Backspace': 'Backspace',
+    'Delete': 'Delete', 'Insert': 'Insert', 'Home': 'Home', 'End': 'End',
+    'PageUp': 'PageUp', 'PageDown': 'PageDown', 'CapsLock': 'CapsLock',
+    'NumLock': 'NumLock', 'ScrollLock': 'ScrollLock', 'PrintScreen': 'PrintScreen',
+  }
+  return named[key] || key
 }
 
 function keysToAccelerator(keys: string[]): string {
   return keys.join('+')
+}
+
+function parseAccelerator(acc: string): string[] {
+  if (!acc) return []
+  return acc.split('+')
 }
 
 function SettingsPage(): React.JSX.Element {
@@ -49,15 +78,23 @@ function SettingsPage(): React.JSX.Element {
   const [showKey, setShowKey] = useState(false)
   const [activeTab, setActiveTab] = useState<TabId>('general')
   const [titleDraft, setTitleDraft] = useState(windowTitle)
-  const [recordingCapture, setRecordingCapture] = useState(false)
-  const [recordingChat, setRecordingChat] = useState(false)
-  const [captureKeys, setCaptureKeys] = useState<string[]>([])
-  const [chatKeys, setChatKeys] = useState<string[]>([])
-  const [conflictMsg, setConflictMsg] = useState<string | null>(null)
   const [zoneWDraft, setZoneWDraft] = useState(chatExpandZoneWidth)
   const [zoneHDraft, setZoneHDraft] = useState(chatExpandZoneHeight)
   const [modelDraft, setModelDraft] = useState(deepseekModel)
   const [backendDraft, setBackendDraft] = useState(backendUrl)
+
+  // Hotkey editing state
+  const [editingCapture, setEditingCapture] = useState(false)
+  const [editingChat, setEditingChat] = useState(false)
+  const [captureKeys, setCaptureKeys] = useState<string[]>([])
+  const [chatKeys, setChatKeys] = useState<string[]>([])
+  const [captureConflict, setCaptureConflict] = useState(false)
+  const [chatConflict, setChatConflict] = useState(false)
+  const [activeCaptureSlot, setActiveCaptureSlot] = useState<number | null>(null)
+  const [activeChatSlot, setActiveChatSlot] = useState<number | null>(null)
+
+  // Refs for the hidden input that captures keyboard events
+  const keyCaptureRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { load(); loadApiKey() }, [load, loadApiKey])
   useEffect(() => { applyTheme(theme) }, [theme])
@@ -66,9 +103,10 @@ function SettingsPage(): React.JSX.Element {
   useEffect(() => { setBackendDraft(backendUrl) }, [backendUrl])
   useEffect(() => { setTitleDraft(windowTitle) }, [windowTitle])
   useEffect(() => { setZoneWDraft(chatExpandZoneWidth); setZoneHDraft(chatExpandZoneHeight) }, [chatExpandZoneWidth, chatExpandZoneHeight])
-  useEffect(() => { if (captureHotkey) setCaptureKeys(parseAccelerator(captureHotkey)) }, [captureHotkey])
-  useEffect(() => { if (chatHotkey) setChatKeys(parseAccelerator(chatHotkey)) }, [chatHotkey])
-  useEffect(() => { if (conflictMsg) { const t = setTimeout(() => setConflictMsg(null), 3000); return () => clearTimeout(t) } }, [conflictMsg])
+
+  // Sync capture hotkey to display when not editing
+  useEffect(() => { if (!editingCapture) setCaptureKeys(parseAccelerator(captureHotkey)) }, [captureHotkey, editingCapture])
+  useEffect(() => { if (!editingChat) setChatKeys(parseAccelerator(chatHotkey)) }, [chatHotkey, editingChat])
 
   const handleSaveApiKey = async () => { useDeepseekStore.getState().setApiKey(apiKeyInput); await window.api.settings.set('deepseekApiKey', apiKeyInput) }
   const saveModel = async () => { await setDeepseekModel(modelDraft) }
@@ -76,116 +114,314 @@ function SettingsPage(): React.JSX.Element {
   const handleSaveTitle = async () => { const t = titleDraft.trim(); if (!t) { setTitleDraft(windowTitle); return }; await setWindowTitle(t) }
   const handleResetTitle = async () => { setTitleDraft(DEFAULT_TITLE); await setWindowTitle(DEFAULT_TITLE) }
 
-  const startRecording = useCallback(async (which: 'capture' | 'chat') => {
-    try { await window.api.hotkey.disableAllHotkeys() } catch { /* ok */ }
-    if (which === 'capture') { setRecordingCapture(true); setRecordingChat(false); setCaptureKeys([]) }
-    else { setRecordingChat(true); setRecordingCapture(false); setChatKeys([]) }
-  }, [])
-
-  const removeLastKey = useCallback((which: 'capture' | 'chat') => {
-    if (which === 'capture') setCaptureKeys((prev) => prev.slice(0, -1))
-    else setChatKeys((prev) => prev.slice(0, -1))
-  }, [])
-
-  const handleRecordKey = useCallback(async (e: React.KeyboardEvent, which: 'capture' | 'chat') => {
-    e.preventDefault(); e.stopPropagation()
-    const key = e.key
-    if (['Control', 'Shift', 'Alt', 'Meta'].includes(key)) return
-    const prev = which === 'capture' ? [...captureKeys] : [...chatKeys]
-    const keys = [...prev]
-    if ((e.ctrlKey || e.metaKey) && !keys.includes('CommandOrControl')) keys.push('CommandOrControl')
-    if (e.shiftKey && !keys.includes('Shift')) keys.push('Shift')
-    if (e.altKey && !keys.includes('Alt')) keys.push('Alt')
-    const uk = key.length === 1 ? key.toUpperCase() : key
-    if (!keys.includes(uk)) keys.push(uk)
-    if (which === 'capture') setCaptureKeys(keys); else setChatKeys(keys)
-  }, [captureKeys, chatKeys])
-
-  const confirmRecording = useCallback(async (which: 'capture' | 'chat') => {
-    const keys = which === 'capture' ? captureKeys : chatKeys
-    if (keys.length === 0) return
-    const acc = keysToAccelerator(keys)
-    const exclude = which === 'capture' ? 'ai-chat' : 'stamina-capture'
-    let ca: string | null = null
-    try { ca = await window.api.hotkey.checkConflict(acc, exclude) } catch { /* ok */ }
-    if (ca) {
-      setConflictMsg('当前快捷键与"' + (ca === 'stamina-capture' ? '体力捕获' : 'AI 聊天') + '"冲突，快捷键无法操作')
-      try { await window.api.hotkey.enableAllHotkeys() } catch { /* ok */ }
-      if (which === 'capture') setRecordingCapture(false); else setRecordingChat(false)
-      return
-    }
-    if (which === 'capture') { await setCaptureHotkey(acc); setRecordingCapture(false) }
-    else { await setChatHotkey(acc); setRecordingChat(false) }
-    try { await window.api.hotkey.enableAllHotkeys() } catch { /* ok */ }
-  }, [captureKeys, chatKeys, setCaptureHotkey, setChatHotkey])
-
-  const cancelRecording = useCallback(async (which: 'capture' | 'chat') => {
-    if (which === 'capture') { setRecordingCapture(false); setCaptureKeys(parseAccelerator(captureHotkey)) }
-    else { setRecordingChat(false); setChatKeys(parseAccelerator(chatHotkey)) }
-    try { await window.api.hotkey.enableAllHotkeys() } catch { /* ok */ }
-  }, [captureHotkey, chatHotkey])
-
-  const getKeyConflictClass = (key: string, otherKeys: string[]): string => otherKeys.includes(key) ? 'bg-yellow-500/20 border-yellow-500' : ''
-  const getRecordingConflictClass = (keys: string[], otherAcc: string): string => {
-    if (keys.length === 0) return ''
-    return keysToAccelerator(keys) === otherAcc ? 'ring-2 ring-red-500 rounded' : ''
-  }
-  const getOtherConflictClass = (recordingKeys: string[], otherAcc: string): string => {
-    if (recordingKeys.length === 0) return ''
-    const acc = keysToAccelerator(recordingKeys)
-    if (acc === otherAcc) return 'border-red-500 bg-red-500/10'
-    const otherParts = parseAccelerator(otherAcc)
-    return recordingKeys.some((k) => otherParts.includes(k)) ? 'border-yellow-500 bg-yellow-500/10' : ''
-  }
-
   const handleZoneWChange = (w: number) => { setZoneWDraft(w); if (!chatExpandZoneVisible) setChatExpandZonePreview({ w, h: zoneHDraft }) }
   const handleZoneHChange = (h: number) => { setZoneHDraft(h); if (!chatExpandZoneVisible) setChatExpandZonePreview({ w: zoneWDraft, h }) }
   const handleZoneWCommit = async () => { await setChatExpandZoneWidth(zoneWDraft); setChatExpandZonePreview(null) }
   const handleZoneHCommit = async () => { await setChatExpandZoneHeight(zoneHDraft); setChatExpandZonePreview(null) }
 
-  const renderHK = (label: string, desc: string, enabled: boolean, setEn: (v: boolean) => Promise<void>,
-    saved: string, rec: boolean, keys: string[],
-    sr: () => void, cf: () => void, cx: () => void, rm: () => void,
-    otherKeys: string[], otherAcc: string
+  // --- Hotkey helpers ---
+
+  const startEdit = useCallback((which: HotkeyAction) => {
+    const saved = which === 'capture' ? captureHotkey : chatHotkey
+    if (which === 'capture') {
+      setEditingCapture(true)
+      setEditingChat(false)
+      setCaptureKeys(parseAccelerator(saved))
+      setCaptureConflict(false)
+    } else {
+      setEditingChat(true)
+      setEditingCapture(false)
+      setCaptureKeys([])
+      setChatKeys(parseAccelerator(saved))
+      setChatConflict(false)
+    }
+  }, [captureHotkey, chatHotkey])
+
+  const cancelEdit = useCallback((which: HotkeyAction) => {
+    if (which === 'capture') {
+      setEditingCapture(false)
+      setCaptureKeys(parseAccelerator(captureHotkey))
+      setCaptureConflict(false)
+      setActiveCaptureSlot(null)
+    } else {
+      setEditingChat(false)
+      setChatKeys(parseAccelerator(chatHotkey))
+      setChatConflict(false)
+      setActiveChatSlot(null)
+    }
+  }, [captureHotkey, chatHotkey])
+
+  const appendKey = useCallback((which: HotkeyAction) => {
+    if (which === 'capture') {
+      setCaptureKeys((prev) => {
+        // Check last key is non-empty
+        if (prev.length > 0 && !prev[prev.length - 1]) return prev
+        return [...prev, '']
+      })
+    } else {
+      setChatKeys((prev) => {
+        if (prev.length > 0 && !prev[prev.length - 1]) return prev
+        return [...prev, '']
+      })
+    }
+  }, [])
+
+  const removeLastKey = useCallback((which: HotkeyAction) => {
+    if (which === 'capture') {
+      setCaptureKeys((prev) => prev.slice(0, -1))
+      setActiveCaptureSlot(null)
+    } else {
+      setChatKeys((prev) => prev.slice(0, -1))
+      setActiveChatSlot(null)
+    }
+  }, [])
+
+  const updateKey = useCallback((which: HotkeyAction, index: number, value: string) => {
+    if (which === 'capture') {
+      setCaptureKeys((prev) => { const n = [...prev]; n[index] = value; return n })
+      setActiveCaptureSlot(null)
+    } else {
+      setChatKeys((prev) => { const n = [...prev]; n[index] = value; return n })
+      setActiveChatSlot(null)
+    }
+  }, [])
+
+  // Check conflict against all registered accelerators
+  const checkConflict = useCallback(async (which: HotkeyAction, keys: string[]) => {
+    const nonEmpty = keys.filter((k) => k)
+    if (nonEmpty.length === 0) return false
+    const acc = keysToAccelerator(nonEmpty)
+    const exclude = actionToIPC(which)
+    try {
+      const conflict = await window.api.hotkey.checkConflict(acc, exclude)
+      return conflict !== null
+    } catch {
+      return false
+    }
+  }, [])
+
+  const saveHotkey = useCallback(async (which: HotkeyAction) => {
+    const keys = which === 'capture' ? captureKeys : chatKeys
+    const nonEmpty = keys.filter((k) => k)
+    const acc = nonEmpty.length > 0 ? keysToAccelerator(nonEmpty) : ''
+
+    // Disable all hotkeys during recording mode
+    try { await window.api.hotkey.disableAllHotkeys() } catch { /* ok */ }
+
+    // Check conflict
+    const exclude = actionToIPC(which)
+    try {
+      const conflict = await window.api.hotkey.checkConflict(acc, exclude)
+      if (conflict) {
+        if (which === 'capture') setCaptureConflict(true)
+        else setChatConflict(true)
+        // Re-enable all
+        try { await window.api.hotkey.enableAllHotkeys() } catch { /* ok */ }
+        return
+      }
+    } catch { /* ok */ }
+
+    if (which === 'capture') {
+      await setCaptureHotkey(acc)
+      setEditingCapture(false)
+      setCaptureConflict(false)
+    } else {
+      await setChatHotkey(acc)
+      setEditingChat(false)
+      setChatConflict(false)
+    }
+
+    try { await window.api.hotkey.enableAllHotkeys() } catch { /* ok */ }
+  }, [captureKeys, chatKeys, setCaptureHotkey, setChatHotkey])
+
+  // Check conflicts on every key change (debounced via useEffect)
+  useEffect(() => {
+    if (!editingCapture) return
+    const t = setTimeout(async () => {
+      const c = await checkConflict('capture', captureKeys)
+      setCaptureConflict(c)
+    }, 200)
+    return () => clearTimeout(t)
+  }, [captureKeys, editingCapture, checkConflict])
+
+  useEffect(() => {
+    if (!editingChat) return
+    const t = setTimeout(async () => {
+      const c = await checkConflict('chat', chatKeys)
+      setChatConflict(c)
+    }, 200)
+    return () => clearTimeout(t)
+  }, [chatKeys, editingChat, checkConflict])
+
+  const handleKeyCapture = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const normalized = normalizeKey(e)
+    if (!normalized) return
+
+    if (editingCapture && activeCaptureSlot !== null) {
+      updateKey('capture', activeCaptureSlot, normalized)
+    } else if (editingChat && activeChatSlot !== null) {
+      updateKey('chat', activeChatSlot, normalized)
+    }
+  }, [editingCapture, editingChat, activeCaptureSlot, activeChatSlot, updateKey])
+
+  const nonEmptyCount = (keys: string[]): number => keys.filter((k) => k).length
+
+  // --- Render hotkey entry ---
+
+  const renderHotkeyRow = (
+    label: string,
+    desc: string,
+    enabled: boolean,
+    setEn: (v: boolean) => Promise<void>,
+    saved: string,
+    editing: boolean,
+    keys: string[],
+    conflict: boolean,
+    startEditFn: () => void,
+    cancelEditFn: () => void,
+    activeSlot: number | null,
+    which: HotkeyAction
   ) => (
-    <div className={cn('py-3 border-b border-border/60 transition-colors rounded px-2 -mx-2',
-      rec ? '' : getOtherConflictClass(keys.length > 0 ? keys : parseAccelerator(saved), otherAcc))}>
+    <div className="py-3 border-b border-border/60">
       <div className="flex items-center justify-between mb-1.5">
-        <div><Label className="text-sm">{label}</Label><p className="text-[11px] text-muted-foreground mt-0.5">{desc}</p></div>
-        <button onClick={() => setEn(!enabled)} className={cn('w-10 h-5 rounded-full transition-colors duration-200 flex-shrink-0', enabled ? 'bg-primary' : 'bg-muted-foreground/25')}>
-          <div className={cn('w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200', enabled ? 'translate-x-5.5' : 'translate-x-0.5')} />
+        <div>
+          <Label className="text-sm">{label}</Label>
+          <p className="text-[11px] text-muted-foreground mt-0.5">{desc}</p>
+        </div>
+        <button
+          onClick={() => setEn(!enabled)}
+          className={cn(
+            'w-10 h-5 rounded-full transition-colors duration-200 flex-shrink-0',
+            enabled ? 'bg-primary' : 'bg-muted-foreground/25'
+          )}
+        >
+          <div className={cn(
+            'w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200',
+            enabled ? 'translate-x-5.5' : 'translate-x-0.5'
+          )} />
         </button>
       </div>
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <div className={cn('flex items-center gap-0.5 flex-1 min-w-0', getRecordingConflictClass(keys, otherAcc))}>
-          {enabled ? (rec ? keys : parseAccelerator(saved)).map((p, i) => (
-            <span key={i} className="flex items-center gap-0.5">
-              {i > 0 && <span className="text-muted-foreground text-[11px]">+</span>}
-              <kbd className={cn('px-1.5 py-0.5 text-[11px] rounded border bg-background font-mono', rec ? getKeyConflictClass(p, otherKeys) : '')}>{p}</kbd>
-            </span>
-          )) : <span className="text-[11px] text-muted-foreground italic">已禁用</span>}
+
+      {!enabled ? (
+        <span className="text-[11px] text-muted-foreground italic">已禁用</span>
+      ) : editing ? (
+        <div>
+          {/* +, -, Save, Cancel buttons */}
+          <div className="flex items-center gap-2 mb-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs px-2"
+              onClick={() => { appendKey(which); setActiveCaptureSlot(which === 'capture' ? null : activeSlot); setActiveChatSlot(which === 'chat' ? null : activeSlot) }}
+            >
+              <Plus size={12} />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs px-2"
+              onClick={() => removeLastKey(which)}
+              disabled={nonEmptyCount(keys) === 0 && keys.every((k) => !k)}
+            >
+              <Minus size={12} />
+            </Button>
+            <Button
+              size="sm"
+              className="h-7 text-xs px-3"
+              onClick={() => saveHotkey(which)}
+            >
+              保存
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs px-3"
+              onClick={cancelEditFn}
+            >
+              取消
+            </Button>
+          </div>
+
+          {/* Key boxes row */}
+          <div className={cn(
+            'flex items-center gap-1 flex-wrap p-1 rounded transition-colors',
+            conflict && 'bg-red-500/10'
+          )}>
+            {keys.length === 0 ? (
+              <span className="text-[11px] text-muted-foreground italic">点击 + 添加按键</span>
+            ) : (
+              keys.map((key, i) => (
+                <span key={i} className="flex items-center gap-1">
+                  {i > 0 && <span className="text-muted-foreground text-[11px]">+</span>}
+                  <span
+                    tabIndex={0}
+                    role="button"
+                    onClick={() => {
+                      if (which === 'capture') setActiveCaptureSlot(i)
+                      else setActiveChatSlot(i)
+                      keyCaptureRef.current?.focus()
+                    }}
+                    onFocus={() => {
+                      if (which === 'capture') setActiveCaptureSlot(i)
+                      else setActiveChatSlot(i)
+                    }}
+                    className={cn(
+                      'inline-flex items-center justify-center min-w-[36px] px-2 py-1 text-[11px] rounded border font-mono cursor-pointer transition-colors select-none',
+                      'hover:border-primary/50',
+                      (which === 'capture' ? activeCaptureSlot : activeChatSlot) === i
+                        ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
+                        : key
+                          ? 'bg-background border-border'
+                          : 'bg-muted/50 border-dashed border-muted-foreground/30'
+                    )}
+                  >
+                    {key || <span className="text-muted-foreground">?</span>}
+                  </span>
+                </span>
+              ))
+            )}
+          </div>
+
+          {conflict && (
+            <p className="text-[10px] text-red-500 mt-1">此快捷键与其他快捷键冲突，保存后不生效</p>
+          )}
         </div>
-        {enabled && (rec ? (
-          <>
-            <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={rm} disabled={keys.length === 0}><Minus size={10} /></Button>
-            <Button size="sm" className="h-6 text-[10px] px-2" onClick={cf}>确认</Button>
-            <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={cx}>取消</Button>
-          </>
-        ) : (
-          <button onClick={sr} className="p-0.5 rounded hover:bg-muted transition-colors" title="追加快捷键"><Plus size={14} /></button>
-        ))}
-      </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <span className={cn(
+            'text-xs font-mono',
+            saved ? 'text-foreground' : 'text-muted-foreground italic'
+          )}>
+            {saved || '未配置'}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs px-2"
+            onClick={startEditFn}
+          >
+            配置快捷键
+          </Button>
+        </div>
+      )}
     </div>
   )
 
   return (
     <div className="max-w-xl">
+      {/* Hidden input for keyboard capture */}
+      <input
+        ref={keyCaptureRef}
+        type="text"
+        className="sr-only"
+        onKeyDown={handleKeyCapture}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+
       <h1 className="text-xl font-bold mb-4">设置</h1>
-      {conflictMsg && (
-        <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded-md bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs">
-          <AlertTriangle size={14} />{conflictMsg}
-        </div>
-      )}
       <div className="flex border-b border-border mb-5 sticky -top-5 z-10 bg-background -mx-5 px-5 pt-1 pb-1">
         {TABS.map((tab) => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={cn('flex items-center gap-1.5 px-4 py-2 text-xs font-medium transition-colors border-b-2 -mb-px', activeTab === tab.id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30')}>
@@ -265,10 +501,36 @@ function SettingsPage(): React.JSX.Element {
         )}
 
         {activeTab === 'hotkey' && (
-          <div className="space-y-4" onKeyDown={(e) => { if (recordingCapture) handleRecordKey(e, 'capture'); else if (recordingChat) handleRecordKey(e, 'chat') }}>
-            {renderHK('体力捕获', '后台截图识别体力值', captureHotkeyEnabled, setCaptureHotkeyEnabled, captureHotkey, recordingCapture, captureKeys, () => startRecording('capture'), () => confirmRecording('capture'), () => cancelRecording('capture'), () => removeLastKey('capture'), chatKeys, chatHotkey)}
-            {renderHK('AI 聊天', '呼出或折叠 AI 聊天面板', chatHotkeyEnabled, setChatHotkeyEnabled, chatHotkey, recordingChat, chatKeys, () => startRecording('chat'), () => confirmRecording('chat'), () => cancelRecording('chat'), () => removeLastKey('chat'), captureKeys, captureHotkey)}
-            <p className="text-[10px] text-muted-foreground pt-1">点击 + 进入追加模式，逐键追加组合键。减号按钮从右往左移除按键。冲突时弹窗提示，组合冲突标红，单个按键重叠标黄。</p>
+          <div className="space-y-4">
+            {renderHotkeyRow(
+              '体力捕获',
+              '后台截图识别体力值',
+              captureHotkeyEnabled,
+              setCaptureHotkeyEnabled,
+              captureHotkey,
+              editingCapture,
+              captureKeys,
+              captureConflict,
+              () => startEdit('capture'),
+              () => cancelEdit('capture'),
+              activeCaptureSlot,
+              'capture'
+            )}
+            {renderHotkeyRow(
+              'AI 聊天',
+              '呼出或折叠 AI 聊天面板',
+              chatHotkeyEnabled,
+              setChatHotkeyEnabled,
+              chatHotkey,
+              editingChat,
+              chatKeys,
+              chatConflict,
+              () => startEdit('chat'),
+              () => cancelEdit('chat'),
+              activeChatSlot,
+              'chat'
+            )}
+            <p className="text-[10px] text-muted-foreground pt-1">点击「配置快捷键」进入编辑模式，点击「+」追加按键录入框，点击录入框后按下键盘按键进行录制，点击「保存」应用配置。</p>
           </div>
         )}
       </div>

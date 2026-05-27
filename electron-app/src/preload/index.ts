@@ -42,6 +42,10 @@ const api = {
     notifyToolState: (toolId: string, enabled: boolean): Promise<void> =>
       ipcRenderer.invoke('tray:update-tool-state', toolId, enabled)
   },
+  tool: {
+    setEnabled: (toolId: string, enabled: boolean): Promise<void> =>
+      ipcRenderer.invoke('tool:set-enabled', toolId, enabled)
+  },
   hotkey: {
     onHotkey: (callback: (action: string) => void): (() => void) => {
       const handler = (_event: Electron.IpcRendererEvent, action: string) => callback(action)
@@ -61,7 +65,9 @@ const api = {
     enableAllHotkeys: (): Promise<void> =>
       ipcRenderer.invoke('hotkey:enable-all'),
     checkConflict: (accelerator: string, excludeAction: string): Promise<string | null> =>
-      ipcRenderer.invoke('hotkey:check-conflict', accelerator, excludeAction)
+      ipcRenderer.invoke('hotkey:check-conflict', accelerator, excludeAction),
+    getAllAccelerators: (): Promise<Record<string, string>> =>
+      ipcRenderer.invoke('hotkey:get-all-accelerators')
   }
 }
 

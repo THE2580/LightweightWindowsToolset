@@ -14,7 +14,7 @@ interface PluginInfo {
 
 export type ToolStatus = 'stable' | 'upcoming'
 
-// Tools that are not yet implemented — cannot be enabled
+// Tools that are not yet implemented 鈥?cannot be enabled
 const UPCOMING_TOOLS = new Set<string>(
   BUILTIN_PLUGINS.filter((p) => p.status === 'upcoming').map((p) => p.id)
 )
@@ -67,6 +67,8 @@ export const usePluginStore = create<PluginState>((set, get) => ({
     set({ disabledTools: next })
     const enabled = !next.has(id)
     window.api.tray.notifyToolState(id, enabled)
+    // Notify main process to unregister/re-register hotkey
+    window.api.tool.setEnabled(id, enabled)
   },
 
   isToolEnabled: (id) => {
