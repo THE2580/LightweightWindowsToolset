@@ -6,7 +6,6 @@ import { registerIpcHandlers } from './ipc/window'
 import { registerSettingsIpc, getStore } from './ipc/settings'
 import { registerCaptureIpc } from './ipc/capture'
 import { registerQueueIpc, loadQueue, saveQueue } from './ipc/queue'
-import { registerTavilyIpc } from './ipc/tavily'
 
 let isQuitting = false
 
@@ -206,7 +205,6 @@ app.whenReady().then(() => {
   registerSettingsIpc()
   registerCaptureIpc()
   registerQueueIpc()
-  registerTavilyIpc()
 
   // queue:flush handler — invoked by renderer after a successful capture
   ipcMain.handle('queue:flush', async () => {

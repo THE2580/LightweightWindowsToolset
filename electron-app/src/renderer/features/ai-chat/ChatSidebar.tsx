@@ -4,9 +4,8 @@ import {
   useEffect,
   type KeyboardEvent
 } from 'react'
-import { Send, Loader2, Trash2, Globe } from 'lucide-react'
+import { Send, Loader2, Trash2 } from 'lucide-react'
 import { useDeepseekStore } from '@/stores/deepseekStore'
-import { formatSearchContext } from './api/tavily'
 
 interface Message {
   id: string
@@ -18,10 +17,6 @@ function ChatSidebar(): React.JSX.Element {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
-
-  const webSearchEnabled = useDeepseekStore((s) => s.webSearchEnabled)
-  const setWebSearchEnabled = useDeepseekStore((s) => s.setWebSearchEnabled)
-
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -37,7 +32,7 @@ function ChatSidebar(): React.JSX.Element {
     const text = input.trim()
     if (!text || isStreaming) return
 
-    const { apiKey, webSearchEnabled: wsEnabled } = useDeepseekStore.getState()
+    const { apiKey } = useDeepseekStore.getState()
     if (!apiKey) {
       setMessages((prev) => [
         ...prev,
@@ -58,29 +53,6 @@ function ChatSidebar(): React.JSX.Element {
     const assistantMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: '' }
     setMessages((prev) => [...prev, assistantMsg])
 
-    let searchContext = ''
-    if (wsEnabled) {
-      try {
-        const configuredKey = await window.api.settings.get('tavilyApiKey') as string | null
-        const tavilyKey = configuredKey || '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'
-        const results = await window.api.tavily.search(text, tavilyKey) as any
-        searchContext = formatSearchContext(results)
-        useDeepseekStore.getState().setLastSearchRaw(searchContext)
-        console.log('[Chat] Search context length:', searchContext.length, 'preview:', searchContext.substring(0, 120))
-      } catch (e) {
-        console.error('[Chat] Web search failed:', e)
-        // Update assistant placeholder to indicate search failure
-        setMessages((prev) => {
-          const updated = [...prev]
-          const last = updated[updated.length - 1]
-          if (last && last.role === 'assistant' && !last.content) {
-            updated[updated.length - 1] = { ...last, content: '联网搜索失败，将以离线模式回复' }
-          }
-          return updated
-        })
-      }
-    }
-
     try {
       const model = (await window.api.settings.get('deepseekModel')) as string
       const response = await fetch('https://api.deepseek.com/chat/completions', {
@@ -93,7 +65,7 @@ function ChatSidebar(): React.JSX.Element {
           model: model || 'deepseek-v4-flash',
           messages: [
             ...messages.map((m) => ({ role: m.role, content: m.content })),
-            { role: 'user', content: searchContext ? text + searchContext : text }
+            { role: 'user', content: text }
           ],
           stream: true
         })
@@ -189,19 +161,8 @@ function ChatSidebar(): React.JSX.Element {
         ))}
       </div>
 
-      {/* Toolbar: web search + clear */}
-      <div className="flex items-center justify-between px-4 py-1.5">
-        <button
-          onClick={() => setWebSearchEnabled(!webSearchEnabled)}
-          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs border transition-colors bg-white ${
-            webSearchEnabled
-              ? 'border-blue-300 text-blue-500'
-              : 'border-gray-300 text-gray-400'
-          }`}
-        >
-          <Globe size={13} />
-          联网模式
-        </button>
+      {/* Toolbar: clear history */}
+      <div className="flex items-center justify-end px-4 py-1.5">
         <button
           onClick={handleClear}
           className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs border border-gray-200 text-gray-400 bg-white hover:text-gray-600 hover:border-gray-300 transition-colors"

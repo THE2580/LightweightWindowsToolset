@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+﻿import { useEffect, useState, useCallback } from 'react'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useDeepseekStore } from '@/stores/deepseekStore'
 import { applyTheme } from '@/lib/theme'
@@ -45,11 +45,6 @@ function SettingsPage(): React.JSX.Element {
   } = useSettingsStore()
 
   const { apiKey, loadApiKey } = useDeepseekStore()
-  const lastSearchRaw = useDeepseekStore((s) => s.lastSearchRaw)
-  const loadTavilyKey = () => { useDeepseekStore.getState().loadTavilyApiKey() }
-  const [tavilyApiKeyDraft, setTavilyApiKeyDraft] = useState('')
-  const [tavilyApiKeySaved, setTavilyApiKeySaved] = useState('')
-  const [showTavilyKey, setShowTavilyKey] = useState(false)
   const [apiKeyInput, setApiKeyInput] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [activeTab, setActiveTab] = useState<TabId>('general')
@@ -69,16 +64,13 @@ function SettingsPage(): React.JSX.Element {
   useEffect(() => { if (apiKey) setApiKeyInput(apiKey) }, [apiKey])
   useEffect(() => { setModelDraft(deepseekModel) }, [deepseekModel])
   useEffect(() => { setBackendDraft(backendUrl) }, [backendUrl])
-  useEffect(() => { loadApiKey(); loadTavilyKey() }, [])
-  useEffect(() => { const loadKey = async () => { const k = await window.api.settings.get('tavilyApiKey') as string | null; if (k) { setTavilyApiKeyDraft(k); setTavilyApiKeySaved(k) } }; loadKey() }, [])
   useEffect(() => { setTitleDraft(windowTitle) }, [windowTitle])
   useEffect(() => { setZoneWDraft(chatExpandZoneWidth); setZoneHDraft(chatExpandZoneHeight) }, [chatExpandZoneWidth, chatExpandZoneHeight])
   useEffect(() => { if (captureHotkey) setCaptureKeys(parseAccelerator(captureHotkey)) }, [captureHotkey])
   useEffect(() => { if (chatHotkey) setChatKeys(parseAccelerator(chatHotkey)) }, [chatHotkey])
   useEffect(() => { if (conflictMsg) { const t = setTimeout(() => setConflictMsg(null), 3000); return () => clearTimeout(t) } }, [conflictMsg])
 
-  const saveApiKey = async () => { useDeepseekStore.getState().setApiKey(apiKeyInput); await window.api.settings.set('deepseekApiKey', apiKeyInput) }
-  const saveTavilyApiKey = async () => { await window.api.settings.set('tavilyApiKey', tavilyApiKeyDraft); setTavilyApiKeySaved(tavilyApiKeyDraft) }
+  const handleSaveApiKey = async () => { useDeepseekStore.getState().setApiKey(apiKeyInput); await window.api.settings.set('deepseekApiKey', apiKeyInput) }
   const saveModel = async () => { await setDeepseekModel(modelDraft) }
   const saveBackend = async () => { await setBackendUrl(backendDraft) }
   const handleSaveTitle = async () => { const t = titleDraft.trim(); if (!t) { setTitleDraft(windowTitle); return }; await setWindowTitle(t) }
@@ -258,27 +250,16 @@ function SettingsPage(): React.JSX.Element {
                 </div>
               )}
             </div>
-            {/* ---- DEBUG: Web Search Raw Results ---- */}
-            <div className="py-3 border-b border-border/60">
-              <Label className="text-sm">????????????</Label>
-              <p className="text-[11px] text-muted-foreground mt-0.5 mb-2">???? Tavily ?????? AI ??????</p>
-              <pre className="max-h-48 overflow-auto rounded-md border border-border bg-muted/50 p-2 text-[11px] whitespace-pre-wrap break-all font-mono">{lastSearchRaw || '暂无联网搜索记录'}</pre>
-            </div>
-            
           </div>
         )}
 
         {activeTab === 'api' && (
           <div className="space-y-4">
             <div className="py-3 border-b border-border/60">
-              <div className="flex items-end justify-between mb-2"><div><Label className="text-sm">DeepSeek API Key</Label><p className="text-[11px] text-muted-foreground mt-0.5">用于 AI 解析和聊天功能</p></div>{apiKeyInput !== (apiKey || '') && (<Button onClick={saveApiKey} size="sm" className="h-8 text-xs">保存</Button>)}</div>
+              <div className="flex items-end justify-between mb-2"><div><Label className="text-sm">DeepSeek API Key</Label><p className="text-[11px] text-muted-foreground mt-0.5">用于 AI 解析和聊天功能</p></div><Button onClick={handleSaveApiKey} size="sm" className="h-8 text-xs">保存</Button></div>
               <div className="relative"><Input type={showKey ? 'text' : 'password'} value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} placeholder="sk-..." className="pr-8 h-8 text-xs" /><button onClick={() => setShowKey(!showKey)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" tabIndex={-1}>{showKey ? <EyeOff size={14} /> : <Eye size={14} />}</button></div>
             </div>
-            
-            <div className="py-3 border-b border-border/60">
-              <div className="flex items-end justify-between mb-2"><div><Label className="text-sm">Tavily API Key</Label><p className="text-[11px] text-muted-foreground mt-0.5">用于联网搜索功能</p></div>{tavilyApiKeyDraft !== tavilyApiKeySaved && (<Button onClick={saveTavilyApiKey} size="sm" className="h-8 text-xs">保存</Button>)}</div>
-              <div className="relative"><Input type={showTavilyKey ? 'text' : 'password'} value={tavilyApiKeyDraft} onChange={(e) => setTavilyApiKeyDraft(e.target.value)} placeholder="tvly-..." className="pr-8 h-8 text-xs" /><button onClick={() => setShowTavilyKey(!showTavilyKey)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" tabIndex={-1}>{showTavilyKey ? <EyeOff size={14} /> : <Eye size={14} />}</button></div>
-            </div><div className="py-3 border-b border-border/60"><div className="flex items-end justify-between"><div><Label className="text-sm">AI 模型</Label><p className="text-[11px] text-muted-foreground mt-0.5 mb-2">DeepSeek 模型名称</p></div>{modelDraft !== deepseekModel && (<Button onClick={saveModel} size="sm" className="h-8 text-xs">保存</Button>)}</div><Input value={modelDraft} onChange={(e) => setModelDraft(e.target.value)} placeholder="deepseek-v4-flash" className="max-w-[240px] h-8 text-xs" /></div>
+            <div className="py-3 border-b border-border/60"><div className="flex items-end justify-between"><div><Label className="text-sm">AI 模型</Label><p className="text-[11px] text-muted-foreground mt-0.5 mb-2">DeepSeek 模型名称</p></div>{modelDraft !== deepseekModel && (<Button onClick={saveModel} size="sm" className="h-8 text-xs">保存</Button>)}</div><Input value={modelDraft} onChange={(e) => setModelDraft(e.target.value)} placeholder="deepseek-v4-flash" className="max-w-[240px] h-8 text-xs" /></div>
             <div className="py-3 border-b border-border/60"><div className="flex items-end justify-between"><div><Label className="text-sm">后端 API 地址</Label><p className="text-[11px] text-muted-foreground mt-0.5 mb-2">体力数据后端服务</p></div>{backendDraft !== backendUrl && (<Button onClick={saveBackend} size="sm" className="h-8 text-xs">保存</Button>)}</div><Input value={backendDraft} onChange={(e) => setBackendDraft(e.target.value)} placeholder="http://100.70.198.102:8000" className="max-w-[240px] h-8 text-xs" /></div>
           </div>
         )}

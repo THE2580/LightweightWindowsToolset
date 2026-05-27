@@ -22,9 +22,6 @@ interface Window {
       getCount: () => Promise<number>
       flush: () => Promise<{ flushed: number; remaining: number }>
     }
-    tavily: {
-      search: (query: string, apiKey: string) => Promise<unknown>
-    }
     tray: {
       onTrayCapture: (callback: () => void) => (() => void)
       onNavigate: (callback: (path: string) => void) => (() => void)
