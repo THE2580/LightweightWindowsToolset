@@ -61,29 +61,35 @@ function parseAccelerator(acc: string): string[] {
 }
 
 /**
- * Validate a hotkey key combination for Electron globalShortcut compatibility.
- * Called only at save time. Rules:
- * - Must have at least 2 non-empty keys.
- * - All keys except the last must be modifiers (Control/Shift/Alt/CommandOrControl).
- * - The last key must NOT be a modifier.
+ * Validate a hotkey key combination.
+ * Rule: keys split strictly — all modifiers first, then all non-modifier keys.
+ * Requires >= 2 keys with at least one modifier on the left and
+ * at least one non-modifier on the right. No interleaving.
  */
 function validateHotkeyKeys(keys: string[]): string | null {
   const nonEmpty = keys.filter((k) => k)
   if (nonEmpty.length === 0) return null
-
   if (nonEmpty.length < 2) {
     return '快捷键至少需要两个按键（修饰键 + 普通键），如 Ctrl+C'
   }
 
-  for (let i = 0; i < nonEmpty.length - 1; i++) {
-    if (!MODIFIER_KEYS.has(nonEmpty[i])) {
-      return '只有首个及中间的按键可以是修饰键（Ctrl/Shift/Alt/Win）'
+  let seenNonModifier = false
+  for (let i = 0; i < nonEmpty.length; i++) {
+    if (MODIFIER_KEYS.has(nonEmpty[i])) {
+      if (seenNonModifier) {
+        return '修饰键必须全部在普通键之前，不能交替排列'
+      }
+    } else {
+      seenNonModifier = true
     }
   }
 
-  const lastKey = nonEmpty[nonEmpty.length - 1]
-  if (MODIFIER_KEYS.has(lastKey)) {
-    return '快捷键必须以普通按键结尾，不能以修饰键结尾'
+  if (!MODIFIER_KEYS.has(nonEmpty[0])) {
+    return '首个按键必须是修饰键（Ctrl/Shift/Alt/Win）'
+  }
+
+  if (MODIFIER_KEYS.has(nonEmpty[nonEmpty.length - 1])) {
+    return '末尾按键必须是普通键，不能以修饰键结尾'
   }
 
   return null
@@ -143,9 +149,9 @@ function SettingsPage(): React.JSX.Element {
   useEffect(() => { captureKeysRef.current = captureKeys }, [captureKeys])
   useEffect(() => { chatKeysRef.current = chatKeys }, [chatKeys])
 
-  // Clear validation error when keys change (so user can retry after fixing)
-  useEffect(() => { setCaptureValidationError(null) }, [captureKeys])
-  useEffect(() => { setChatValidationError(null) }, [chatKeys])
+  // Clear save-time errors when keys change
+  useEffect(() => { setCaptureValidationError(null); setCaptureConflict(false) }, [captureKeys])
+  useEffect(() => { setChatValidationError(null); setChatConflict(false) }, [chatKeys])
 
   const handleSaveApiKey = async () => { useDeepseekStore.getState().setApiKey(apiKeyInput); await window.api.settings.set('deepseekApiKey', apiKeyInput) }
   const saveModel = async () => { await setDeepseekModel(modelDraft) }
@@ -167,17 +173,17 @@ function SettingsPage(): React.JSX.Element {
       setEditingCapture(true)
       setEditingChat(false)
       setCaptureValidationError(null)
+      setCaptureConflict(false)
       const parsed = parseAccelerator(saved)
       setCaptureKeys(parsed.length > 0 ? parsed : [''])
       setTimeout(() => { keyCaptureRef.current?.focus() }, 0)
-      setCaptureConflict(false)
     } else {
       setEditingChat(true)
       setEditingCapture(false)
       setChatValidationError(null)
+      setChatConflict(false)
       const parsedChat = parseAccelerator(saved)
       setChatKeys(parsedChat.length > 0 ? parsedChat : [''])
-      setChatConflict(false)
     }
   }, [captureHotkey, chatHotkey])
 
@@ -222,47 +228,34 @@ function SettingsPage(): React.JSX.Element {
     }
   }, [])
 
-  const checkConflict = useCallback(async (which: HotkeyAction, keys: string[]) => {
-    const nonEmpty = keys.filter((k) => k)
-    if (nonEmpty.length === 0) return false
-    const acc = keysToAccelerator(nonEmpty)
-    const exclude = actionToIPC(which)
-    try {
-      const conflict = await window.api.hotkey.checkConflict(acc, exclude)
-      return conflict !== null
-    } catch {
-      return false
-    }
-  }, [])
-
   const saveHotkey = useCallback(async (which: HotkeyAction) => {
     const keys = which === 'capture' ? captureKeysRef.current : chatKeysRef.current
     const nonEmpty = keys.filter((k) => k)
     const deduped = nonEmpty.filter((k, i) => nonEmpty.indexOf(k) === i)
     const acc = deduped.length > 0 ? keysToAccelerator(deduped) : ''
 
-    // Validate combination (only at save time)
+    // Step 1: validate combination structure
     if (deduped.length > 0) {
       const err = validateHotkeyKeys(deduped)
       if (err) {
-        if (which === 'capture') setCaptureValidationError(err)
-        else setChatValidationError(err)
+        if (which === 'capture') { setCaptureValidationError(err); setCaptureConflict(false) }
+        else { setChatValidationError(err); setChatConflict(false) }
         return
       }
     }
 
-    // Check conflict
+    // Step 2: check conflict against other registered shortcuts
     const exclude = actionToIPC(which)
     try {
-      const conflict = await window.api.hotkey.checkConflict(acc, exclude)
-      if (conflict) {
-        if (which === 'capture') setCaptureConflict(true)
-        else setChatConflict(true)
-        try { await window.api.hotkey.enableAllHotkeys() } catch { /* ok */ }
+      const conflictAction = await window.api.hotkey.checkConflict(acc, exclude)
+      if (conflictAction) {
+        if (which === 'capture') { setCaptureConflict(true); setCaptureValidationError(null) }
+        else { setChatConflict(true); setChatValidationError(null) }
         return
       }
     } catch { /* ok */ }
 
+    // All checks passed — save
     if (which === 'capture') {
       await setCaptureHotkey(deduped)
       setEditingCapture(false)
@@ -277,25 +270,6 @@ function SettingsPage(): React.JSX.Element {
 
     try { await window.api.hotkey.enableAllHotkeys() } catch { /* ok */ }
   }, [setCaptureHotkey, setChatHotkey])
-
-  // Conflict detection (debounced, real-time)
-  useEffect(() => {
-    if (!editingCapture) return
-    const t = setTimeout(async () => {
-      const c = await checkConflict('capture', captureKeys)
-      setCaptureConflict(c)
-    }, 200)
-    return () => clearTimeout(t)
-  }, [captureKeys, editingCapture, checkConflict])
-
-  useEffect(() => {
-    if (!editingChat) return
-    const t = setTimeout(async () => {
-      const c = await checkConflict('chat', chatKeys)
-      setChatConflict(c)
-    }, 200)
-    return () => clearTimeout(t)
-  }, [chatKeys, editingChat, checkConflict])
 
   const handleKeyCapture = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     e.preventDefault()
@@ -462,7 +436,7 @@ function SettingsPage(): React.JSX.Element {
           {conflict && (
             <p className="text-[10px] text-red-500 mt-1">此快捷键与其他快捷键冲突，保存后不生效</p>
           )}
-          {validationError && !conflict && (
+          {validationError && (
             <p className="text-[10px] text-red-500 mt-1">{validationError}</p>
           )}
         </div>
@@ -607,7 +581,7 @@ function SettingsPage(): React.JSX.Element {
               activeChatSlot,
               'chat'
             )}
-            <p className="text-[10px] text-muted-foreground pt-1">点击「配置快捷键」进入编辑模式，逐框录入按键后点击「保存」。快捷键需满足：至少两个按键、首位必须为修饰键（Ctrl/Shift/Alt/Win）、末尾必须为普通按键。</p>
+            <p className="text-[10px] text-muted-foreground pt-1">点击「配置快捷键」进入编辑，逐框录入按键后保存。快捷键规则：至少两个按键，左侧全为修饰键（Ctrl/Shift/Alt/Win），右侧全为普通键，不可交替排列。</p>
           </div>
         )}
       </div>
