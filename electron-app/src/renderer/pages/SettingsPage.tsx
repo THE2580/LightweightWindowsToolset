@@ -262,7 +262,7 @@ function SettingsPage(): React.JSX.Element {
             <div className="py-3 border-b border-border/60">
               <Label className="text-sm">????????????</Label>
               <p className="text-[11px] text-muted-foreground mt-0.5 mb-2">???? Tavily ?????? AI ??????</p>
-              <pre className="max-h-48 overflow-auto rounded-md border border-border bg-muted/50 p-2 text-[11px] whitespace-pre-wrap break-all font-mono">{lastSearchRaw || '????????'}</pre>
+              <pre className="max-h-48 overflow-auto rounded-md border border-border bg-muted/50 p-2 text-[11px] whitespace-pre-wrap break-all font-mono">{lastSearchRaw || '暂无联网搜索记录'}</pre>
             </div>
             
           </div>
