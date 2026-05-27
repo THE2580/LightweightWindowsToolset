@@ -1,4 +1,3 @@
-const TAVILY_API_KEY = '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'
 const TAVILY_ENDPOINT = 'https://api.tavily.com/search'
 
 export interface SearchResult {
@@ -7,12 +6,12 @@ export interface SearchResult {
   content: string
 }
 
-export async function searchWeb(query: string): Promise<SearchResult[]> {
+export async function searchWeb(query: string, apiKey: string): Promise<SearchResult[]> {
   const response = await fetch(TAVILY_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      api_key: TAVILY_API_KEY,
+      api_key: apiKey,
       query,
       search_depth: 'basic',
       include_answer: false,

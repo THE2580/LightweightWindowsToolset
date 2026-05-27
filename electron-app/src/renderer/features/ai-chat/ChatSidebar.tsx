@@ -2,10 +2,9 @@ import {
   useState,
   useRef,
   useEffect,
-  type KeyboardEvent,
-  type FormEvent
+  type KeyboardEvent
 } from 'react'
-import { Send, Loader2 } from 'lucide-react'
+import { Send, Loader2, Trash2, Globe } from 'lucide-react'
 import { useDeepseekStore } from '@/stores/deepseekStore'
 import { searchWeb, formatSearchContext } from './api/tavily'
 
@@ -22,17 +21,23 @@ function ChatSidebar(): React.JSX.Element {
 
   const webSearchEnabled = useDeepseekStore((s) => s.webSearchEnabled)
   const setWebSearchEnabled = useDeepseekStore((s) => s.setWebSearchEnabled)
+
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight)
   }, [messages])
 
+  const handleClear = (): void => {
+    if (messages.length === 0) return
+    setMessages([])
+  }
+
   const handleSend = async (): Promise<void> => {
     const text = input.trim()
     if (!text || isStreaming) return
 
-    const { apiKey, webSearchEnabled } = useDeepseekStore.getState()
+    const { apiKey, webSearchEnabled: wsEnabled } = useDeepseekStore.getState()
     if (!apiKey) {
       setMessages((prev) => [
         ...prev,
@@ -54,10 +59,13 @@ function ChatSidebar(): React.JSX.Element {
     setMessages((prev) => [...prev, assistantMsg])
 
     let searchContext = ''
-    if (webSearchEnabled) {
+    if (wsEnabled) {
       try {
-        const results = await searchWeb(text)
-        searchContext = formatSearchContext(results)
+        const tavilyKey = await window.api.settings.get('tavilyApiKey') as string | null
+        if (tavilyKey) {
+          const results = await searchWeb(text, tavilyKey)
+          searchContext = formatSearchContext(results)
+        }
       } catch (e) {
         console.error('[Chat] Web search failed:', e)
       }
@@ -146,7 +154,6 @@ function ChatSidebar(): React.JSX.Element {
 
   return (
     <div className="flex flex-col h-full">
-
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3 flex flex-col">
         {messages.length === 0 && (
@@ -172,27 +179,30 @@ function ChatSidebar(): React.JSX.Element {
         ))}
       </div>
 
-            {/* Web Search Toggle */}
-      <div className="px-4 pt-2 pb-1">
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={webSearchEnabled}
-            onChange={(e) => setWebSearchEnabled(e.target.checked)}
-            className="peer sr-only"
-          />
-          <div className="relative w-8 h-4.5 bg-muted-foreground/25 rounded-full
-                          peer-checked:bg-primary transition-colors duration-200">
-            <div className="absolute left-0.5 top-0.5 w-3.5 h-3.5 bg-white rounded-full
-                            peer-checked:translate-x-3.5 transition-transform duration-200" />
-          </div>
-          <span className="text-xs text-muted-foreground select-none">
-            ????{webSearchEnabled ? ' ? ???' : ''}
-          </span>
-        </label>
+      {/* Toolbar: web search + clear */}
+      <div className="flex items-center justify-between px-4 py-1.5">
+        <button
+          onClick={() => setWebSearchEnabled(!webSearchEnabled)}
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs border transition-colors bg-white ${
+            webSearchEnabled
+              ? 'border-blue-300 text-blue-500'
+              : 'border-gray-300 text-gray-400'
+          }`}
+        >
+          <Globe size={13} />
+          联网模式
+        </button>
+        <button
+          onClick={handleClear}
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs border border-gray-200 text-gray-400 bg-white hover:text-gray-600 hover:border-gray-300 transition-colors"
+          disabled={messages.length === 0}
+        >
+          <Trash2 size={12} />
+          清空记录
+        </button>
       </div>
 
-{/* Input */}
+      {/* Input */}
       <div className="px-4 py-3 border-t border-border">
         <div className="flex gap-2">
           <textarea
@@ -208,8 +218,9 @@ function ChatSidebar(): React.JSX.Element {
           <button
             onClick={handleSend}
             disabled={isStreaming || !input.trim()}
-            className="p-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90
-                       disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="inline-flex items-center justify-center w-9 h-9 rounded-md border transition-colors bg-white
+                       enabled:border-blue-300 enabled:text-blue-500 enabled:hover:bg-blue-50
+                       disabled:border-gray-200 disabled:text-gray-300 disabled:cursor-not-allowed"
             aria-label="Send"
           >
             {isStreaming ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
