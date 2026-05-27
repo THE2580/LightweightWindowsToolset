@@ -7,6 +7,7 @@ import {
 } from 'react'
 import { Send, Loader2 } from 'lucide-react'
 import { useDeepseekStore } from '@/stores/deepseekStore'
+import { searchWeb, formatSearchContext } from './api/tavily'
 
 interface Message {
   id: string
@@ -18,6 +19,9 @@ function ChatSidebar(): React.JSX.Element {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
+
+  const webSearchEnabled = useDeepseekStore((s) => s.webSearchEnabled)
+  const setWebSearchEnabled = useDeepseekStore((s) => s.setWebSearchEnabled)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -28,7 +32,7 @@ function ChatSidebar(): React.JSX.Element {
     const text = input.trim()
     if (!text || isStreaming) return
 
-    const { apiKey } = useDeepseekStore.getState()
+    const { apiKey, webSearchEnabled } = useDeepseekStore.getState()
     if (!apiKey) {
       setMessages((prev) => [
         ...prev,
@@ -49,6 +53,16 @@ function ChatSidebar(): React.JSX.Element {
     const assistantMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: '' }
     setMessages((prev) => [...prev, assistantMsg])
 
+    let searchContext = ''
+    if (webSearchEnabled) {
+      try {
+        const results = await searchWeb(text)
+        searchContext = formatSearchContext(results)
+      } catch (e) {
+        console.error('[Chat] Web search failed:', e)
+      }
+    }
+
     try {
       const model = (await window.api.settings.get('deepseekModel')) as string
       const response = await fetch('https://api.deepseek.com/chat/completions', {
@@ -61,7 +75,7 @@ function ChatSidebar(): React.JSX.Element {
           model: model || 'deepseek-v4-flash',
           messages: [
             ...messages.map((m) => ({ role: m.role, content: m.content })),
-            { role: 'user', content: text }
+            { role: 'user', content: searchContext ? text + '\n\n' + searchContext : text }
           ],
           stream: true
         })
@@ -158,7 +172,27 @@ function ChatSidebar(): React.JSX.Element {
         ))}
       </div>
 
-      {/* Input */}
+            {/* Web Search Toggle */}
+      <div className="px-4 pt-2 pb-1">
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={webSearchEnabled}
+            onChange={(e) => setWebSearchEnabled(e.target.checked)}
+            className="peer sr-only"
+          />
+          <div className="relative w-8 h-4.5 bg-muted-foreground/25 rounded-full
+                          peer-checked:bg-primary transition-colors duration-200">
+            <div className="absolute left-0.5 top-0.5 w-3.5 h-3.5 bg-white rounded-full
+                            peer-checked:translate-x-3.5 transition-transform duration-200" />
+          </div>
+          <span className="text-xs text-muted-foreground select-none">
+            ????{webSearchEnabled ? ' ? ???' : ''}
+          </span>
+        </label>
+      </div>
+
+{/* Input */}
       <div className="px-4 py-3 border-t border-border">
         <div className="flex gap-2">
           <textarea

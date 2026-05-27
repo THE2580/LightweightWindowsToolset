@@ -3,14 +3,17 @@ import { create } from 'zustand'
 interface DeepSeekState {
   apiKey: string | null
   apiKeyLoaded: boolean
+  webSearchEnabled: boolean
 
   setApiKey: (key: string) => void
   loadApiKey: () => Promise<void>
+  setWebSearchEnabled: (enabled: boolean) => void
 }
 
 export const useDeepseekStore = create<DeepSeekState>((set, get) => ({
   apiKey: null,
   apiKeyLoaded: false,
+  webSearchEnabled: false,
 
   setApiKey: (key) => {
     set({ apiKey: key })
@@ -28,5 +31,9 @@ export const useDeepseekStore = create<DeepSeekState>((set, get) => ({
     } catch {
       set({ apiKeyLoaded: true })
     }
+  },
+
+  setWebSearchEnabled: (enabled) => {
+    set({ webSearchEnabled: enabled })
   }
 }))
