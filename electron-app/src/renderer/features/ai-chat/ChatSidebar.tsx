@@ -61,13 +61,21 @@ function ChatSidebar(): React.JSX.Element {
     let searchContext = ''
     if (wsEnabled) {
       try {
-        const tavilyKey = await window.api.settings.get('tavilyApiKey') as string | null
-        if (tavilyKey) {
-          const results = await searchWeb(text, tavilyKey)
-          searchContext = formatSearchContext(results)
-        }
+        const configuredKey = await window.api.settings.get('tavilyApiKey') as string | null
+        const tavilyKey = configuredKey || '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'
+        const results = await searchWeb(text, tavilyKey)
+        searchContext = formatSearchContext(results)
       } catch (e) {
         console.error('[Chat] Web search failed:', e)
+        // Update assistant placeholder to indicate search failure
+        setMessages((prev) => {
+          const updated = [...prev]
+          const last = updated[updated.length - 1]
+          if (last && last.role === 'assistant' && !last.content) {
+            updated[updated.length - 1] = { ...last, content: '???????????????' }
+          }
+          return updated
+        })
       }
     }
 
