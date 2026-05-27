@@ -65,6 +65,7 @@ function ChatSidebar(): React.JSX.Element {
         const tavilyKey = configuredKey || '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'
         const results = await window.api.tavily.search(text, tavilyKey) as any
         searchContext = formatSearchContext(results)
+        console.log('[Chat] Search context length:', searchContext.length, 'preview:', searchContext.substring(0, 120))
       } catch (e) {
         console.error('[Chat] Web search failed:', e)
         // Update assistant placeholder to indicate search failure
@@ -91,7 +92,8 @@ function ChatSidebar(): React.JSX.Element {
           model: model || 'deepseek-v4-flash',
           messages: [
             ...messages.map((m) => ({ role: m.role, content: m.content })),
-            { role: 'user', content: searchContext ? text + '\n\n' + searchContext : text }
+            ...(searchContext ? [{ role: 'system', content: searchContext }] : []),
+            { role: 'user', content: text }
           ],
           stream: true
         })
