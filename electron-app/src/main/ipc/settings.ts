@@ -1,4 +1,4 @@
-import { ipcMain, safeStorage } from 'electron'
+import { app, ipcMain, safeStorage } from 'electron'
 import Store from 'electron-store'
 
 const store = new Store({
@@ -22,6 +22,10 @@ const store = new Store({
 })
 
 const ENCRYPTED_KEYS = new Set(['deepseekApiKey'])
+
+// Sync autoStart with OS on startup
+const initialAutoStart = store.get('autoStart', false) as boolean
+app.setLoginItemSettings({ openAtLogin: initialAutoStart })
 
 export function getStore(): Store {
   return store
@@ -50,6 +54,11 @@ export function registerSettingsIpc(): void {
       }
     }
     store.set(key, value)
+
+    // Apply autoStart setting to the OS
+    if (key === 'autoStart') {
+      app.setLoginItemSettings({ openAtLogin: !!value })
+    }
   })
 
   ipcMain.handle('settings:getAll', () => {
