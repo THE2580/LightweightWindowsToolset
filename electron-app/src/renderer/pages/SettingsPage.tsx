@@ -61,10 +61,16 @@ function parseAccelerator(acc: string): string[] {
 }
 
 /**
- * Validate a hotkey key combination.
- * Rule: keys split strictly — all modifiers first, then all non-modifier keys.
- * Requires >= 2 keys with at least one modifier on the left and
- * at least one non-modifier on the right. No interleaving.
+ * Validate a hotkey key combination for Electron globalShortcut.register.
+ *
+ * Electron's accelerator format: zero or more modifiers + exactly ONE key code,
+ * joined by '+'.  Multiple non-modifier keys are NOT supported — the middle ones
+ * are silently discarded (e.g. Control+B+C is registered as Control+C).
+ *
+ * Rules enforced here:
+ * 1. At least 2 keys (>=1 modifier + exactly 1 non-modifier).
+ * 2. All modifiers must come first, the single non-modifier key last.
+ * 3. No interleaving.
  */
 function validateHotkeyKeys(keys: string[]): string | null {
   const nonEmpty = keys.filter((k) => k)
@@ -74,6 +80,7 @@ function validateHotkeyKeys(keys: string[]): string | null {
   }
 
   let seenNonModifier = false
+  let nonModifierCount = 0
   for (let i = 0; i < nonEmpty.length; i++) {
     if (MODIFIER_KEYS.has(nonEmpty[i])) {
       if (seenNonModifier) {
@@ -81,6 +88,7 @@ function validateHotkeyKeys(keys: string[]): string | null {
       }
     } else {
       seenNonModifier = true
+      nonModifierCount++
     }
   }
 
@@ -90,6 +98,12 @@ function validateHotkeyKeys(keys: string[]): string | null {
 
   if (MODIFIER_KEYS.has(nonEmpty[nonEmpty.length - 1])) {
     return '末尾按键必须是普通键，不能以修饰键结尾'
+  }
+
+  // Electron globalShortcut.register only supports exactly one non-modifier key.
+  // e.g. Control+B+C → Electron discards B, only registers Control+C.
+  if (nonModifierCount > 1) {
+    return '快捷键只能有一个普通键，不支持多字符组合（如 Ctrl+B+C 中间键会被 Electron 丢弃）'
   }
 
   return null
@@ -581,7 +595,7 @@ function SettingsPage(): React.JSX.Element {
               activeChatSlot,
               'chat'
             )}
-            <p className="text-[10px] text-muted-foreground pt-1">点击「配置快捷键」进入编辑，逐框录入按键后保存。快捷键规则：至少两个按键，左侧全为修饰键（Ctrl/Shift/Alt/Win），右侧全为普通键，不可交替排列。</p>
+            <p className="text-[10px] text-muted-foreground pt-1">快捷键格式：一个或多个修饰键（Ctrl/Shift/Alt/Win）在前，恰好一个普通键在后。不支持多字符组合（Ctrl+B+C 中间键会被 Electron 丢弃）。</p>
           </div>
         )}
       </div>
