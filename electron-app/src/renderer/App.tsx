@@ -1,5 +1,7 @@
 import { useEffect } from 'react'
 import { HashRouter, Routes, Route, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
+import { AnimatePresence } from 'framer-motion'
 import AppShell from './components/layout/AppShell'
 import HomePage from './pages/HomePage'
 import SettingsPage from './pages/SettingsPage'
@@ -45,17 +47,28 @@ function AppListeners(): null {
   return null
 }
 
+function AppContent(): React.JSX.Element {
+  const location = useLocation()
+  return (
+    <>
+      <AppListeners />
+      <AppShell>
+        <AnimatePresence mode="wait">
+          <Routes location={location} key={location.pathname}>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/tool/:pluginId" element={<PluginRoute />} />
+          </Routes>
+        </AnimatePresence>
+      </AppShell>
+    </>
+  )
+}
+
 function App(): React.JSX.Element {
   return (
     <HashRouter>
-      <AppListeners />
-      <AppShell>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/tool/:pluginId" element={<PluginRoute />} />
-        </Routes>
-      </AppShell>
+      <AppContent />
     </HashRouter>
   )
 }

@@ -2,6 +2,7 @@
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useDeepseekStore } from '@/stores/deepseekStore'
 import { applyTheme } from '@/lib/theme'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -492,9 +493,9 @@ function SettingsPage(): React.JSX.Element {
           </button>
         ))}
       </div>
-      <div className="min-h-[300px]">
+      <AnimatePresence mode="wait">
         {activeTab === 'general' && (
-          <div className="space-y-4">
+          <motion.div key="general" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15, ease: 'easeOut' }} className="space-y-4">
             <div className="py-3 border-b border-border/60">
               <Label className="text-sm">主窗口标题</Label>
               <p className="text-[11px] text-muted-foreground mt-0.5 mb-2">显示在窗口标题栏的文字</p>
@@ -549,22 +550,22 @@ function SettingsPage(): React.JSX.Element {
                 </div>
               )}
             </div>
-          </div>
+          </motion.div>
         )}
 
         {activeTab === 'api' && (
-          <div className="space-y-4">
+          <motion.div key="api" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15, ease: 'easeOut' }} className="space-y-4">
             <div className="py-3 border-b border-border/60">
               <div className="flex items-end justify-between mb-2"><div><Label className="text-sm">DeepSeek API Key</Label><p className="text-[11px] text-muted-foreground mt-0.5">用于 AI 解析和聊天功能</p></div><Button onClick={handleSaveApiKey} size="sm" className="h-8 text-xs">保存</Button></div>
               <div className="relative"><Input type={showKey ? 'text' : 'password'} value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} placeholder="sk-..." className="pr-8 h-8 text-xs" /><button onClick={() => setShowKey(!showKey)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" tabIndex={-1}>{showKey ? <EyeOff size={14} /> : <Eye size={14} />}</button></div>
             </div>
             <div className="py-3 border-b border-border/60"><div className="flex items-end justify-between"><div><Label className="text-sm">AI 模型</Label><p className="text-[11px] text-muted-foreground mt-0.5 mb-2">DeepSeek 模型名称</p></div>{modelDraft !== deepseekModel && (<Button onClick={saveModel} size="sm" className="h-8 text-xs">保存</Button>)}</div><Input value={modelDraft} onChange={(e) => setModelDraft(e.target.value)} placeholder="deepseek-v4-flash" className="max-w-[240px] h-8 text-xs" /></div>
             <div className="py-3 border-b border-border/60"><div className="flex items-end justify-between"><div><Label className="text-sm">后端 API 地址</Label><p className="text-[11px] text-muted-foreground mt-0.5 mb-2">游戏资源后端服务</p></div>{backendDraft !== backendUrl && (<Button onClick={saveBackend} size="sm" className="h-8 text-xs">保存</Button>)}</div><Input value={backendDraft} onChange={(e) => setBackendDraft(e.target.value)} placeholder="http://100.70.198.102:8000" className="max-w-[240px] h-8 text-xs" /></div>
-          </div>
+          </motion.div>
         )}
 
         {activeTab === 'hotkey' && (
-          <div className="space-y-4">
+          <motion.div key="hotkey" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15, ease: 'easeOut' }} className="space-y-4">
             {renderHotkeyRow(
               '游戏资源捕获',
               '后台截图识别资源值',
@@ -596,9 +597,9 @@ function SettingsPage(): React.JSX.Element {
               'chat'
             )}
             <p className="text-[10px] text-muted-foreground pt-1">快捷键格式：一个或多个修饰键（Ctrl/Shift/Alt/Win）在前，恰好一个普通键在后。不支持多字符组合（Ctrl+B+C 中间键会被 Electron 丢弃）。</p>
-          </div>
+          </motion.div>
         )}
-      </div>
+      </AnimatePresence>
     </div>
   )
 }

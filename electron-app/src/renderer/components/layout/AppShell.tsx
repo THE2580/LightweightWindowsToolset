@@ -64,7 +64,7 @@ function AppShell({ children }: AppShellProps): React.JSX.Element {
           <div className="absolute inset-0 z-10" onClick={handleBackdropClick} />
         )}
 
-        <div className={`absolute top-0 h-full w-80 border-l border-border bg-background shadow-lg z-20 flex flex-col transition-all duration-200 ease-out ${chatOpen ? 'right-0' : '-right-80'}`}>
+        <div className={`absolute top-0 h-full w-80 border-l border-border bg-background shadow-lg z-20 flex flex-col transition-[right] duration-200 ease-out ${chatOpen ? 'right-0' : '-right-80'}`}>
           <div className="flex items-center justify-between px-3 py-1.5 flex-shrink-0">
             <span className="text-sm font-semibold">AI 聊天</span>
             <button onClick={() => setChatOpen(false)} className="p-1 rounded hover:bg-muted transition-colors" aria-label="Close chat">
