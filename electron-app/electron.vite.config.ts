@@ -28,6 +28,22 @@ export default defineConfig({
   },
   renderer: {
     root: resolve(__dirname, 'src/renderer'),
+    server: {
+      watch: {
+        ignored: [
+          '**/out/**',
+          '**/node_modules/**',
+          '**/dist/**',
+          '**/*.txt',
+          '**/tests/**',
+          '**/test-results/**',
+          '**/_fix_*.ps1',
+          '**/*.md',
+          '**/*.png',
+          '**/*.zip'
+        ]
+      }
+    },
     build: {
       outDir: resolve(__dirname, 'out/renderer'),
       rollupOptions: {
