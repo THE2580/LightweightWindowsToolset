@@ -20,6 +20,7 @@ interface SettingsState {
   chatHotkey: string
   captureHotkeyEnabled: boolean
   chatHotkeyEnabled: boolean
+  captureRefreshInterval: number
   isLoaded: boolean
 
   load: () => Promise<void>
@@ -39,6 +40,7 @@ interface SettingsState {
   setChatHotkey: (keys: string[]) => Promise<void>
   setCaptureHotkeyEnabled: (v: boolean) => Promise<void>
   setChatHotkeyEnabled: (v: boolean) => Promise<void>
+  setCaptureRefreshInterval: (v: number) => Promise<void>
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -58,6 +60,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   chatHotkey: '',
   captureHotkeyEnabled: true,
   chatHotkeyEnabled: true,
+  captureRefreshInterval: 2,
   isLoaded: false,
 
   load: async () => {
@@ -80,6 +83,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         chatHotkey: (all.chatHotkey as string) || '',
         captureHotkeyEnabled: (all.captureHotkeyEnabled as boolean) ?? true,
         chatHotkeyEnabled: (all.chatHotkeyEnabled as boolean) ?? true,
+        captureRefreshInterval: (all.captureRefreshInterval as number) || 2,
         isLoaded: true
       })
     } catch {
@@ -102,5 +106,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setCaptureHotkey: async (keys) => { const jsonStr = JSON.stringify(keys); const acc = keys.join('+'); await window.api.settings.set('captureHotkey', jsonStr); await window.api.hotkey.updateHotkey('stamina-capture', acc); set({ captureHotkey: jsonStr }) },
   setChatHotkey: async (keys) => { const jsonStr = JSON.stringify(keys); const acc = keys.join('+'); await window.api.settings.set('chatHotkey', jsonStr); await window.api.hotkey.updateHotkey('ai-chat', acc); set({ chatHotkey: jsonStr }) },
   setCaptureHotkeyEnabled: async (v) => { await window.api.settings.set('captureHotkeyEnabled', v); await window.api.hotkey.setHotkeyEnabled('stamina-capture', v); set({ captureHotkeyEnabled: v }) },
-  setChatHotkeyEnabled: async (v) => { await window.api.settings.set('chatHotkeyEnabled', v); await window.api.hotkey.setHotkeyEnabled('ai-chat', v); set({ chatHotkeyEnabled: v }) }
+  setChatHotkeyEnabled: async (v) => { await window.api.settings.set('chatHotkeyEnabled', v); await window.api.hotkey.setHotkeyEnabled('ai-chat', v); set({ chatHotkeyEnabled: v }) },
+  setCaptureRefreshInterval: async (v) => { await window.api.settings.set('captureRefreshInterval', v); set({ captureRefreshInterval: v }) }
 }))

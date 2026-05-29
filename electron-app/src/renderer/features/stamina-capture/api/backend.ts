@@ -1,86 +1,41 @@
-const DEFAULT_BACKEND_URL = 'http://100.70.198.102:8000'
-const MAX_RETRIES = 3
-const RETRY_BASE_DELAY_MS = 1000
+// Backend API via IPC (main-process Node.js http — bypasses Chromium proxy)
 
-let backendUrl = DEFAULT_BACKEND_URL
-
-export function setBackendUrl(url: string): void {
-  backendUrl = url || DEFAULT_BACKEND_URL
-}
-
-export interface StaminaRecordPayload {
+export interface ResourceRecordPayload {
   game_name: string
-  package_name: string
-  remaining_stamina: number
-  max_stamina: number
+  resource_type: string
+  current_resource: number
+  max_resource: number
   capture_time: string
-  source: 'windows'
+  platform: string
 }
 
-export interface StaminaRecord {
+export interface ResourceRecord {
   id: number
   game_name: string
-  remaining_stamina: number
-  max_stamina: number
+  resource_type: string
+  current_resource: number
+  max_resource: number
   capture_time: string
-  source: string
+  platform: string
+  created_at?: string
 }
 
-export async function getPendingCount(): Promise<number> {
-  return window.api.queue.getCount()
-}
-
-async function fetchWithRetry(
-  url: string,
-  options: RequestInit,
-  retries = MAX_RETRIES
-): Promise<Response> {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      const response = await fetch(url, options)
-      return response
-    } catch (err) {
-      if (attempt === retries) throw err
-      const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1)
-      await new Promise((resolve) => setTimeout(resolve, delay))
-    }
-  }
-  throw new Error('Max retries exceeded')
-}
-
-export async function postStaminaRecord(payload: StaminaRecordPayload): Promise<StaminaRecord> {
+export async function postResourceRecord(payload: ResourceRecordPayload): Promise<ResourceRecord> {
   try {
-    const response = await fetchWithRetry(`${backendUrl}/api/stamina/record`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-    if (!response.ok) {
-      throw new Error(`Backend error: ${response.status}`)
-    }
-    return response.json()
-  } catch {
-    // Persist to electron-store via IPC so records survive app restart
+    return await window.api.backend.postRecord(payload)
+  } catch (err) {
+    // Queue for retry via electron-store
     await window.api.queue.add(payload)
-    throw new Error('Backend unreachable — record queued for retry')
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(`Backend unreachable — record queued for retry`)
   }
 }
 
-export async function getTodayRecord(gameName: string): Promise<StaminaRecord | null> {
-  const response = await fetchWithRetry(
-    `${backendUrl}/api/stamina/today/${encodeURIComponent(gameName)}`
-  )
-  if (response.status === 204) return null
-  if (!response.ok) {
-    throw new Error(`Backend error: ${response.status}`)
-  }
-  return response.json()
+export async function getAllTodayRecords(): Promise<ResourceRecord[]> {
+  return window.api.backend.getToday()
 }
 
-export async function getAllTodayRecords(): Promise<StaminaRecord[]> {
-  const response = await fetchWithRetry(`${backendUrl}/api/stamina/today`)
-  if (!response.ok) {
-    throw new Error(`Backend error: ${response.status}`)
-  }
-  return response.json()
+/** @deprecated Legacy alias */
+export function setBackendUrl(_url: string): void {
+  // Backend URL is now managed in main process (settings store)
 }

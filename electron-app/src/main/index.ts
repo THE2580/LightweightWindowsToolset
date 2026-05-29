@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, globalShortcut, ipcMain } from 'electron'
+﻿import { app, BrowserWindow, shell, globalShortcut, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { createTray, destroyTray } from './tray'
@@ -6,6 +6,7 @@ import { registerIpcHandlers } from './ipc/window'
 import { registerSettingsIpc, getStore } from './ipc/settings'
 import { registerCaptureIpc } from './ipc/capture'
 import { registerQueueIpc, loadQueue, saveQueue } from './ipc/queue'
+import { registerBackendIpc } from './ipc/backend'
 
 let isQuitting = false
 
@@ -107,7 +108,7 @@ async function flushPendingQueue(): Promise<{ flushed: number; remaining: number
 
   for (const item of queue) {
     try {
-      const resp = await fetch(`${backendUrl}/api/stamina/record`, {
+      const resp = await fetch(`${backendUrl}/api/resource/record`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(item)
@@ -271,6 +272,7 @@ app.whenReady().then(() => {
   registerSettingsIpc()
   registerCaptureIpc()
   registerQueueIpc()
+  registerBackendIpc()
 
   // queue:flush handler — invoked by renderer after a successful capture
   ipcMain.handle('queue:flush', async () => {

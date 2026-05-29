@@ -15,14 +15,28 @@ const api = {
     getAll: (): Promise<Record<string, unknown>> => ipcRenderer.invoke('settings:getAll')
   },
   capture: {
-    trigger: (): Promise<{ ocrText: string; imageBase64: string }> =>
-      ipcRenderer.invoke('capture:trigger')
+    trigger: (): Promise<{ ocrText: string; imageBase64: string; success: boolean; errorCode?: string; errorMessage?: string; windowInfo?: { processName: string; windowTitle: string } }> => ipcRenderer.invoke('capture:trigger'),
+    detectForeground: (): Promise<{ processName: string; resolvedGameId: string | null; isDesktop: boolean }> => ipcRenderer.invoke('capture:detect-foreground'),
+    notify: (title: string, body: string, isSuccess?: boolean): Promise<void> =>
+      ipcRenderer.invoke('notify:show', title, body, isSuccess)
+  },
+  overlay: {
+    create: (a: string, b: string[]): Promise<void> => ipcRenderer.invoke('overlay:create', a, b),
+    update: (a: { s: string; l: string }[], b: string): Promise<void> => ipcRenderer.invoke('overlay:update', a, b),
+    result: (a: { s: string; l: string }[], b: string, c: string, d: boolean): Promise<void> => ipcRenderer.invoke('overlay:result', a, b, c, d),
+    close: (): Promise<void> => ipcRenderer.invoke('overlay:close')
   },
   queue: {
     add: (payload: unknown): Promise<void> => ipcRenderer.invoke('queue:add', payload),
     getCount: (): Promise<number> => ipcRenderer.invoke('queue:getCount'),
     flush: (): Promise<{ flushed: number; remaining: number }> =>
       ipcRenderer.invoke('queue:flush')
+  },
+  backend: {
+    postRecord: (payload: { game_name: string; resource_type: string; current_resource: number; max_resource: number; capture_time: string; platform: string }): Promise<{ id: number; game_name: string; resource_type: string; current_resource: number; max_resource: number; capture_time: string; platform: string }> =>
+      ipcRenderer.invoke('backend:post-record', payload),
+    getToday: (): Promise<{ id: number; game_name: string; resource_type: string; current_resource: number; max_resource: number; capture_time: string; platform: string }[]> =>
+      ipcRenderer.invoke('backend:get-today')
   },
   tray: {
     onTrayCapture: (callback: () => void): (() => void) => {

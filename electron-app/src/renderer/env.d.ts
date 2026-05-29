@@ -15,12 +15,31 @@ interface Window {
       getAll: () => Promise<Record<string, unknown>>
     }
     capture: {
-      trigger: () => Promise<{ ocrText: string; imageBase64: string }>
+      trigger: () => Promise<{
+        ocrText: string
+        imageBase64: string
+        success: boolean
+        errorCode?: string
+        errorMessage?: string
+        resolvedGameId?: string
+        windowInfo?: { processName: string; windowTitle: string }
+      }>
+      notify: (title: string, body: string, isSuccess?: boolean) => Promise<void>
+    }
+    overlay: {
+      create: (a: string, b: string[]) => Promise<void>
+      update: (a: { s: string; l: string }[], b: string) => Promise<void>
+      result: (a: { s: string; l: string }[], b: string, c: string, d: boolean) => Promise<void>
+      close: () => Promise<void>
     }
     queue: {
       add: (payload: unknown) => Promise<void>
       getCount: () => Promise<number>
       flush: () => Promise<{ flushed: number; remaining: number }>
+    }
+    backend: {
+      postRecord: (payload: { game_name: string; resource_type: string; current_resource: number; max_resource: number; capture_time: string; platform: string }) => Promise<{ id: number; game_name: string; resource_type: string; current_resource: number; max_resource: number; capture_time: string; platform: string }>
+      getToday: () => Promise<{ id: number; game_name: string; resource_type: string; current_resource: number; max_resource: number; capture_time: string; platform: string }[]>
     }
     tray: {
       onTrayCapture: (callback: () => void) => (() => void)

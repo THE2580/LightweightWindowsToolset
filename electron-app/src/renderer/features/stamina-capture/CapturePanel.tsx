@@ -1,110 +1,49 @@
 import { useCaptureStore } from '@/stores/captureStore'
-import { Button } from '@/components/ui/button'
-import { Camera, Loader2 } from 'lucide-react'
-import { parseStaminaViaAI } from './api/deepseek'
-import { postStaminaRecord, setBackendUrl } from './api/backend'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { Keyboard } from 'lucide-react'
 
-const STATE_LABELS: Record<string, string> = {
-  idle: '截图捕获体力',
-  capturing: '正在截图...',
-  ocr: 'OCR 识别中...',
-  parsing: 'AI 解析中...',
-  posting: '提交后端...',
-  done: '捕获完成',
-  error: '捕获失败，点击重试'
+function parseHotkeyKeys(jsonStr: string): string[] {
+  if (!jsonStr) return []
+  try {
+    return JSON.parse(jsonStr)
+  } catch {
+    return jsonStr.split('+')
+  }
 }
 
 function CapturePanel(): React.JSX.Element {
-  const {
-    captureState, setCaptureState, selectedGame,
-    setStamina, setOcrText, setTodayRecords, getGameConfig
-  } = useCaptureStore()
-  const isLoading = captureState !== 'idle' && captureState !== 'done' && captureState !== 'error'
-
-  const handleCapture = async (): Promise<void> => {
-    if (isLoading) return
-
-    const gameConfig = getGameConfig(selectedGame)
-    if (!gameConfig) return
-
-    try {
-      setCaptureState('capturing')
-      const result = await window.api.capture.trigger()
-
-      if (!result.ocrText && !result.imageBase64) {
-        throw new Error('Screenshot failed: empty result')
-      }
-
-      setOcrText(result.ocrText)
-
-      setCaptureState('parsing')
-      const aiResult = await parseStaminaViaAI(
-        result.ocrText || 'no text recognized',
-        gameConfig.name,
-        gameConfig.staminaName || '体力'
-      )
-
-      if (aiResult.remaining_stamina !== null && aiResult.max_stamina !== null) {
-        setStamina({
-          remaining: aiResult.remaining_stamina,
-          max: aiResult.max_stamina
-        })
-      }
-
-      if (aiResult.remaining_stamina !== null && aiResult.max_stamina !== null) {
-        setCaptureState('posting')
-
-        const backendUrl = await window.api.settings.get('backendUrl')
-        if (backendUrl && typeof backendUrl === 'string') {
-          setBackendUrl(backendUrl)
-        }
-
-        try {
-          const record = await postStaminaRecord({
-            game_name: gameConfig.name,
-            package_name: gameConfig.processName,
-            remaining_stamina: aiResult.remaining_stamina,
-            max_stamina: aiResult.max_stamina,
-            capture_time: new Date().toISOString(),
-            source: 'windows'
-          })
-          setTodayRecords([record])
-        } catch (backendErr) {
-          console.warn('[Capture] Backend post failed (non-blocking):', backendErr)
-        }
-      }
-
-      setCaptureState('done')
-      setTimeout(() => setCaptureState('idle'), 2000)
-    } catch (err) {
-      console.error('[Capture] Pipeline error:', err)
-      setCaptureState('error')
-    }
-  }
+  const { selectedGame, getGameConfig } = useCaptureStore()
+  const captureHotkey = useSettingsStore((s) => s.captureHotkey)
+  const gameConfig = getGameConfig(selectedGame)
+  const gameName = gameConfig?.name || '游戏'
+  const keys = parseHotkeyKeys(captureHotkey)
 
   return (
     <div className="rounded-lg border border-border bg-card shadow-sm p-5">
-      <h3 className="text-sm font-semibold mb-3">捕获控制</h3>
-      <p className="text-xs text-muted-foreground mb-4">
-        按快捷键或点击按钮截图当前游戏窗口，自动识别体力值
-      </p>
-      <Button
-        onClick={handleCapture}
-        disabled={isLoading}
-        size="sm"
-        className="w-full"
-        variant={captureState === 'error' ? 'destructive' : 'default'}
-      >
-        {isLoading ? (
-          <Loader2 size={16} className="animate-spin" />
-        ) : (
-          <Camera size={16} />
-        )}
-        {STATE_LABELS[captureState]}
-      </Button>
-      {captureState === 'error' && (
-        <p className="text-[11px] text-red-500 mt-2">捕获过程中出现错误，请检查游戏窗口是否打开</p>
-      )}
+      <h3 className="text-sm font-semibold mb-3">资源捕获</h3>
+      <div className="flex items-start gap-3">
+        <Keyboard size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+        <div className="text-xs text-muted-foreground leading-relaxed">
+          请全屏打开 <span className="font-medium text-primary">{gameName}</span> 后，使用快捷键{' '}
+          {keys.length > 0 ? (
+            <span className="inline-flex items-center gap-1 align-middle">
+              {keys.map((k, i) => (
+                <span key={i} className="inline-flex items-center gap-1">
+                  {i > 0 && <span className="text-[10px]">+</span>}
+                  <span className="inline-flex items-center justify-center min-w-[28px] px-1.5 py-0.5 text-[10px] rounded border border-green-300 bg-card font-mono leading-none">
+                    {k}
+                  </span>
+                </span>
+              ))}
+            </span>
+          ) : (
+            <span className="italic">未配置</span>
+          )}
+          {' '}进行资源自动识别
+          <br />
+          <span className="text-[10px]">快捷键请在「设置」页面中配置</span>
+        </div>
+      </div>
     </div>
   )
 }
