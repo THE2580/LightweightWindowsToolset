@@ -82,7 +82,11 @@ function CapturePage(): React.JSX.Element {
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1">
-              <span className="text-[10px] text-muted-foreground">↻</span>
+              <button
+                onClick={() => { setDraft('2'); setIntervalSetting(2) }}
+                className="text-[10px] text-muted-foreground hover:text-primary transition-colors cursor-pointer"
+                title="重置为默认 2s"
+              >↻</button>
               <input
                 type="number" min="0.5" step="0.5"
                 value={draft} onChange={(e) => setDraft(e.target.value)}

@@ -110,7 +110,7 @@ const OVERLAY_HTML = `<!DOCTYPE html>
   window._showInvalid = function(processName) {
     document.getElementById('titleText').textContent = '资源捕获';
     document.getElementById('processName').textContent = processName || '';
-    document.getElementById('invalidProcessName').textContent = '进程: ' + (processName || '未知');
+    document.getElementById('invalidProcessName').textContent = '请切换到支持的游戏窗口后重试';
     document.getElementById('invalidBanner').classList.add('show');
     document.getElementById('steps').innerHTML = '';
     document.getElementById('resultLine').className = 'result-line';

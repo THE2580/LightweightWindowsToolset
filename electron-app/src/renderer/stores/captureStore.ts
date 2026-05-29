@@ -32,7 +32,7 @@ export interface ResourceTypeConfig {
   recoveryMinutes: number
 }
 
-const STEP_LABELS = ['正在截图...', 'OCR文本识别中...', 'AI文本解析中...']
+const STEP_LABELS = ['正在截取游戏画面…', '正在识别画面文字…', '正在解析资源数据…']
 
 const GAME_CONFIGS: GameConfig[] = [
   {
@@ -229,9 +229,12 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
         set({ todayRecords: records })
         if (!get().backendOnline) set({ backendOnline: true })
         const now = Date.now()
+        // Sort by capture_time ASC so the last record for each resource_type is the newest
+        const sortedRecords = [...records].sort(
+          (a, b) => new Date(a.capture_time).getTime() - new Date(b.capture_time).getTime()
+        )
         const latest = new Map<string, ResourceSnapshot>()
-        for (const r of records) {
-          if (latest.has(r.resource_type)) continue
+        for (const r of sortedRecords) {
           const cfg = GAME_CONFIGS.find((g) => g.name === r.game_name)
           if (!cfg) continue
           const rt = cfg.resourceTypes.find((t) => t.id === r.resource_type)
@@ -261,8 +264,11 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
         if (!get().backendOnline) set({ backendOnline: true })
         const now = Date.now()
         const latest = new Map<string, ResourceSnapshot>()
-        let lastGameId: string | null = null
-        for (const r of records) {
+        // Sort by capture_time ASC so the last record for each resource_type is the newest
+        const sortedRecords = [...records].sort(
+          (a, b) => new Date(a.capture_time).getTime() - new Date(b.capture_time).getTime()
+        )
+        for (const r of sortedRecords) {
           const cfg = GAME_CONFIGS.find((g) => g.name === r.game_name)
           if (!cfg) continue
           const rt = cfg.resourceTypes.find((t) => t.id === r.resource_type)
@@ -276,15 +282,11 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
             recoveryMinutes: rt.recoveryMinutes,
             lastCaptureTime: r.capture_time
           })
-          if (rt.isPrimary) lastGameId = cfg.id
         }
         if (latest.size > 0) {
           const u: Record<string, ResourceSnapshot> = { ...get().resourceMap }
           for (const [k, v] of latest) u[k] = v
-          set((prev) => ({
-            resourceMap: u,
-            selectedGame: lastGameId || prev.selectedGame
-          }))
+          set({ resourceMap: u })
         }
       } else if (!get().backendOnline) set({ backendOnline: true })
     } catch { set({ backendOnline: false }) }
@@ -342,8 +344,11 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
     }
 
     // Update selectedGame if detected game differs from current selection
-    if (resolvedGameConfig.id !== state.selectedGame) {
-      set({ selectedGame: resolvedGameConfig.id })
+    // Sync both selectedGame and selectedResourceType to the captured game's primary resource
+    const primaryRTForSync = resolvedGameConfig.resourceTypes.find(rt => rt.isPrimary)
+    const targetRT = primaryRTForSync?.id || resolvedGameConfig.resourceTypes[0]?.id || resolvedGameConfig.id
+    if (resolvedGameConfig.id !== state.selectedGame || targetRT !== state.selectedResourceType) {
+      set({ selectedGame: resolvedGameConfig.id, selectedResourceType: targetRT })
     }
 
     const gameName = resolvedGameConfig.name

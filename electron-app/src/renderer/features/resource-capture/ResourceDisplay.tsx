@@ -11,10 +11,9 @@ function formatCountdown(seconds: number): string {
 }
 
 function ResourceDisplay(): React.JSX.Element {
-  const { resourceMap, subResources, getCurrentResourceConfig } = useCaptureStore(
+  const { resourceMap, getCurrentResourceConfig } = useCaptureStore(
     useShallow((s) => ({
       resourceMap: s.resourceMap,
-      subResources: s.subResources,
       getCurrentResourceConfig: s.getCurrentResourceConfig
     }))
   )
@@ -88,10 +87,12 @@ function ResourceDisplay(): React.JSX.Element {
         <div className="mt-2 text-center space-y-0.5">
           <p className="text-[10px] text-muted-foreground">
             {(() => {
-              const total = (displayMax - displayRemaining) * resourceConfig.recoveryMinutes
-              return total >= 60
-                ? `恢复满需 ${Math.floor(total / 60)}h${total % 60}m`
-                : `恢复满需 ${total}m`
+              const totalMin = Math.floor((displayMax - displayRemaining) * resourceConfig.recoveryMinutes)
+              const hours = Math.floor(totalMin / 60)
+              const mins = totalMin % 60
+              return hours > 0
+                ? `恢复满需 ${hours}h${mins}m`
+                : `恢复满需 ${mins}m`
             })()}
           </p>
           {displayRemaining < displayMax && (
@@ -99,27 +100,21 @@ function ResourceDisplay(): React.JSX.Element {
               +1 于 {formatCountdown(nextRecoverySec)}
             </p>
           )}
+          {displayRemaining < displayMax && resourceConfig.recoveryMinutes > 0 && (
+            <p className="text-[10px] text-muted-foreground">
+              {(() => {
+                const totalMin = Math.floor((displayMax - displayRemaining) * resourceConfig.recoveryMinutes)
+                const eta = new Date(Date.now() + totalMin * 60000)
+                const hh = String(eta.getHours()).padStart(2, '0')
+                const mm = String(eta.getMinutes()).padStart(2, '0')
+                return `预计 ${hh}:${mm} 恢复满`
+              })()}
+            </p>
+          )}
         </div>
       )}
 
-      {subResources.length > 0 && (
-        <div className="mt-3 pt-2.5 border-t border-border/60 space-y-1.5">
-          {subResources.map((sr) => (
-            <div key={sr.config.id} className="flex items-center justify-between gap-2">
-              <span className="text-[10px] text-muted-foreground truncate">{sr.config.label}</span>
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                <span className="font-mono text-[11px] tabular-nums">{sr.remaining}/{sr.max}</span>
-                <div className="w-12 h-1 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary/60 rounded-full"
-                    style={{ width: `${Math.min((sr.remaining / sr.max) * 100, 100)}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+
     </div>
   )
 }
