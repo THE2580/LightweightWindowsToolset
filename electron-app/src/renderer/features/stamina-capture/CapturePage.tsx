@@ -5,12 +5,16 @@ import CapturePanel from './CapturePanel'
 import StaminaDisplay from './StaminaDisplay'
 import CaptureHistory from './CaptureHistory'
 import { useCaptureStore } from '@/stores/captureStore'
+import { useShallow } from 'zustand/shallow'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { RefreshCw } from 'lucide-react'
+import { WifiOff } from 'lucide-react'
 
 function CapturePage(): React.JSX.Element {
-  const loadTodayFromBackend = useCaptureStore((s) => s.loadTodayFromBackend)
-  const refreshRecords = useCaptureStore((s) => s.refreshRecords)
+  const { loadTodayFromBackend } = useCaptureStore(
+    useShallow((s) => ({ loadTodayFromBackend: s.loadTodayFromBackend }))
+  )
+  const backendOnline = useCaptureStore((s) => s.backendOnline)
   const interval = useSettingsStore((s) => s.captureRefreshInterval)
   const setIntervalSetting = useSettingsStore((s) => s.setCaptureRefreshInterval)
   const [draft, setDraft] = useState(String(interval))
@@ -19,9 +23,9 @@ function CapturePage(): React.JSX.Element {
   const restartTimer = useCallback((ms: number) => {
     if (timerRef.current) clearInterval(timerRef.current)
     if (ms > 0) {
-      timerRef.current = setInterval(() => { refreshRecords() }, ms * 1000)
+      timerRef.current = setInterval(() => { useCaptureStore.getState().refreshRecords() }, ms * 1000)
     }
-  }, [refreshRecords])
+  }, [])
 
   // Initial load
   useEffect(() => {
@@ -58,6 +62,12 @@ function CapturePage(): React.JSX.Element {
           <div>
             <h1 className="text-lg font-bold">游戏资源捕获</h1>
             <p className="text-xs text-muted-foreground">截图识别游戏资源值</p>
+            {!backendOnline && (
+              <div className="flex items-center gap-1 mt-1">
+                <WifiOff size={11} className="text-amber-500" />
+                <span className="text-[10px] text-amber-600">后端离线</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {/* Auto-refresh interval */}

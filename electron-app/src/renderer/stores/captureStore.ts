@@ -116,6 +116,7 @@ interface CaptureStore {
   todayRecords: ResourceRecord[]
   captureHistory: CaptureHistoryEntry[]
   gameConfigs: GameConfig[]
+  backendOnline: boolean
 
   setSelectedGame: (id: string) => void
   setSelectedResourceType: (rt: string) => void
@@ -143,6 +144,7 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
   todayRecords: [],
   captureHistory: [],
   gameConfigs: GAME_CONFIGS,
+  backendOnline: true,
 
   setSelectedGame: (id) => {
     const config = GAME_CONFIGS.find((g) => g.id === id)
@@ -178,6 +180,7 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
       const records = await getAllTodayRecords()
       if (records.length > 0) {
         set({ todayRecords: records })
+        if (!get().backendOnline) set({ backendOnline: true })
         const now = Date.now()
         const latest = new Map<string, StaminaSnapshot>()
         for (const r of records) {
@@ -200,7 +203,7 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
           set((prev) => { const u = { ...prev.staminaMap }; for (const [k, v] of latest) u[k] = v; return { staminaMap: u } })
         }
       }
-    } catch { /* backend may be offline */ }
+    } catch { set({ backendOnline: false }) }
   },
 
   loadTodayFromBackend: async () => {
@@ -208,23 +211,36 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
       const records = await getAllTodayRecords()
       if (records.length > 0) {
         set({ todayRecords: records })
-        const primaryRecord = records[records.length - 1]
-        const gameConfig = GAME_CONFIGS.find(
-          (g) => g.name === primaryRecord.game_name
-        )
-        if (gameConfig) {
-          const primaryRT = gameConfig.resourceTypes.find((rt) => rt.isPrimary)
-          if (primaryRT && primaryRecord.resource_type === primaryRT.id) {
-            set((prev) => ({
-              staminaMap: { ...prev.staminaMap, [primaryRecord.resource_type]: { remaining: primaryRecord.current_resource, max: primaryRecord.max_resource, recoveryMinutes: primaryRT.recoveryMinutes, lastCaptureTime: primaryRecord.capture_time } },
-              selectedGame: gameConfig.id
-            }))
-          }
+        if (!get().backendOnline) set({ backendOnline: true })
+        const now = Date.now()
+        const latest = new Map<string, StaminaSnapshot>()
+        let lastGameId: string | null = null
+        for (const r of records) {
+          const cfg = GAME_CONFIGS.find((g) => g.name === r.game_name)
+          if (!cfg) continue
+          const rt = cfg.resourceTypes.find((t) => t.id === r.resource_type)
+          if (!rt) continue
+          const elapsedMin = (now - new Date(r.capture_time).getTime()) / 60000
+          const recovered = rt.recoveryMinutes > 0 ? Math.floor(elapsedMin / rt.recoveryMinutes) : 0
+          const current = Math.min(r.current_resource + recovered, r.max_resource)
+          latest.set(r.resource_type, {
+            remaining: current,
+            max: r.max_resource,
+            recoveryMinutes: rt.recoveryMinutes,
+            lastCaptureTime: r.capture_time
+          })
+          if (rt.isPrimary) lastGameId = cfg.id
         }
-      }
-    } catch {
-      // Backend may be offline
-    }
+        if (latest.size > 0) {
+          const u: Record<string, StaminaSnapshot> = { ...get().staminaMap }
+          for (const [k, v] of latest) u[k] = v
+          set((prev) => ({
+            staminaMap: u,
+            selectedGame: lastGameId || prev.selectedGame
+          }))
+        }
+      } else if (!get().backendOnline) set({ backendOnline: true })
+    } catch { set({ backendOnline: false }) }
   },
 
   triggerBackgroundCapture: async () => {
