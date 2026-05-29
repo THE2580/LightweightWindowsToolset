@@ -1,4 +1,5 @@
 import { useCaptureStore } from '@/stores/captureStore'
+import { useShallow } from 'zustand/shallow'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { Keyboard } from 'lucide-react'
 
@@ -12,7 +13,9 @@ function parseHotkeyKeys(jsonStr: string): string[] {
 }
 
 function CapturePanel(): React.JSX.Element {
-  const { selectedGame, getGameConfig } = useCaptureStore()
+  const { selectedGame, getGameConfig } = useCaptureStore(
+    useShallow((s) => ({ selectedGame: s.selectedGame, getGameConfig: s.getGameConfig }))
+  )
   const captureHotkey = useSettingsStore((s) => s.captureHotkey)
   const gameConfig = getGameConfig(selectedGame)
   const gameName = gameConfig?.name || '游戏'

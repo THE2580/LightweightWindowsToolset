@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { memo } from 'react'
 import { useCaptureStore } from '@/stores/captureStore'
+import { useShallow } from 'zustand/shallow'
 import { Card, CardContent } from '@/components/ui/card'
 
 function formatCountdown(seconds: number): string {
@@ -10,7 +12,15 @@ function formatCountdown(seconds: number): string {
 }
 
 function StaminaDisplay(): React.JSX.Element {
-  const { staminaMap, subResources, getCurrentResourceConfig, selectedGame, selectedResourceType } = useCaptureStore()
+  const { staminaMap, subResources, getCurrentResourceConfig, selectedGame, selectedResourceType } = useCaptureStore(
+    useShallow((s) => ({
+      staminaMap: s.staminaMap,
+      subResources: s.subResources,
+      getCurrentResourceConfig: s.getCurrentResourceConfig,
+      selectedGame: s.selectedGame,
+      selectedResourceType: s.selectedResourceType
+    }))
+  )
   const snapshot = staminaMap[selectedResourceType] ?? null
   const resourceConfig = getCurrentResourceConfig()
   const [tick, setTick] = useState(Date.now())
@@ -133,4 +143,5 @@ function StaminaDisplay(): React.JSX.Element {
   )
 }
 
-export default StaminaDisplay
+const StaminaDisplayMemo = memo(StaminaDisplay)
+export default StaminaDisplayMemo

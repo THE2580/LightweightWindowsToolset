@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCaptureStore, GameConfig } from '@/stores/captureStore'
+import { useShallow } from 'zustand/shallow'
 
 function getGameColor(gameId: string, configs: GameConfig[]): string {
   if (gameId.startsWith('unknown-')) return '#6B7280'
@@ -14,7 +15,9 @@ function formatFullTimestamp(iso: string): string {
 }
 
 function CaptureHistory(): React.JSX.Element {
-  const { captureHistory, gameConfigs } = useCaptureStore()
+  const { captureHistory, gameConfigs } = useCaptureStore(
+    useShallow((s) => ({ captureHistory: s.captureHistory, gameConfigs: s.gameConfigs }))
+  )
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const toggleExpand = (id: string) => {
@@ -106,7 +109,7 @@ function CaptureHistory(): React.JSX.Element {
 
                   {/* Expand/collapse — pure CSS max-height transition */}
                   <div
-                    className="overflow-hidden transition-all duration-200 ease-out"
+                    className="overflow-hidden transition-[max-height,opacity] duration-200 ease-out"
                     style={{
                       maxHeight: isExpanded ? '300px' : '0px',
                       opacity: isExpanded ? 1 : 0

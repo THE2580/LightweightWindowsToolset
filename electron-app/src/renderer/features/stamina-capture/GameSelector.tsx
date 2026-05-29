@@ -1,8 +1,17 @@
 ﻿import { useCaptureStore, GameConfig, ResourceTypeConfig } from '@/stores/captureStore'
+import { useShallow } from 'zustand/shallow'
 import { ChevronDown } from 'lucide-react'
 
 function GameSelector(): React.JSX.Element {
-  const { selectedGame, setSelectedGame, selectedResourceType, setSelectedResourceType, gameConfigs } = useCaptureStore()
+  const { selectedGame, setSelectedGame, selectedResourceType, setSelectedResourceType, gameConfigs } = useCaptureStore(
+    useShallow((s) => ({
+      selectedGame: s.selectedGame,
+      setSelectedGame: s.setSelectedGame,
+      selectedResourceType: s.selectedResourceType,
+      setSelectedResourceType: s.setSelectedResourceType,
+      gameConfigs: s.gameConfigs
+    }))
+  )
   const currentGame: GameConfig | undefined = gameConfigs.find((g) => g.id === selectedGame)
   const resourceTypes: ResourceTypeConfig[] = currentGame?.resourceTypes || []
 
