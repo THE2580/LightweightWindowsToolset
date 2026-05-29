@@ -19,8 +19,8 @@ export interface BuiltinPlugin {
 export const BUILTIN_PLUGINS: BuiltinPlugin[] = [
   {
     id: 'stamina-capture',
-    name: '体力捕获',
-    description: '截图识别游戏体力值，自动记录并同步',
+    name: '游戏资源捕获',
+    description: '截图识别游戏资源值，自动记录并同步',
     icon: 'zap',
     status: 'stable',
     entry: './CapturePage.tsx',

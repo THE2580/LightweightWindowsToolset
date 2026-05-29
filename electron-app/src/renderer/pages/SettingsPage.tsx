@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+﻿import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useDeepseekStore } from '@/stores/deepseekStore'
 import { applyTheme } from '@/lib/theme'
@@ -559,15 +559,15 @@ function SettingsPage(): React.JSX.Element {
               <div className="relative"><Input type={showKey ? 'text' : 'password'} value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} placeholder="sk-..." className="pr-8 h-8 text-xs" /><button onClick={() => setShowKey(!showKey)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" tabIndex={-1}>{showKey ? <EyeOff size={14} /> : <Eye size={14} />}</button></div>
             </div>
             <div className="py-3 border-b border-border/60"><div className="flex items-end justify-between"><div><Label className="text-sm">AI 模型</Label><p className="text-[11px] text-muted-foreground mt-0.5 mb-2">DeepSeek 模型名称</p></div>{modelDraft !== deepseekModel && (<Button onClick={saveModel} size="sm" className="h-8 text-xs">保存</Button>)}</div><Input value={modelDraft} onChange={(e) => setModelDraft(e.target.value)} placeholder="deepseek-v4-flash" className="max-w-[240px] h-8 text-xs" /></div>
-            <div className="py-3 border-b border-border/60"><div className="flex items-end justify-between"><div><Label className="text-sm">后端 API 地址</Label><p className="text-[11px] text-muted-foreground mt-0.5 mb-2">体力数据后端服务</p></div>{backendDraft !== backendUrl && (<Button onClick={saveBackend} size="sm" className="h-8 text-xs">保存</Button>)}</div><Input value={backendDraft} onChange={(e) => setBackendDraft(e.target.value)} placeholder="http://100.70.198.102:8000" className="max-w-[240px] h-8 text-xs" /></div>
+            <div className="py-3 border-b border-border/60"><div className="flex items-end justify-between"><div><Label className="text-sm">后端 API 地址</Label><p className="text-[11px] text-muted-foreground mt-0.5 mb-2">游戏资源后端服务</p></div>{backendDraft !== backendUrl && (<Button onClick={saveBackend} size="sm" className="h-8 text-xs">保存</Button>)}</div><Input value={backendDraft} onChange={(e) => setBackendDraft(e.target.value)} placeholder="http://100.70.198.102:8000" className="max-w-[240px] h-8 text-xs" /></div>
           </div>
         )}
 
         {activeTab === 'hotkey' && (
           <div className="space-y-4">
             {renderHotkeyRow(
-              '体力捕获',
-              '后台截图识别体力值',
+              '游戏资源捕获',
+              '后台截图识别资源值',
               captureHotkeyEnabled,
               setCaptureHotkeyEnabled,
               captureHotkey,
