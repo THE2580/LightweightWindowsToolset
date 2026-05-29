@@ -33,6 +33,14 @@ export const BUILTIN_PLUGINS: BuiltinPlugin[] = [
     icon: 'pin',
     status: 'upcoming',
     entry: './WindowPinner.tsx'
+  },
+  {
+    id: 'key-counter',
+    name: '今日按键统计',
+    description: '统计每日键盘鼠标按键次数，隔天自动重置，支持历史记录与按键排行',
+    icon: 'keyboard',
+    status: 'upcoming',
+    entry: './KeyCounter.tsx'
   }
 ]
 
