@@ -1,9 +1,9 @@
 # LightweightWindowsToolset — 项目进展总结
 
-> 最后更新: 2026-05-29 (第七轮)
-> 当前分支: main
-> 最新提交: 693885a (docs: 第三轮全面更新 PROJECT_SUMMARY)
-> 未提交改动: ~20 files (第六/七轮: 测试移除 + 弹窗优化 + 恢复速率 + 自动刷新 + UI 修复)
+> 最后更新: 2026-05-29 (第八轮)
+> 当前分支: main (codex/ 前缀)
+> 最新提交: 7d5bd76 (chore: electron-vite watch 排除 test-results 等非源码文件)
+> 未提交改动: 无 (第八轮已全部提交, 5 commits)
 > 编译状态: ✅ 通过
 > 打包状态: ✅ 便携版已产出 (`dist/win-unpacked/轻量化工具集.exe`)
 > E2E 实测: ❌ 未完成
@@ -169,18 +169,45 @@
 
 ---
 
-## 四、未修复问题 ⚠️
+
+## 四、第八轮改动 (性能 + 动画 + 数据修复) ✅
+
+### 4.1 渲染性能优化
+- Zustand `useShallow` 浅比较: CaptureHistory/CapturePanel/GameSelector/StaminaDisplay/CapturePage 全部使用, 消除对象 selector 的无意义重渲染
+- `React.memo(StaminaDisplay)`: 阻止父组件轮询重渲染向下传递
+- Overlay BrowserWindow 复用: `show()`/`hide()` 替代每次 `new`/`close()`, 减少 GPU 资源分配
+- `refreshRecords` 稳定化: 用 `useCaptureStore.getState().refreshRecords()` 替代 selector, `restartTimer` deps 从 `[refreshRecords]` 改为 `[]`
+
+### 4.2 UI 动画完善
+- 路由 exit 动画: 拆分 `AppContent` 组件, 用 `AnimatePresence mode="wait"` + `useLocation().pathname` 做 key, 页面切换滑入滑出 (12px, 0.2s)
+- SettingsPage 标签淡入淡出: 三标签内容包裹 `motion.div` (4px, 0.15s)
+- CSS transition 精确化: AppShell 聊天面板 `transition-all` → `transition-[right]`, CaptureHistory 手风琴 → `transition-[max-height,opacity]`
+
+### 4.3 后端离线指示器
+- `captureStore.backendOnline` 状态: 默认 `true`, API 请求成功设 `true`, catch 设 `false`
+- CapturePage 标题下方显示 `WifiOff` 图标 + "后端离线" (琥珀色), 后端恢复后自动消失
+
+### 4.4 数据拉取修复
+- **后端** (`AndroidGameInfoTools/backend/main.py`): `GET /api/resource/today` SQL 从 `GROUP BY game_name` 改为 `GROUP BY (game_name, resource_type)`, subquery 和 join 均补上 `resource_type` 列. 修复了同游戏多资源类型只返回一条记录的问题
+- **前端** (`captureStore.loadTodayFromBackend`): 从只取 `records[length-1]` 改为遍历全部记录, 逐条计算恢复值写入 `staminaMap`
+
+### 4.5 编译配置
+- `electron.vite.config.ts` 添加 `server.watch.ignored`: 排除 `out/`, `node_modules/`, `dist/`, `test-results/`, `*.txt`, `*.md`, `*.png`, `*.zip` 等非源码文件, 防止 Playwright 测试报告触发频繁重启
+
+---
+
+## 五、未修复问题 ⚠️
 
 | # | 问题 | 严重度 | 详情 |
 |---|------|--------|------|
 | 1 | E2E 管线未实测 | **高** | 需实际打开绝区零/原神窗口完成一次完整捕获, 验证: AI 解析正确性 + 后端写入正确性 + 弹窗全链路正确性 |
 | 2 | 后端伪报错 | **中** | 后端实际写入成功, 但前端偶尔提示 "Backend unreachable — record queued for retry"。`backend.ts` 已有详细日志, 需端到端复现后定位根因 |
 | 3 | 历史记录未持久化 | **低** | captureHistory 仅内存, Electron 重启丢失 |
-| 4 | 缩到托盘后全局热键仍可触发捕获 | **低** | 应用缩到托盘后按 hotkey 可能意外截本应用 (test 模式已移除但本应用仍在运行) |
+| 4 | 缩到托盘后全局热键仍可触发捕获 | **低** | 应用缩到托盘后按 hotkey 可能意外截本应用 |
 
 ---
 
-## 五、关键设计决策
+## 六、关键设计决策
 
 | 决策 | 选择 | 原因 |
 |------|------|------|
@@ -200,7 +227,7 @@
 
 ---
 
-## 六、关键文件地图
+## 七、关键文件地图
 
 | 文件 | 职责 |
 |------|------|
@@ -223,10 +250,11 @@
 
 ---
 
-## 七、环境
+## 八、环境
 
 - OS: Windows (2240x1400, 150% DPI)
 - Node.js: v24.12.0, npm: 11.6.2
 - gh CLI: 已认证
 - 代理: socks5://127.0.0.1:7897
 - 后端: Tailscale 100.70.198.102:8000
+> 后端数据库: game_resource_manage.resource_capture_records (已插入 5 条测试数据: 原神×2 + 绝区零×1 + 终末地×1 + 异环×1)
