@@ -1,4 +1,4 @@
-// OCR module using Windows.Media.Ocr via PowerShell with language fallback
+// OCR module using Windows.Media.Ocr via PowerShell
 // Runs in main process; receives an image buffer, returns recognized text
 
 import { execFile } from 'child_process'
@@ -6,109 +6,254 @@ import { writeFile, unlink, mkdtemp } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
 
-const PS_SCRIPT_BASE = `
-param([string]$ImagePath)
+/**
+ * PowerShell OCR script template.
+ * Uses System.IO.File.ReadAllBytes + InMemoryRandomAccessStream to load the image,
+ * avoiding unreliable WinRT StorageFile.GetFileFromPathAsync in PowerShell.
+ * __IMAGEPATH__ is replaced at runtime with the actual PNG path.
+ */
+const PS_SCRIPT_TEMPLATE = `
+# OCR via Windows.Media.Ocr — optimized edition
+# Params: $ImagePath (PNG file), $CropX $CropY $CropW $CropH (optional crop rect)
+$ImagePath = '__IMAGEPATH__'
+$CropX = __CROPX__
+$CropY = __CROPY__
+$CropW = __CROPW__
+$CropH = __CROPH__
 
-[System.Reflection.Assembly]::LoadWithPartialName("System.Runtime.WindowsRuntime") | Out-Null
+# Force UTF-8 output encoding
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+chcp 65001 *> $null
 
-$file = [Windows.Storage.StorageFile]::GetFileFromPathAsync($ImagePath).GetAwaiter().GetResult()
-$stream = $file.OpenAsync([Windows.Storage.FileAccessMode]::Read).GetAwaiter().GetResult()
-$decoder = [Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream).GetAwaiter().GetResult()
-$bitmap = $decoder.GetSoftwareBitmapAsync().GetAwaiter().GetResult()
+try { Add-Type -AssemblyName System.Runtime.WindowsRuntime *> $null } catch { }
+try { Add-Type -AssemblyName System.Drawing *> $null } catch { }
 
-# Try to create OCR engine with specified language, fallback to user profile
-$engine = $null
+# Load WinRT types
 try {
-  $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage([Windows.Globalization.Language]::new("__LANG__"))
-} catch { }
+  [Windows.Media.Ocr.OcrEngine, Windows.Media.Ocr, ContentType=WindowsRuntime] | Out-Null
+  [Windows.Graphics.Imaging.BitmapDecoder, Windows.Graphics.Imaging, ContentType=WindowsRuntime] | Out-Null
+  [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics.Imaging, ContentType=WindowsRuntime] | Out-Null
+  [Windows.Globalization.Language, Windows.Globalization, ContentType=WindowsRuntime] | Out-Null
+} catch {
+  Write-Output "OCR_ERROR:WinRT_LOAD_FAILED"
+  exit 0
+}
 
-if (-not $engine) {
-  $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+# --- One-time reflection setup (cached, not per-call) ---
+$asExtensions = [System.WindowsRuntimeSystemExtensions]
+$asTaskMethod = $null
+foreach ($m in $asExtensions.GetMethods()) {
+  if ($m.Name -eq 'AsTask' -and $m.GetParameters().Count -eq 1) {
+    $p = $m.GetParameters()[0]
+    if ($p.ParameterType.IsGenericType) {
+      $gt = $p.ParameterType.GetGenericTypeDefinition()
+      if ($gt.Name -eq 'IAsyncOperation\`1') { $asTaskMethod = $m; break }
+    }
+  }
+}
+if (-not $asTaskMethod) {
+  Write-Output "OCR_ERROR:REFLECTION:Cannot find AsTask<T> method"
+  exit 0
+}
+
+function Await-WinRT($asyncOp, [Type]$resultType, $timeoutMs = 10000) {
+  $gmi = $asTaskMethod.MakeGenericMethod(@($resultType))
+  $task = $gmi.Invoke($null, @($asyncOp))
+  if (-not $task.Wait($timeoutMs)) { throw "Async op timed out after \${timeoutMs}ms" }
+  return $task.Result
+}
+
+# --- Load and crop image ---
+$bitmap = $null
+try {
+  if ($CropW -gt 0 -and $CropH -gt 0) {
+    # Crop with System.Drawing (synchronous, fast) then convert to SoftwareBitmap
+    $fullBmp = [System.Drawing.Bitmap]::FromFile($ImagePath)
+    $cropRect = New-Object System.Drawing.Rectangle($CropX, $CropY, $CropW, $CropH)
+    # Ensure crop rect is within image bounds
+    if ($cropRect.Right -gt $fullBmp.Width) { $cropRect.Width = $fullBmp.Width - $cropRect.X }
+    if ($cropRect.Bottom -gt $fullBmp.Height) { $cropRect.Height = $fullBmp.Height - $cropRect.Y }
+    if ($cropRect.X -lt 0) { $cropRect.X = 0; $cropRect.Width = $cropRect.Width + $CropX }
+    if ($cropRect.Y -lt 0) { $cropRect.Y = 0; $cropRect.Height = $cropRect.Height + $CropY }
+    if ($cropRect.Width -le 0 -or $cropRect.Height -le 0) {
+      # Fallback to full image
+      $ms = New-Object System.IO.MemoryStream
+      [System.Drawing.Image]::FromFile($ImagePath).Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+      $ms.Seek(0, 0) | Out-Null
+    } else {
+      $croppedBmp = $fullBmp.Clone($cropRect, $fullBmp.PixelFormat)
+      $ms = New-Object System.IO.MemoryStream
+      $croppedBmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+      $croppedBmp.Dispose()
+      $ms.Seek(0, 0) | Out-Null
+    }
+    $fullBmp.Dispose()
+  } else {
+    # No crop — load full image
+    $ms = New-Object System.IO.MemoryStream
+    [System.Drawing.Image]::FromFile($ImagePath).Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+    $ms.Seek(0, 0) | Out-Null
+  }
+
+  $ras = [System.IO.WindowsRuntimeStreamExtensions]::AsRandomAccessStream($ms)
+  $decoder = Await-WinRT ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($ras)) ([Windows.Graphics.Imaging.BitmapDecoder])
+  $bitmap = Await-WinRT ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
+} catch {
+  Write-Output "OCR_ERROR:BITMAP_LOAD:\$($_.Exception.Message)"
+  exit 0
+}
+
+# --- Try OCR languages ---
+$langs = @('zh-Hans-CN', 'zh-CN', 'zh-Hans', 'ja-JP', 'en-US')
+$engine = $null
+$usedLang = ''
+
+foreach ($lang in $langs) {
+  try {
+    $wl = [Windows.Globalization.Language]::new($lang)
+    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($wl)
+    if ($engine) { $usedLang = $lang; break }
+  } catch { }
 }
 
 if (-not $engine) {
-  Write-Error "OCR_ENGINE_FAILED:No OCR engine available for any language"
-  exit 1
+  try {
+    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+    $usedLang = 'user-profile'
+  } catch { }
 }
 
-$result = $engine.RecognizeAsync($bitmap).GetAwaiter().GetResult()
+if (-not $engine) {
+  Write-Output "OCR_ERROR:NO_ENGINE"
+  exit 0
+}
+
+# --- Run recognition ---
+$result = $null
+try {
+  $result = Await-WinRT ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
+} catch {
+  Write-Output "OCR_ERROR:RECOGNIZE:\$($_.Exception.Message)"
+  exit 0
+}
+
 if ($result -and $result.Text) {
-  $result.Text
+  Write-Output "OCR_OK:$usedLang"
+  Write-Output $result.Text
 } else {
-  # Return empty string on no text found (not an error)
-  ""
+  Write-Output "OCR_OK:$usedLang:EMPTY"
 }
 `.trim()
 
-const LANGUAGE_FALLBACKS = ['zh-Hans-CN', 'ja-JP', 'en-US', 'zh-Hans', 'zh-CN']
+
 
 /**
- * Run OCR on a PNG image buffer using Windows.Media.Ocr
- * Tries multiple language packs in order, falls back to user profile languages.
- * Returns the recognized text, or empty string on failure.
+ * Apply zero-correction to OCR output.
+ * OCR engines commonly misrecognize digit 0 as letter o/O.
  */
-export async function recognizeText(imageBuffer: Buffer): Promise<string> {
-  const tmpDir = await mkdtemp(join(tmpdir(), 'lwt-ocr-'))
-  const imgPath = join(tmpDir, 'capture.png')
-
-  try {
-    await writeFile(imgPath, imageBuffer)
-
-    // Try each language in order, then fall back to user profile
-    for (const lang of LANGUAGE_FALLBACKS) {
-      const text = await runOcr(imgPath, lang)
-      if (text && text.trim()) {
-        return text.trim()
-      }
-      // Empty result with this language, try next
-    }
-
-    // Final fallback: user profile languages
-    const text = await runOcr(imgPath, '')
-    return text.trim()
-  } catch (e) {
-    console.error('[OCR] Exception:', e)
-    return ''
-  } finally {
-    // Cleanup temp files
-    unlink(imgPath).catch(() => {})
-  }
+function applyZeroCorrection(text: string): string {
+  let corrected = text
+  corrected = corrected.replace(/(\d)[oO](\d|\/)/g, '$10$2')
+  corrected = corrected.replace(/(^|\s)[oO](?=\/)/g, '$10')
+  corrected = corrected.replace(/(?<!\d)[oO](\d)/g, '0$1')
+  return corrected
 }
 
 /**
- * Execute OCR with a specific language
- * @param imgPath - path to PNG image file
- * @param language - BCP-47 language tag, or empty string to use user profile languages
+ * Execute OCR PowerShell script with the image path baked into the script.
  */
-async function runOcr(imgPath: string, language: string): Promise<string> {
+async function runOcr(
+  imgPath: string,
+  crop?: { x: number; y: number; w: number; h: number }
+): Promise<string> {
+  // Embed the image path directly in the script to avoid parameter-passing issues
+  const escapedPath = imgPath.replace(/\\/g, '\\\\')
+  let script = PS_SCRIPT_TEMPLATE.replace('__IMAGEPATH__', escapedPath)
+  script = script.replace('__CROPX__', String(crop?.x ?? 0))
+  script = script.replace('__CROPY__', String(crop?.y ?? 0))
+  script = script.replace('__CROPW__', String(crop?.w ?? 0))
+  script = script.replace('__CROPH__', String(crop?.h ?? 0))
   const psPath = join(tmpdir(), `lwt-ocr-${Date.now()}-${Math.random().toString(36).slice(2)}.ps1`)
-  const script = language ? PS_SCRIPT_BASE.replace('__LANG__', language) : PS_SCRIPT_BASE.replace(/^.*__LANG__.*\n/m, '')
 
   try {
     await writeFile(psPath, script, 'utf-8')
 
-    return await new Promise<string>((resolve, reject) => {
+    return await new Promise<string>((resolve) => {
       execFile(
         'powershell.exe',
-        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', psPath, '-ImagePath', imgPath],
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', psPath],
         { timeout: 15000, encoding: 'utf-8', windowsHide: true },
         (err, stdout, stderr) => {
+          const output = (stdout || '').trim()
+          if (stderr) {
+            console.error('[OCR] PowerShell stderr:', stderr.trim())
+          }
           if (err) {
-            const errMsg = stderr || err.message
-            if (errMsg.includes('OCR_ENGINE_FAILED')) {
-              // Engine not available for this language - expected for fallback attempts
-              resolve('')
-              return
-            }
-            console.error(`[OCR] Error (lang=${language}):`, errMsg)
+            console.error('[OCR] PowerShell exit error:', err.message)
+          }
+
+          const lines = output.split(/\r?\n/)
+          if (lines.length === 0) {
+            console.error('[OCR] No output from PowerShell')
             resolve('')
             return
           }
-          resolve((stdout || '').trim())
+
+          const statusLine = lines[0]
+          if (statusLine.startsWith('OCR_ERROR:')) {
+            console.error('[OCR] Engine error:', statusLine)
+            resolve('')
+            return
+          }
+          if (statusLine.startsWith('OCR_OK:')) {
+            console.log('[OCR] Engine success, language:', statusLine)
+            const text = lines.slice(1).join('\n').trim()
+            resolve(text)
+            return
+          }
+
+          // Legacy: output is just text
+          resolve(output)
         }
       )
     })
   } finally {
     unlink(psPath).catch(() => {})
+  }
+}
+
+/**
+ * Run OCR on a PNG image buffer using Windows.Media.Ocr
+ * Applies zero-correction before returning.
+ * Returns the recognized text, or empty string on failure.
+ */
+export async function recognizeText(
+  imageBuffer: Buffer,
+  crop?: { x: number; y: number; w: number; h: number }
+): Promise<string> {
+  const tmpDir = await mkdtemp(join(tmpdir(), 'lwt-ocr-'))
+  const imgPath = join(tmpDir, 'capture.png')
+
+  try {
+    await writeFile(imgPath, imageBuffer)
+    console.log('[OCR] Image written to:', imgPath, 'size:', imageBuffer.length)
+
+    const rawText = await runOcr(imgPath, crop)
+
+    if (!rawText) {
+      console.error('[OCR] No text recognized from image')
+      return ''
+    }
+
+    const corrected = applyZeroCorrection(rawText.trim())
+    if (corrected !== rawText.trim()) {
+      console.log('[OCR] Zero-correction applied:', JSON.stringify(rawText.trim()), '→', JSON.stringify(corrected))
+    }
+    return corrected
+  } catch (e) {
+    console.error('[OCR] Exception:', e)
+    return ''
+  } finally {
+    unlink(imgPath).catch(() => {})
   }
 }
