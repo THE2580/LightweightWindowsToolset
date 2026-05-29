@@ -96,10 +96,7 @@ const OVERLAY_HTML = `<!DOCTYPE html>
 </html>`
 
 function createOverlay(processName: string, stepLabels: string[]): void {
-  // Kill any existing overlay
-  if (overlay && !overlay.isDestroyed()) {
-    overlay.close()
-  }
+  // Clear any pending close timer (overlay may be hidden but alive)
   if (overlayCloseTimer) {
     clearTimeout(overlayCloseTimer)
     overlayCloseTimer = null
@@ -115,6 +112,23 @@ function createOverlay(processName: string, stepLabels: string[]): void {
   const winH = 53 + stepCount * 15
   const x = Math.round((screenW - winW) / 2)
   const y = 40
+
+  // Reuse existing overlay window instead of destroying and recreating
+  if (overlay && !overlay.isDestroyed()) {
+    overlay.setSize(winW, winH)
+    overlay.setPosition(x, y)
+    const initialSteps = stepLabels.map((label, i) => ({
+      s: i === 0 ? 'running' : 'pending',
+      l: label
+    }))
+    overlay.webContents.executeJavaScript(
+      `window._render(, , null)`
+    ).catch(() => {})
+    overlay.show()
+    overlay.setAlwaysOnTop(true, 'screen-saver')
+    overlay.setVisibleOnAllWorkspaces(true)
+    return
+  }
 
   overlay = new BrowserWindow({
     width: winW,
@@ -184,9 +198,8 @@ function showOverlayResult(
   if (overlayCloseTimer) clearTimeout(overlayCloseTimer)
   overlayCloseTimer = setTimeout(() => {
     if (overlay && !overlay.isDestroyed()) {
-      overlay.close()
+      overlay.hide()
     }
-    overlay = null
     overlayCloseTimer = null
     overlayStepLabels = []
   }, autoCloseMs)
@@ -198,9 +211,8 @@ function closeOverlay(): void {
     overlayCloseTimer = null
   }
   if (overlay && !overlay.isDestroyed()) {
-    overlay.close()
+    overlay.hide()
   }
-  overlay = null
   overlayStepLabels = []
 }
 
