@@ -15,13 +15,13 @@ const api = {
     getAll: (): Promise<Record<string, unknown>> => ipcRenderer.invoke('settings:getAll')
   },
   capture: {
-    trigger: (): Promise<{ ocrText: string; imageBase64: string; success: boolean; errorCode?: string; errorMessage?: string; windowInfo?: { processName: string; windowTitle: string } }> => ipcRenderer.invoke('capture:trigger'),
+    trigger: (): Promise<{ ocrText: string; imageBase64: string; success: boolean; errorCode?: string; errorMessage?: string }> => ipcRenderer.invoke('capture:trigger'),
     detectForeground: (): Promise<{ processName: string; resolvedGameId: string | null; isDesktop: boolean }> => ipcRenderer.invoke('capture:detect-foreground'),
     notify: (title: string, body: string, isSuccess?: boolean): Promise<void> =>
       ipcRenderer.invoke('notify:show', title, body, isSuccess)
   },
   overlay: {
-    create: (a: string, b: string[]): Promise<void> => ipcRenderer.invoke('overlay:create', a, b),
+    create: (a: string, b: string[], c?: boolean): Promise<void> => ipcRenderer.invoke('overlay:create', a, b, c),
     update: (a: { s: string; l: string }[], b: string): Promise<void> => ipcRenderer.invoke('overlay:update', a, b),
     result: (a: { s: string; l: string }[], b: string, c: string, d: boolean): Promise<void> => ipcRenderer.invoke('overlay:result', a, b, c, d),
     close: (): Promise<void> => ipcRenderer.invoke('overlay:close')

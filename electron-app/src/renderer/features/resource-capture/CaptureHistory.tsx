@@ -127,7 +127,7 @@ function CaptureHistory({ onExpandedChange }: Props): React.JSX.Element {
               <div
                 className="overflow-hidden transition-[max-height,opacity] duration-200 ease-out"
                 style={{
-                  maxHeight: isExpanded ? '260px' : '0px',
+                  maxHeight: isExpanded ? '480px' : '0px',
                   opacity: isExpanded ? 1 : 0
                 }}
               >
@@ -163,7 +163,7 @@ function CaptureHistory({ onExpandedChange }: Props): React.JSX.Element {
                           复制
                         </button>
                       </div>
-                      <div className="font-mono bg-muted/50 rounded px-1.5 py-1 break-all max-h-14 overflow-y-auto">
+                      <div className="font-mono bg-muted/50 rounded px-1.5 py-1 break-all max-h-40 overflow-y-auto whitespace-pre-wrap">
                         {entry.ocrText}
                       </div>
                     </div>

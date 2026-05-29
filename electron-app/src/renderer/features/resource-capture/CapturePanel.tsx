@@ -45,6 +45,7 @@ function CapturePanel(): React.JSX.Element {
           截图自动识别
         </div>
       </div>
+      <p className="text-[9px] text-amber-500/80 mt-2 leading-relaxed">请确保游戏分辨率接近屏幕分辨率，否则识别正确率较低</p>
     </div>
   )
 }

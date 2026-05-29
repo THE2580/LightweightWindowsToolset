@@ -26,12 +26,12 @@ interface CaptureResult {
   }
 }
 
-// --- Dynamic pipeline overlay with real-time DOM updates ---
+// --- Dynamic pipeline overlay ---
+// Overlay lifecycle is managed by the RENDERER process.
+// Main process only provides IPC handlers: create / update / result / close.
+// Each overlay:create rebuilds a fresh BrowserWindow (no reuse).
 
 let overlay: BrowserWindow | null = null
-let overlayCloseTimer: ReturnType<typeof setTimeout> | null = null
-// Store step labels set during overlay:create so capture:trigger can update them
-let overlayStepLabels: string[] = []
 
 const OVERLAY_HTML = `<!DOCTYPE html>
 <html>
@@ -40,8 +40,10 @@ const OVERLAY_HTML = `<!DOCTYPE html>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system,BlinkMacSystemFont,"Microsoft YaHei",sans-serif; background: transparent; overflow: hidden; -webkit-app-region: no-drag; }
-  .container { background: rgba(15,23,42,0.94); border: 1px solid rgba(37,99,235,0.3); border-radius: 8px; padding: 11px 12px; margin: 2px; backdrop-filter: blur(14px); animation: fadeIn 0.2s ease-out; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+  .container { background: rgba(15,23,42,0.94); border: 1px solid rgba(37,99,235,0.3); border-radius: 8px; padding: 11px 12px; margin: 2px; backdrop-filter: blur(14px); animation: fadeIn 0.22s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+  .container.leaving { animation: fadeOut 0.28s ease-out forwards; }
   .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px; }
   .title { color: #93c5fd; font-size: 9px; font-weight: 600; }
   .process { color: #94a3b8; font-size: 7px; font-family: "SF Mono",Consolas,monospace; }
@@ -57,19 +59,31 @@ const OVERLAY_HTML = `<!DOCTYPE html>
   .result-line.show { display: block; }
   .result-line.ok { color: #4ade80; }
   .result-line.bad { color: #f87171; }
+
+  /* Invalid-process banner */
+  .invalid-banner { display: none; flex-direction: column; align-items: center; gap: 6px; padding: 5px 0; }
+  .invalid-banner.show { display: flex; }
+  .invalid-banner .icon-x { width: 20px; height: 20px; border-radius: 50%; background: rgba(248,113,113,0.15); display: flex; align-items: center; justify-content: center; color: #f87171; font-size: 11px; font-weight: 700; }
+  .invalid-banner .msg { color: #fca5a5; font-size: 9px; font-weight: 600; }
+  .invalid-banner .sub { color: #64748b; font-size: 7px; }
 </style>
 </head>
 <body>
-<div class="container">
+<div class="container" id="container">
   <div class="header">
-    <span class="title">资源捕获</span>
+    <span class="title" id="titleText">资源捕获</span>
     <span class="process" id="processName"></span>
+  </div>
+  <div class="invalid-banner" id="invalidBanner">
+    <div class="icon-x">✗</div>
+    <div class="msg">当前为无效进程</div>
+    <div class="sub" id="invalidProcessName"></div>
   </div>
   <div class="steps" id="steps"></div>
   <div class="result-line" id="resultLine"></div>
 </div>
 <script>
-  // Render functions called from main process via executeJavaScript
+  // Render step states
   window._render = function(steps, processName, result) {
     if (processName) document.getElementById('processName').textContent = processName;
     var container = document.getElementById('steps');
@@ -91,137 +105,120 @@ const OVERLAY_HTML = `<!DOCTYPE html>
       rl.className = 'result-line show ' + (result.ok ? 'ok' : 'bad');
     }
   };
+
+  // Show invalid-process banner
+  window._showInvalid = function(processName) {
+    document.getElementById('titleText').textContent = '资源捕获';
+    document.getElementById('processName').textContent = processName || '';
+    document.getElementById('invalidProcessName').textContent = '进程: ' + (processName || '未知');
+    document.getElementById('invalidBanner').classList.add('show');
+    document.getElementById('steps').innerHTML = '';
+    document.getElementById('resultLine').className = 'result-line';
+  };
+
+  // Trigger fade-out animation, then notify main process
+  window._startFadeOut = function() {
+    var c = document.getElementById('container');
+    c.classList.add('leaving');
+    c.addEventListener('animationend', function() {
+      window.close(); // semantically signals "done" to the main process
+    }, { once: true });
+  };
 </script>
 </body>
 </html>`
 
-function createOverlay(processName: string, stepLabels: string[]): void {
-  // Clear any pending close timer (overlay may be hidden but alive)
-  if (overlayCloseTimer) {
-    clearTimeout(overlayCloseTimer)
-    overlayCloseTimer = null
-  }
+const OVERLAY_W = 238
+const OVERLAY_BASE_H = 53
 
-  // Store step labels for use in capture:trigger progress updates
-  overlayStepLabels = [...stepLabels]
-
-  const primaryDisplay = screen.getPrimaryDisplay()
-  const { width: screenW } = primaryDisplay.workAreaSize
-  const stepCount = stepLabels.length
-  const winW = 238
-  const winH = 53 + stepCount * 15
-  const x = Math.round((screenW - winW) / 2)
-  const y = 40
-
-  // Reuse existing overlay window instead of destroying and recreating
-  if (overlay && !overlay.isDestroyed()) {
-    overlay.setSize(winW, winH)
-    overlay.setPosition(x, y)
-    const initialSteps = stepLabels.map((label, i) => ({
-      s: i === 0 ? 'running' : 'pending',
-      l: label
-    }))
-    // Reset overlay DOM state to prevent stale data from previous capture
-    overlay.webContents.executeJavaScript(
-      `window._render(${JSON.stringify(initialSteps)}, ${JSON.stringify(processName)}, null)`
-    ).catch(() => {})
-    overlay.show()
-    overlay.setAlwaysOnTop(true, 'screen-saver')
-    overlay.setVisibleOnAllWorkspaces(true)
-    return
-  }
-
-  overlay = new BrowserWindow({
-    width: winW,
-    height: winH,
-    x,
-    y,
-    frame: false,
-    transparent: true,
-    alwaysOnTop: true,
-    focusable: false,
-    skipTaskbar: true,
-    resizable: false,
-    hasShadow: false,
-    type: 'toolbar',
-    webPreferences: {
-      sandbox: true,
-      contextIsolation: true,
-      nodeIntegration: false
-    }
-  })
-
-  overlay.setAlwaysOnTop(true, 'screen-saver')
-  overlay.setVisibleOnAllWorkspaces(true)
-  overlay.setIgnoreMouseEvents(true)
-  overlay.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(OVERLAY_HTML)}`)
-
-  // Initial render after page loads
-  overlay.webContents.on('did-finish-load', () => {
-    const initialSteps = stepLabels.map((label, i) => ({
-      s: i === 0 ? 'running' : 'pending',
-      l: label
-    }))
-    overlay?.webContents.executeJavaScript(
-      `window._render(${JSON.stringify(initialSteps)}, ${JSON.stringify(processName)}, null)`
-    ).catch(() => {})
-  })
+function computeOverlayHeight(stepCount: number, hasResult: boolean): number {
+  return OVERLAY_BASE_H + stepCount * 15 + (hasResult ? 20 : 0)
 }
 
-function updateOverlaySteps(
-  stepStates: { s: string; l: string }[],
-  processName?: string
-): void {
-  if (!overlay || overlay.isDestroyed()) return
-
-  overlay.webContents.executeJavaScript(
-    `window._render(${JSON.stringify(stepStates)}, ${JSON.stringify(processName ?? null)}, null)`
-  ).catch(() => {})
-}
-
-function showOverlayResult(
-  stepStates: { s: string; l: string }[],
-  processName: string,
-  resultText: string,
-  isSuccess: boolean,
-  autoCloseMs = 4000
-): void {
-  if (!overlay || overlay.isDestroyed()) return
-
-  // Resize for result line
-  overlay.setSize(238, overlay.getSize()[1] + 20)
-
-  overlay.webContents.executeJavaScript(
-    `window._render(${JSON.stringify(stepStates)}, ${JSON.stringify(processName)}, ${JSON.stringify({ t: resultText, ok: isSuccess })})`
-  ).catch(() => {})
-
-  // Auto-close after showing result
-  if (overlayCloseTimer) clearTimeout(overlayCloseTimer)
-  overlayCloseTimer = setTimeout(() => {
-    if (overlay && !overlay.isDestroyed()) {
-      overlay.hide()
-    }
-    overlayCloseTimer = null
-    overlayStepLabels = []
-  }, autoCloseMs)
-}
-
-function closeOverlay(): void {
-  if (overlayCloseTimer) {
-    clearTimeout(overlayCloseTimer)
-    overlayCloseTimer = null
-  }
+function destroyOverlay(): void {
   if (overlay && !overlay.isDestroyed()) {
     overlay.hide()
+    overlay.close()
+    overlay = null
   }
-  overlayStepLabels = []
+}
+
+function createOverlayWindow(processName: string, stepLabels: string[], isInvalid: boolean): Promise<void> {
+  return new Promise((resolve) => {
+    // Destroy any previous overlay unconditionally (fresh start)
+    destroyOverlay()
+
+    const primaryDisplay = screen.getPrimaryDisplay()
+    const { width: screenW } = primaryDisplay.workAreaSize
+    const winH = isInvalid ? 110 : computeOverlayHeight(stepLabels.length, false)
+    const x = Math.round((screenW - OVERLAY_W) / 2)
+    const y = 40
+
+    overlay = new BrowserWindow({
+      width: OVERLAY_W,
+      height: winH,
+      x,
+      y,
+      frame: false,
+      transparent: true,
+      alwaysOnTop: true,
+      focusable: false,
+      skipTaskbar: true,
+      resizable: false,
+      hasShadow: false,
+      type: 'toolbar',
+      webPreferences: {
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false
+      }
+    })
+
+    overlay.setAlwaysOnTop(true, 'screen-saver')
+    overlay.setVisibleOnAllWorkspaces(true)
+    overlay.setIgnoreMouseEvents(true)
+
+    overlay.webContents.on('did-finish-load', () => {
+      if (isInvalid) {
+        overlay?.webContents.executeJavaScript(
+          `window._showInvalid(${JSON.stringify(processName)})`
+        ).catch(() => {})
+        // Auto-close invalid overlay after 2.5s
+        setTimeout(() => {
+          if (overlay && !overlay.isDestroyed()) {
+            overlay.webContents.executeJavaScript('window._startFadeOut()').catch(() => {})
+            // Fallback: destroy after animation
+            setTimeout(() => destroyOverlay(), 400)
+          }
+        }, 2500)
+      } else {
+        const initialSteps = stepLabels.map((label, i) => ({
+          s: 'pending',
+          l: label
+        }))
+        // Set step 0 to running
+        if (initialSteps.length > 0) {
+          initialSteps[0].s = 'running'
+        }
+        overlay?.webContents.executeJavaScript(
+          `window._render(${JSON.stringify(initialSteps)}, ${JSON.stringify(processName)}, null)`
+        ).catch(() => {})
+      }
+      resolve()
+    })
+
+    // If page load times out, resolve anyway
+    setTimeout(() => resolve(), 3000)
+
+    overlay.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(OVERLAY_HTML)}`)
+  })
 }
 
 // --- Window detection ---
 
 function buildDetectScript(): string {
   return `
-\$cs = @"
+$cs = @"
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -247,45 +244,45 @@ public class Win32Window {
 }
 "@
 
-Add-Type -TypeDefinition \$cs *> \$null
+Add-Type -TypeDefinition $cs *> $null
 
-\$hwnd = [Win32Window]::GetForegroundWindow()
-if (\$hwnd -eq [IntPtr]::Zero) {
-  @{processName=""; windowTitle=""; isDesktop=\$true; rect=\$null} | ConvertTo-Json -Compress
+$hwnd = [Win32Window]::GetForegroundWindow()
+if ($hwnd -eq [IntPtr]::Zero) {
+  @{processName=""; windowTitle=""; isDesktop=$true; rect=$null} | ConvertTo-Json -Compress
   exit 0
 }
 
-\$procId = 0
-[Win32Window]::GetWindowThreadProcessId(\$hwnd, [ref]\$procId)
-\$pn = try { (Get-Process -Id \$procId -ErrorAction Stop).ProcessName } catch { "unknown" }
+$procId = 0
+[Win32Window]::GetWindowThreadProcessId($hwnd, [ref]$procId)
+$pn = try { (Get-Process -Id $procId -ErrorAction Stop).ProcessName } catch { "unknown" }
 
-\$sb = New-Object System.Text.StringBuilder(256)
-[Win32Window]::GetWindowText(\$hwnd, \$sb, 256)
-\$windowTitle = \$sb.ToString()
+$sb = New-Object System.Text.StringBuilder(256)
+[Win32Window]::GetWindowText($hwnd, $sb, 256)
+$windowTitle = $sb.ToString()
 
-\$desktopHwnd = [Win32Window]::GetDesktopWindow()
-\$isDesktop = (\$hwnd -eq \$desktopHwnd) -or
-             (\$pn -eq "explorer") -or
-             (\$pn -eq "Progman") -or
-             (\$pn -eq "ShellExperienceHost")
+$desktopHwnd = [Win32Window]::GetDesktopWindow()
+$isDesktop = ($hwnd -eq $desktopHwnd) -or
+             ($pn -eq "explorer") -or
+             ($pn -eq "Progman") -or
+             ($pn -eq "ShellExperienceHost")
 
-if (\$isDesktop) {
-  @{processName=\$pn; windowTitle=\$windowTitle; isDesktop=\$true; rect=\$null} | ConvertTo-Json -Compress
+if ($isDesktop) {
+  @{processName=$pn; windowTitle=$windowTitle; isDesktop=$true; rect=$null} | ConvertTo-Json -Compress
   exit 0
 }
 
-\$rect = New-Object RECT
-\$hasRect = [Win32Window]::GetWindowRect(\$hwnd, [ref]\$rect)
+$rect = New-Object RECT
+$hasRect = [Win32Window]::GetWindowRect($hwnd, [ref]$rect)
 
-\$w = \$rect.Right - \$rect.Left
-\$h = \$rect.Bottom - \$rect.Top
-if (-not \$hasRect -or \$w -le 0 -or \$h -le 0) {
-  @{processName=\$pn; windowTitle=\$windowTitle; isDesktop=\$false; rect=\$null} | ConvertTo-Json -Compress
+$w = $rect.Right - $rect.Left
+$h = $rect.Bottom - $rect.Top
+if (-not $hasRect -or $w -le 0 -or $h -le 0) {
+  @{processName=$pn; windowTitle=$windowTitle; isDesktop=$false; rect=$null} | ConvertTo-Json -Compress
   exit 0
 }
 
-\$r = @{left=\$rect.Left; top=\$rect.Top; right=\$rect.Right; bottom=\$rect.Bottom}
-@{processName=\$pn; windowTitle=\$windowTitle; isDesktop=\$false; rect=\$r} | ConvertTo-Json -Compress
+$r = @{left=$rect.Left; top=$rect.Top; right=$rect.Right; bottom=$rect.Bottom}
+@{processName=$pn; windowTitle=$windowTitle; isDesktop=$false; rect=$r} | ConvertTo-Json -Compress
 `.trim()
 }
 
@@ -361,118 +358,87 @@ function resolveGameFromProcess(processName: string): string | null {
   return null
 }
 
-// Step label keys for overlay progress — must match what the renderer passes to overlay:create
-const STEP_SCREENSHOT = '正在截图...'
-const STEP_OCR = 'OCR文本识别中...'
-const STEP_AI = 'AI文本解析中...'
-
-function buildOverlaySteps(statuses: { screenshot: string; ocr: string; ai: string }): { s: string; l: string }[] {
-  return [
-    { s: statuses.screenshot, l: STEP_SCREENSHOT },
-    { s: statuses.ocr, l: STEP_OCR },
-    { s: statuses.ai, l: STEP_AI },
-  ]
+/** Wrap a promise with a timeout. Returns a rejected promise if timeout fires. */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} 超时 (${ms / 1000}s)`)), ms)
+    )
+  ])
 }
 
 export function registerCaptureIpc(): void {
+  // --- capture:trigger — pure screenshot + OCR, NO foreground detection, NO overlay management ---
   ipcMain.handle('capture:trigger', async (): Promise<CaptureResult> => {
     try {
-      const windowInfo = await getForegroundWindow()
-
-      if (windowInfo.isDesktop || !windowInfo.processName) {
-        return {
-          ocrText: '',
-          imageBase64: '',
-          success: false,
-          errorCode: 'DESKTOP_FOREGROUND',
-          errorMessage: '当前焦点为桌面，请切换到游戏窗口后再捕获',
-          windowInfo: { processName: 'desktop', windowTitle: '桌面' }
-        }
-      }
-
-      const resolvedGameId = resolveGameFromProcess(windowInfo.processName)
-      if (!resolvedGameId) {
-        return {
-          ocrText: '',
-          imageBase64: '',
-          success: false,
-          errorCode: 'UNKNOWN_PROCESS',
-          errorMessage: `未识别的进程「${windowInfo.processName}」，仅支持已配置的游戏窗口`,
-          windowInfo: { processName: windowInfo.processName, windowTitle: windowInfo.windowTitle }
-        }
-      }
-
-      // --- Screenshot phase ---
+      // --- Screenshot phase (8s timeout) ---
       let imgBuffer: Buffer
       try {
-        imgBuffer = await screenshot({ format: 'png' })
+        imgBuffer = await withTimeout(
+          screenshot({ format: 'png' }),
+          8000,
+          '截图'
+        )
         console.log('[Capture] screenshot-desktop captured', imgBuffer.length, 'bytes')
       } catch (captureErr) {
-        console.error('[Capture] screenshot-desktop failed:', captureErr)
+        console.error('[Capture] Screenshot failed:', captureErr)
         return {
           ocrText: '',
           imageBase64: '',
           success: false,
-          errorCode: 'CAPTURE_ERROR',
-          errorMessage: `截图失败: ${captureErr instanceof Error ? captureErr.message : String(captureErr)}`,
-          windowInfo: { processName: windowInfo.processName, windowTitle: windowInfo.windowTitle }
+          errorCode: 'CAPTURE_TIMEOUT',
+          errorMessage: `截图失败: ${captureErr instanceof Error ? captureErr.message : String(captureErr)}`
         }
       }
-
-      // --- Update overlay: screenshot done, OCR running ---
-      updateOverlaySteps(
-        buildOverlaySteps({ screenshot: 'done', ocr: 'running', ai: 'pending' }),
-        undefined,
-      )
 
       const imageBase64 = imgBuffer.toString('base64')
 
       const scaleFactor = screen.getPrimaryDisplay().scaleFactor
+
+      // Get foreground window info for crop rect (lightweight, just for cropping)
       let cropRect: { x: number; y: number; w: number; h: number } | undefined
-      if (windowInfo.rect) {
-        cropRect = {
-          x: Math.round(windowInfo.rect.left * scaleFactor),
-          y: Math.round(windowInfo.rect.top * scaleFactor),
-          w: Math.round((windowInfo.rect.right - windowInfo.rect.left) * scaleFactor),
-          h: Math.round((windowInfo.rect.bottom - windowInfo.rect.top) * scaleFactor)
+      try {
+        const fgInfo = await getForegroundWindow()
+        if (fgInfo.rect && !fgInfo.isDesktop) {
+          cropRect = {
+            x: Math.round(fgInfo.rect.left * scaleFactor),
+            y: Math.round(fgInfo.rect.top * scaleFactor),
+            w: Math.round((fgInfo.rect.right - fgInfo.rect.left) * scaleFactor),
+            h: Math.round((fgInfo.rect.bottom - fgInfo.rect.top) * scaleFactor)
+          }
+          console.log('[Capture] scaleFactor:', scaleFactor, 'crop rect:', cropRect.x, cropRect.y, cropRect.w, 'x', cropRect.h)
         }
-        console.log('[Capture] scaleFactor:', scaleFactor, 'crop rect:', cropRect.x, cropRect.y, cropRect.w, 'x', cropRect.h)
-      } else {
-        console.log('[Capture] No crop rect — using full image')
+      } catch {
+        console.log('[Capture] Foreground detection for crop failed, using full image')
       }
 
-      // --- OCR phase ---
-      const ocrText = await recognizeText(imgBuffer, cropRect)
-      console.log('[Capture] OCR result length:', ocrText.length, 'text:', JSON.stringify(ocrText.substring(0, 100)))
-
-      // --- Update overlay: OCR done (or error), AI pending ---
-      updateOverlaySteps(
-        buildOverlaySteps({ screenshot: 'done', ocr: ocrText ? 'done' : 'error', ai: 'pending' }),
-        undefined,
+      // --- OCR phase (15s timeout) ---
+      const ocrText = await withTimeout(
+        recognizeText(imgBuffer, cropRect),
+        15000,
+        'OCR'
       )
+      console.log('[Capture] OCR result length:', ocrText.length, 'text:', JSON.stringify(ocrText.substring(0, 100)))
 
       return {
         ocrText,
         imageBase64,
         success: true,
-        resolvedGameId,
-        windowInfo: { processName: windowInfo.processName, windowTitle: windowInfo.windowTitle }
       }
     } catch (err) {
       console.error('[Capture] Pipeline error:', err)
-      closeOverlay()
       return {
         ocrText: '',
         imageBase64: '',
         success: false,
-        errorCode: 'CAPTURE_ERROR',
+        errorCode: 'PIPELINE_ERROR',
         errorMessage: `截图或OCR处理出错: ${err instanceof Error ? err.message : String(err)}`
       }
     }
   })
 
-  // Overlay IPC
-  // Lightweight foreground detection — returns process info without screenshot/OCR
+  // --- capture:detect-foreground — lightweight process detection (unchanged) ---
   ipcMain.handle('capture:detect-foreground', async () => {
     try {
       const wi = await getForegroundWindow()
@@ -489,19 +455,41 @@ export function registerCaptureIpc(): void {
     }
   })
 
-  ipcMain.handle('overlay:create', (_event, processName: string, stepLabels: string[]) => {
-    createOverlay(processName, stepLabels)
+  // --- Overlay IPC ---
+
+  ipcMain.handle('overlay:create', async (_event, processName: string, stepLabels: string[], isInvalid = false) => {
+    await createOverlayWindow(processName, stepLabels, isInvalid)
   })
 
-  ipcMain.handle('overlay:update', (_event, stepStates: { s: string; l: string }[], processName: string) => {
-    updateOverlaySteps(stepStates, processName)
+  ipcMain.handle('overlay:update', (_event, stepStates: { s: string; l: string }[], processName?: string) => {
+    if (!overlay || overlay.isDestroyed()) return
+    overlay.webContents.executeJavaScript(
+      `window._render(${JSON.stringify(stepStates)}, ${JSON.stringify(processName ?? null)}, null)`
+    ).catch(() => {})
   })
 
   ipcMain.handle('overlay:result', (_event, stepStates: { s: string; l: string }[], processName: string, resultText: string, isSuccess: boolean) => {
-    showOverlayResult(stepStates, processName, resultText, isSuccess)
+    if (!overlay || overlay.isDestroyed()) return
+
+    // Resize for result line
+    overlay.setSize(OVERLAY_W, computeOverlayHeight(stepStates.length, true))
+
+    overlay.webContents.executeJavaScript(
+      `window._render(${JSON.stringify(stepStates)}, ${JSON.stringify(processName)}, ${JSON.stringify({ t: resultText, ok: isSuccess })})`
+    ).catch(() => {})
+
+    // Trigger fade-out after result display
+    const fadeDelay = isSuccess ? 2000 : 3000
+    setTimeout(() => {
+      if (overlay && !overlay.isDestroyed()) {
+        overlay.webContents.executeJavaScript('window._startFadeOut()').catch(() => {})
+        // Fallback destroy in case animationend doesn't fire
+        setTimeout(() => destroyOverlay(), 500)
+      }
+    }, fadeDelay)
   })
 
   ipcMain.handle('overlay:close', () => {
-    closeOverlay()
+    destroyOverlay()
   })
 }

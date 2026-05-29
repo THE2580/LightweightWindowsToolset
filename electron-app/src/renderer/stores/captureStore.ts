@@ -134,6 +134,55 @@ interface CaptureStore {
   triggerBackgroundCapture: () => Promise<void>
 }
 
+/** Resolve a foreground process name to a GameConfig by matching processName field */
+function resolveGameByProcess(processName: string): GameConfig | null {
+  const lower = processName.toLowerCase()
+  return GAME_CONFIGS.find(g => {
+    if (!g.processName) return false
+    return g.processName.toLowerCase().replace('.exe', '') === lower
+  }) ?? null
+}
+
+/** Extract resource-relevant lines from raw OCR text to reduce AI parsing noise */
+function filterOcrText(rawText: string): string {
+  if (!rawText) return ''
+  const lines = rawText.split(/\r?\n/)
+  // Keep lines that contain resource-like patterns: number/number, Chinese resource labels
+  const resourcePattern = /\d+\s*\/\s*\d+/
+  const labelHints = /树脂|体力|宝钱|电量|理智|像素|资源|体力值|剩余/
+  const filtered = lines.filter(line => resourcePattern.test(line) || labelHints.test(line))
+  if (filtered.length === 0) {
+    // Fallback: return last 30 lines (game HUD is usually at top or has dense numeric data)
+    console.log('[Capture] No resource lines found in OCR, using last 30 lines as fallback')
+    return lines.slice(-30).join('\n')
+  }
+  const result = filtered.join('\n')
+  console.log('[Capture] OCR filter: kept', filtered.length, '/', lines.length, 'lines, chars:', result.length)
+  return result
+}
+
+/** Returns current UTC ISO string — all capture_time fields MUST use this */
+function utcNow(): string {
+  return new Date().toISOString()
+}
+
+/** Build step states array for overlay */
+function buildSteps(screenshot: string, ocr: string, ai: string): { s: string; l: string }[] {
+  return [
+    { s: screenshot, l: STEP_LABELS[0] },
+    { s: ocr,       l: STEP_LABELS[1] },
+    { s: ai,        l: STEP_LABELS[2] },
+  ]
+}
+
+/** Helper to add to captureHistory without duplicating timestamp generation */
+function addHistory(entry: Omit<CaptureHistoryEntry, 'timestamp'>): void {
+  useCaptureStore.getState().addCaptureHistory({
+    ...entry,
+    timestamp: utcNow()
+  })
+}
+
 export const useCaptureStore = create<CaptureStore>((set, get) => ({
   selectedGame: 'genshin',
   selectedResourceType: 'GenshinImpact_ORIGINAL_RESIN',
@@ -154,9 +203,8 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
   },
   setSelectedResourceType: (rt) => set({ selectedResourceType: rt }),
   setResource: (s) => {
-    const { selectedGame } = get()
+    const rt = get().selectedResourceType
     if (s) {
-      const rt = get().selectedResourceType
       set((prev) => ({ resourceMap: { ...prev.resourceMap, [rt]: s } }))
     }
   },
@@ -173,7 +221,6 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
     const config = GAME_CONFIGS.find((g) => g.id === selectedGame)
     return config?.resourceTypes.find((rt) => rt.id === selectedResourceType)
   },
-
 
   refreshRecords: async () => {
     try {
@@ -243,269 +290,331 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
     } catch { set({ backendOnline: false }) }
   },
 
+  // ── Core pipeline ──
   triggerBackgroundCapture: async () => {
     const state = get()
-    if (state.captureState !== 'idle') return
-    const gameConfig = state.getGameConfig(state.selectedGame)
-    if (!gameConfig) return
+    if (state.captureState !== 'idle') {
+      console.log('[Capture] Busy, state:', state.captureState)
+      return
+    }
 
+    set({ captureState: 'capturing' })
+
+    // ── Phase 1: Foreground detection ──
+    let fg: { processName: string; resolvedGameId: string | null; isDesktop: boolean }
     try {
-      set({ captureState: 'capturing' })
-
-      // Pre-detect foreground window to show correct game name in overlay
-      const fg = await window.api.capture.detectForeground()
-      let overlayName = fg.processName
-      if (fg.resolvedGameId) {
-        const cfg = GAME_CONFIGS.find((g) => g.id === fg.resolvedGameId)
-        if (cfg) overlayName = cfg.name
-      }
-      await window.api.overlay.create(overlayName, STEP_LABELS)
-
-      const result = await window.api.capture.trigger()
-
-      const processName = result.windowInfo?.processName || fg.processName
-
-      // Always resolve game from actual detection, never from dropdown
-      const detectedGameId = result.resolvedGameId || fg.resolvedGameId
-      let resolvedGameConfig: GameConfig = gameConfig
-      if (detectedGameId) {
-        const cfg = GAME_CONFIGS.find((g) => g.id === detectedGameId)
-        if (cfg) {
-          resolvedGameConfig = cfg
-          if (detectedGameId !== state.selectedGame) {
-            set({ selectedGame: detectedGameId })
-          }
-        }
-      }
-
-      if (!result.success) {
-        // Error at capture/OCR phase — overlay already updated by main process
-        // Show result on overlay
-        const errorSteps = [
-          { s: 'error', l: STEP_LABELS[0] },
-          { s: 'pending', l: STEP_LABELS[1] },
-          { s: 'pending', l: STEP_LABELS[2] },
-        ]
-        await window.api.overlay.result(
-          errorSteps, processName,
-          `资源捕获失败: ${result.errorMessage || '捕获失败'}`,
-          false
-        )
-        const historyEntry: CaptureHistoryEntry = {
-          id: Date.now().toString(),
-          timestamp: new Date().toISOString(),
-          gameId: `unknown-${result.windowInfo?.processName || 'desktop'}`,
-          gameName: result.windowInfo?.processName || '未知进程',
-          resourceName: '',
-          currentValue: null,
-          maxValue: null,
-          status: 'fail',
-          failureReason: result.errorMessage || '捕获失败',
-          ocrText: result.ocrText || '',
-          processName: result.windowInfo?.processName
-        }
-        set({ captureHistory: [historyEntry, ...state.captureHistory].slice(0, 50), captureState: 'error' })
-        setTimeout(() => set({ captureState: 'idle' }), 3000)
-        return
-      }
-
-      if (!result.ocrText && !result.imageBase64) {
-        throw new Error('Screenshot failed')
-      }
-
-      set({ ocrText: result.ocrText })
-
-      // Steps screenshot and OCR were already updated by main process.
-      // Now start AI parsing.
-      const ocrOk = !!result.ocrText
-
-      // Update overlay: AI parsing running
-      const aiRunningSteps = [
-        { s: 'done', l: STEP_LABELS[0] },
-        { s: ocrOk ? 'done' : 'error', l: STEP_LABELS[1] },
-        { s: 'running', l: STEP_LABELS[2] },
-      ]
-      await window.api.overlay.update(aiRunningSteps, processName)
-
-      // --- AI parsing ---
-      set({ captureState: 'parsing' })
-
-      const aiResults: ParseResult[] = await parseResourcesViaAI(
-        result.ocrText || 'no text recognized',
-        resolvedGameConfig
-      )
-
-      const primaryResult = aiResults.find((r) =>
-        resolvedGameConfig.resourceTypes.some((rt) => rt.isPrimary && r.max_resource === rt.cap)
-      )
-
-      const subResults: CapturedResource[] = []
-      for (const r of aiResults) {
-        const matched = resolvedGameConfig.resourceTypes.find(
-          (rt) => !rt.isPrimary && r.max_resource === rt.cap
-        )
-        if (matched) {
-          subResults.push({
-            remaining: r.remaining_resource,
-            max: r.max_resource,
-            config: matched,
-            gameApiName: resolvedGameConfig.apiGameName
-          })
-        }
-      }
-
-      if (primaryResult) {
-        set((prev) => ({
-          resourceMap: {
-            ...prev.resourceMap,
-            [primaryRT?.id || resolvedGameConfig.id]: { remaining: primaryResult.remaining_resource, max: primaryResult.max_resource, recoveryMinutes: primaryRT?.recoveryMinutes || 0, lastCaptureTime: new Date().toISOString() },
-            ...Object.fromEntries(subResults.map((sr) => [sr.config.id, { remaining: sr.remaining, max: sr.max, recoveryMinutes: sr.config.recoveryMinutes, lastCaptureTime: new Date().toISOString() }])),
-          },
-          subResources: subResults,
-          captureState: 'posting'
-        }))
-      } else if (subResults.length > 0) {
-        const first = subResults[0]
-        set((prev) => ({
-          resourceMap: {
-            ...prev.resourceMap,
-            [first.config.id]: { remaining: first.remaining, max: first.max, recoveryMinutes: first.config.recoveryMinutes, lastCaptureTime: new Date().toISOString() },
-            ...Object.fromEntries(subResults.slice(1).map((sr) => [sr.config.id, { remaining: sr.remaining, max: sr.max, recoveryMinutes: sr.config.recoveryMinutes, lastCaptureTime: new Date().toISOString() }])),
-          },
-          subResources: subResults.slice(1),
-          captureState: 'posting'
-        }))
-      } else {
-        // AI failed to parse any resources
-        const aiFailSteps = [
-          { s: 'done', l: STEP_LABELS[0] },
-          { s: ocrOk ? 'done' : 'error', l: STEP_LABELS[1] },
-          { s: 'error', l: STEP_LABELS[2] },
-        ]
-        await window.api.overlay.result(aiFailSteps, processName, 'AI 未识别到资源数据', false)
-        const historyEntry: CaptureHistoryEntry = {
-          id: Date.now().toString(),
-          timestamp: new Date().toISOString(),
-          gameId: resolvedGameConfig.id,
-          gameName: resolvedGameConfig.name,
-          resourceName: '',
-          currentValue: null,
-          maxValue: null,
-          status: 'fail',
-          failureReason: 'AI 未识别到资源数据',
-          ocrText: result.ocrText,
-          processName: result.windowInfo?.processName
-        }
-        set({
-          captureHistory: [historyEntry, ...state.captureHistory].slice(0, 50),
-          captureState: 'done'
-        })
-        setTimeout(() => set({ captureState: 'idle' }), 2000)
-        return
-      }
-
-      if (aiResults.length > 0) {
-        set({ captureState: 'posting' })
-
-        const records: ResourceRecord[] = []
-        const primaryRT = resolvedGameConfig.resourceTypes.find((rt) => rt.isPrimary)
-        for (const r of aiResults) {
-          const matchedConfig = resolvedGameConfig.resourceTypes.find(
-            (rt) => r.max_resource === rt.cap || (rt.isPrimary && r.max_resource !== 0)
-          )
-          if (matchedConfig && r.remaining_resource !== null && r.max_resource !== null) {
-            try {
-              const record = await postResourceRecord({
-                game_name: resolvedGameConfig.name,
-                resource_type: matchedConfig.id,
-                current_resource: r.remaining_resource,
-                max_resource: r.max_resource,
-                capture_time: new Date().toISOString(),
-                platform: 'desktop'
-              })
-              records.push(record)
-              addHistory({
-                id: `${Date.now()}-${matchedConfig.id}`,
-                gameId: resolvedGameConfig.id,
-                gameName: resolvedGameConfig.name,
-                resourceName: matchedConfig.label,
-                currentValue: r.remaining_resource,
-                maxValue: r.max_resource,
-                status: 'success',
-                processName: result.windowInfo?.processName,
-                ocrText: get().ocrText
-              })
-            } catch (backendErr) {
-              set({ ocrText: result.ocrText })
-              addHistory({
-                id: `${Date.now()}-${matchedConfig.id}`,
-                gameId: resolvedGameConfig.id,
-                gameName: resolvedGameConfig.name,
-                resourceName: matchedConfig.label,
-                currentValue: r.remaining_resource,
-                maxValue: r.max_resource,
-                status: 'fail',
-                failureReason: `后端提交失败: ${backendErr instanceof Error ? backendErr.message : String(backendErr)}`,
-                processName: result.windowInfo?.processName,
-                ocrText: get().ocrText
-              })
-            }
-          }
-        }
-        if (records.length > 0) {
-          set({ todayRecords: records })
-        }
-
-        const primaryLabel = primaryRT?.label || '资源'
-        const primaryValue = primaryResult
-          ? `${primaryResult.remaining_resource}/${primaryResult.max_resource}`
-          : ''
-        const subCount = subResults.length > 0 ? ` +${subResults.length}子资源` : ''
-
-        const successSteps = [
-          { s: 'done', l: STEP_LABELS[0] },
-          { s: 'done', l: STEP_LABELS[1] },
-          { s: 'done', l: STEP_LABELS[2] },
-        ]
-        await window.api.overlay.result(
-          successSteps, processName,
-          `识别成功 ${resolvedGameConfig.name} ${primaryLabel} ${primaryValue}${subCount}`,
-          true
-        )
-
-        window.api.queue.flush().catch(() => {})
-      }
-
-      set({ captureState: 'done' })
-      setTimeout(() => set({ captureState: 'idle' }), 2000)
+      fg = await window.api.capture.detectForeground()
+      console.log('[Capture] Foreground:', fg.processName, 'desktop=', fg.isDesktop, 'resolved=', fg.resolvedGameId)
     } catch (err) {
-      console.error('[Capture] Background pipeline error:', err)
+      console.error('[Capture] Foreground detection failed:', err)
+      set({ captureState: 'idle' })
+      return
+    }
 
-      const historyEntry: CaptureHistoryEntry = {
-        id: Date.now().toString(),
-        timestamp: new Date().toISOString(),
-        gameId: fg.resolvedGameId || `unknown-${fg.processName}`,
-        gameName: fg.resolvedGameId ? GAME_CONFIGS.find((g) => g.id === fg.resolvedGameId)?.name || fg.processName : fg.processName,
+    // ── Phase 2: Process validation ──
+    // Resolve game config: prefer GAME_CONFIGS.processName match, fallback to main-process KNOWN_PROCESSES mapping
+    let resolvedGameConfig: GameConfig | null = resolveGameByProcess(fg.processName)
+    if (!resolvedGameConfig && fg.resolvedGameId) {
+      resolvedGameConfig = GAME_CONFIGS.find(g => g.id === fg.resolvedGameId) ?? null
+    }
+
+    if (!resolvedGameConfig || fg.isDesktop) {
+      // Invalid process — show overlay with error banner and abort
+      const displayName = fg.processName || 'desktop'
+      console.log('[Capture] Invalid process:', displayName)
+
+      await window.api.overlay.create(displayName, [], true).catch(() => {})
+
+      addHistory({
+        id: `${Date.now()}-invalid`,
+        gameId: `invalid-${displayName}`,
+        gameName: displayName,
         resourceName: '',
         currentValue: null,
         maxValue: null,
         status: 'fail',
-        failureReason: err instanceof Error ? err.message : String(err),
-        ocrText: get().ocrText,
-        processName: fg.processName
-      }
-      set((s) => ({ captureHistory: [historyEntry, ...s.captureHistory].slice(0, 50), captureState: 'error' }))
+        failureReason: '当前为无效进程',
+        processName: displayName
+      })
 
-      await window.api.overlay.close()
-      setTimeout(() => set({ captureState: 'idle' }), 3000)
+      set({ captureState: 'idle' })
+      return
     }
+
+    // Update selectedGame if detected game differs from current selection
+    if (resolvedGameConfig.id !== state.selectedGame) {
+      set({ selectedGame: resolvedGameConfig.id })
+    }
+
+    const gameName = resolvedGameConfig.name
+    const processName = fg.processName
+
+    // ── Phase 3: Show overlay (valid game) ──
+    await window.api.overlay.create(gameName, STEP_LABELS, false).catch(() => {})
+    // Update step 0 to "running" immediately
+    await window.api.overlay.update(
+      buildSteps('running', 'pending', 'pending'),
+      gameName
+    ).catch(() => {})
+
+    // ── Phase 4: Screenshot + OCR (with 20s overall timeout) ──
+    let captureResult: {
+      ocrText: string
+      imageBase64: string
+      success: boolean
+      errorCode?: string
+      errorMessage?: string
+    }
+
+    try {
+      const capturePromise = window.api.capture.trigger()
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('截图或OCR超时 (20s)')), 20000)
+      )
+      captureResult = await Promise.race([capturePromise, timeoutPromise])
+    } catch (err) {
+      console.error('[Capture] Screenshot/OCR failed:', err)
+      const errMsg = err instanceof Error ? err.message : String(err)
+
+      // Show error on overlay
+      await window.api.overlay.update(
+        buildSteps('error', 'pending', 'pending'),
+        gameName
+      ).catch(() => {})
+      await window.api.overlay.result(
+        buildSteps('error', 'pending', 'pending'),
+        processName,
+        `资源捕获失败: ${errMsg}`,
+        false
+      ).catch(() => {})
+
+      addHistory({
+        id: `${Date.now()}-capture-fail`,
+        gameId: resolvedGameConfig.id,
+        gameName,
+        resourceName: '',
+        currentValue: null,
+        maxValue: null,
+        status: 'fail',
+        failureReason: errMsg,
+        ocrText: '',
+        processName
+      })
+
+      set({ captureState: 'idle' })
+      return
+    }
+
+    if (!captureResult.success) {
+      console.error('[Capture] capture:trigger returned failure:', captureResult.errorCode, captureResult.errorMessage)
+
+      await window.api.overlay.update(
+        buildSteps('error', 'pending', 'pending'),
+        gameName
+      ).catch(() => {})
+      await window.api.overlay.result(
+        buildSteps('error', 'pending', 'pending'),
+        processName,
+        `资源捕获失败: ${captureResult.errorMessage || '未知错误'}`,
+        false
+      ).catch(() => {})
+
+      addHistory({
+        id: `${Date.now()}-capture-fail`,
+        gameId: resolvedGameConfig.id,
+        gameName,
+        resourceName: '',
+        currentValue: null,
+        maxValue: null,
+        status: 'fail',
+        failureReason: captureResult.errorMessage || '截图或OCR失败',
+        ocrText: captureResult.ocrText || '',
+        processName
+      })
+
+      set({ captureState: 'idle' })
+      return
+    }
+
+    // ── Phase 5: Screenshot + OCR succeeded ──
+    const ocrOk = !!captureResult.ocrText
+    set({ ocrText: captureResult.ocrText })
+
+    // Pre-filter OCR text: keep only lines with resource-like patterns to reduce AI noise
+    const filteredOcrText = filterOcrText(captureResult.ocrText)
+
+    // Update overlay: screenshot done, OCR done, AI running
+    await window.api.overlay.update(
+      buildSteps('done', ocrOk ? 'done' : 'error', 'running'),
+      gameName
+    ).catch(() => {})
+
+    // ── Phase 6: AI parsing (30s timeout via AbortController in deepseek.ts) ──
+    set({ captureState: 'parsing' })
+
+    let aiResults: ParseResult[]
+    try {
+      aiResults = await parseResourcesViaAI(
+        filteredOcrText || 'no text recognized',
+        resolvedGameConfig
+      )
+      console.log('[Capture] AI parsed', aiResults.length, 'resources')
+    } catch (aiErr) {
+      console.error('[Capture] AI parsing failed:', aiErr)
+      const aiMsg = aiErr instanceof Error ? aiErr.message : String(aiErr)
+
+      await window.api.overlay.result(
+        buildSteps('done', ocrOk ? 'done' : 'error', 'error'),
+        processName,
+        `AI 解析失败: ${aiMsg}`,
+        false
+      ).catch(() => {})
+
+      addHistory({
+        id: `${Date.now()}-ai-fail`,
+        gameId: resolvedGameConfig.id,
+        gameName,
+        resourceName: '',
+        currentValue: null,
+        maxValue: null,
+        status: 'fail',
+        failureReason: `AI 解析失败: ${aiMsg}`,
+        ocrText: captureResult.ocrText,
+        processName
+      })
+
+      set({ captureState: 'idle' })
+      return
+    }
+
+    if (aiResults.length === 0) {
+      console.error('[Capture] AI returned no resources')
+
+      await window.api.overlay.result(
+        buildSteps('done', ocrOk ? 'done' : 'error', 'error'),
+        processName,
+        'AI 未识别到资源数据',
+        false
+      ).catch(() => {})
+
+      addHistory({
+        id: `${Date.now()}-ai-empty`,
+        gameId: resolvedGameConfig.id,
+        gameName,
+        resourceName: '',
+        currentValue: null,
+        maxValue: null,
+        status: 'fail',
+        failureReason: 'AI 未识别到资源数据',
+        ocrText: captureResult.ocrText,
+        processName
+      })
+
+      set({ captureState: 'idle' })
+      return
+    }
+
+    // ── Phase 7: Post to backend + update local stores ──
+    set({ captureState: 'posting' })
+
+    const primaryRT = resolvedGameConfig.resourceTypes.find(rt => rt.isPrimary)
+    const records: ResourceRecord[] = []
+    const now = utcNow()
+
+    // Build local resource map updates
+    const newResourceMap: Record<string, ResourceSnapshot> = {}
+    const newSubResources: CapturedResource[] = []
+
+    for (const r of aiResults) {
+      const matched = resolvedGameConfig.resourceTypes.find(
+        rt => r.max_resource === rt.cap
+      )
+      if (!matched || r.remaining_resource === null || r.max_resource === null) continue
+
+      // Backend post
+      try {
+        const record = await postResourceRecord({
+          game_name: resolvedGameConfig.name,
+          resource_type: matched.id,
+          current_resource: r.remaining_resource,
+          max_resource: r.max_resource,
+          capture_time: now,
+          platform: 'desktop'
+        })
+        records.push(record)
+        addHistory({
+          id: `${Date.now()}-${matched.id}`,
+          gameId: resolvedGameConfig.id,
+          gameName: resolvedGameConfig.name,
+          resourceName: matched.label,
+          currentValue: r.remaining_resource,
+          maxValue: r.max_resource,
+          status: 'success',
+          ocrText: captureResult.ocrText,
+          processName
+        })
+      } catch (backendErr) {
+        // Backend failed, still record locally
+        addHistory({
+          id: `${Date.now()}-${matched.id}`,
+          gameId: resolvedGameConfig.id,
+          gameName: resolvedGameConfig.name,
+          resourceName: matched.label,
+          currentValue: r.remaining_resource,
+          maxValue: r.max_resource,
+          status: 'fail',
+          failureReason: `后端提交失败: ${backendErr instanceof Error ? backendErr.message : String(backendErr)}`,
+          ocrText: captureResult.ocrText,
+          processName
+        })
+      }
+
+      // Always update local resource map
+      const isPrimary = matched.isPrimary
+      newResourceMap[matched.id] = {
+        remaining: r.remaining_resource,
+        max: r.max_resource,
+        recoveryMinutes: matched.recoveryMinutes,
+        lastCaptureTime: now
+      }
+
+      if (!isPrimary) {
+        newSubResources.push({
+          remaining: r.remaining_resource,
+          max: r.max_resource,
+          config: matched,
+          gameApiName: resolvedGameConfig.apiGameName
+        })
+      }
+    }
+
+    // Apply local state updates
+    set((prev) => ({
+      resourceMap: { ...prev.resourceMap, ...newResourceMap },
+      subResources: newSubResources,
+    }))
+
+    if (records.length > 0) {
+      set({ todayRecords: records })
+    }
+
+    // ── Phase 8: Show success on overlay ──
+    const primaryValue = primaryRT && newResourceMap[primaryRT.id]
+      ? `${newResourceMap[primaryRT.id].remaining}/${newResourceMap[primaryRT.id].max}`
+      : ''
+    const subCount = newSubResources.length > 0 ? ` +${newSubResources.length}子资源` : ''
+
+    await window.api.overlay.result(
+      buildSteps('done', ocrOk ? 'done' : 'error', 'done'),
+      processName,
+      `识别成功 ${gameName} ${primaryRT?.label || '资源'} ${primaryValue}${subCount}`,
+      true
+    ).catch(() => {})
+
+    // Flush retry queue
+    window.api.queue.flush().catch(() => {})
+
+    set({ captureState: 'done' })
+    setTimeout(() => set({ captureState: 'idle' }), 2000)
   }
 }))
-
-/** Helper to add to captureHistory without duplicating timestamp generation */
-function addHistory(entry: Omit<CaptureHistoryEntry, 'timestamp'>): void {
-  useCaptureStore.getState().addCaptureHistory({
-    ...entry,
-    timestamp: new Date().toISOString()
-  })
-}

@@ -21,13 +21,12 @@ interface Window {
         success: boolean
         errorCode?: string
         errorMessage?: string
-        resolvedGameId?: string
-        windowInfo?: { processName: string; windowTitle: string }
       }>
+      detectForeground: () => Promise<{ processName: string; resolvedGameId: string | null; isDesktop: boolean }>
       notify: (title: string, body: string, isSuccess?: boolean) => Promise<void>
     }
     overlay: {
-      create: (a: string, b: string[]) => Promise<void>
+      create: (a: string, b: string[], c?: boolean) => Promise<void>
       update: (a: { s: string; l: string }[], b: string) => Promise<void>
       result: (a: { s: string; l: string }[], b: string, c: string, d: boolean) => Promise<void>
       close: () => Promise<void>

@@ -41,6 +41,7 @@ Do NOT include any other text.`
 /**
  * Parse ALL resources for a game from OCR text via DeepSeek.
  * Returns an array of ParseResult, one per identified resource.
+ * Throws a clear error message on timeout (AbortError).
  */
 export async function parseResourcesViaAI(
   ocrText: string,
@@ -126,6 +127,12 @@ export async function parseResourcesViaAI(
     }
     console.log('[DeepSeek Parse] Regex extracted', results.length, 'resources')
     return results
+  } catch (err) {
+    // Re-throw AbortError with a clear timeout message
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error(`AI 解析超时 (${PARSE_TIMEOUT_MS / 1000}s)`)
+    }
+    throw err
   } finally {
     clearTimeout(timeoutId)
   }
