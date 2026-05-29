@@ -2,7 +2,7 @@ import { Tray, Menu, nativeImage, BrowserWindow, app, ipcMain } from 'electron'
 import { join } from 'path'
 
 const TOOLS = [
-  { id: 'stamina-capture', label: '游戏资源捕获' },
+  { id: 'resource-capture', label: '游戏资源捕获' },
 ]
 
 // Tool enabled states synced from renderer (default: all enabled)

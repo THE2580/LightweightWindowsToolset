@@ -31,7 +31,7 @@ function AppListeners(): null {
       toggleToolEnabled(toolId)
     })
     const unsubHotkey = window.api.hotkey.onHotkey((action) => {
-      if (action === 'stamina-capture') {
+      if (action === 'resource-capture') {
         triggerBackgroundCapture()
       } else if (action === 'ai-chat') {
         toggleChat()

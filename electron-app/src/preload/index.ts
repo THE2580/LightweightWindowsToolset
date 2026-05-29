@@ -63,10 +63,10 @@ const api = {
   hotkey: {
     onHotkey: (callback: (action: string) => void): (() => void) => {
       const handler = (_event: Electron.IpcRendererEvent, action: string) => callback(action)
-      ipcRenderer.on('hotkey:stamina-capture', () => handler(null as any, 'stamina-capture'))
+      ipcRenderer.on('hotkey:resource-capture', () => handler(null as any, 'resource-capture'))
       ipcRenderer.on('hotkey:ai-chat', () => handler(null as any, 'ai-chat'))
       return () => {
-        ipcRenderer.removeAllListeners('hotkey:stamina-capture')
+        ipcRenderer.removeAllListeners('hotkey:resource-capture')
         ipcRenderer.removeAllListeners('hotkey:ai-chat')
       }
     },

@@ -103,9 +103,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setDeepseekModel: async (m) => { await window.api.settings.set('deepseekModel', m); set({ deepseekModel: m }) },
   setWindowTitle: async (t) => { await window.api.settings.set('windowTitle', t); await window.api.window.setTitle(t); set({ windowTitle: t }) },
   setCloseBehavior: async (b) => { await window.api.settings.set('closeBehavior', b); set({ closeBehavior: b }) },
-  setCaptureHotkey: async (keys) => { const jsonStr = JSON.stringify(keys); const acc = keys.join('+'); await window.api.settings.set('captureHotkey', jsonStr); await window.api.hotkey.updateHotkey('stamina-capture', acc); set({ captureHotkey: jsonStr }) },
+  setCaptureHotkey: async (keys) => { const jsonStr = JSON.stringify(keys); const acc = keys.join('+'); await window.api.settings.set('captureHotkey', jsonStr); await window.api.hotkey.updateHotkey('resource-capture', acc); set({ captureHotkey: jsonStr }) },
   setChatHotkey: async (keys) => { const jsonStr = JSON.stringify(keys); const acc = keys.join('+'); await window.api.settings.set('chatHotkey', jsonStr); await window.api.hotkey.updateHotkey('ai-chat', acc); set({ chatHotkey: jsonStr }) },
-  setCaptureHotkeyEnabled: async (v) => { await window.api.settings.set('captureHotkeyEnabled', v); await window.api.hotkey.setHotkeyEnabled('stamina-capture', v); set({ captureHotkeyEnabled: v }) },
+  setCaptureHotkeyEnabled: async (v) => { await window.api.settings.set('captureHotkeyEnabled', v); await window.api.hotkey.setHotkeyEnabled('resource-capture', v); set({ captureHotkeyEnabled: v }) },
   setChatHotkeyEnabled: async (v) => { await window.api.settings.set('chatHotkeyEnabled', v); await window.api.hotkey.setHotkeyEnabled('ai-chat', v); set({ chatHotkeyEnabled: v }) },
   setCaptureRefreshInterval: async (v) => { await window.api.settings.set('captureRefreshInterval', v); set({ captureRefreshInterval: v }) }
 }))

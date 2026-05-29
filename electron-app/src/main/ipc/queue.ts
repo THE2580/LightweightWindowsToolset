@@ -54,7 +54,3 @@ export function registerQueueIpc(): void {
     return true
   })
 }
-
-// Backward-compat alias
-/** @deprecated Use QueuedResourcePayload */
-export type QueuedStaminaPayload = QueuedResourcePayload

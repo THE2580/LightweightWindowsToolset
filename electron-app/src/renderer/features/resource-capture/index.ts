@@ -1,9 +1,9 @@
 import { Zap } from 'lucide-react'
 
-function StaminaCaptureFeature(): void {
+function ResourceCaptureFeature(): void {
   // Plugin registration placeholder
   // This will be auto-discovered by the plugin registry
 }
 
-export default StaminaCaptureFeature
+export default ResourceCaptureFeature
 export const icon = Zap

@@ -4,7 +4,7 @@
 
 import { lazy, ComponentType } from 'react'
 
-const CapturePage = lazy(() => import('@/features/stamina-capture/CapturePage'))
+const CapturePage = lazy(() => import('@/features/resource-capture/CapturePage'))
 
 export interface BuiltinPlugin {
   id: string
@@ -18,7 +18,7 @@ export interface BuiltinPlugin {
 
 export const BUILTIN_PLUGINS: BuiltinPlugin[] = [
   {
-    id: 'stamina-capture',
+    id: 'resource-capture',
     name: '游戏资源捕获',
     description: '截图识别游戏资源值，自动记录并同步',
     icon: 'zap',

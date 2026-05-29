@@ -1,4 +1,4 @@
-﻿import { app, BrowserWindow, shell, globalShortcut, ipcMain } from 'electron'
+import { app, BrowserWindow, shell, globalShortcut, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { createTray, destroyTray } from './tray'
@@ -23,7 +23,7 @@ function registerSingleHotkey(action: string, accelerator: string, mainWindow: B
   try {
     const registered = globalShortcut.register(accelerator, () => {
       // Block if tool is disabled
-      if (action === 'stamina-capture' && disabledTools.has('stamina-capture')) return
+      if (action === 'resource-capture' && disabledTools.has('resource-capture')) return
       mainWindow.webContents.send(`hotkey:${action}`, action)
     })
     if (registered) {
@@ -167,8 +167,8 @@ app.whenReady().then(() => {
   const chatEnabled = (getStore().get('chatHotkeyEnabled') as boolean) ?? true
 
   // Only register if hotkey is non-empty and enabled
-  if (captureEnabled && captureHk) registerSingleHotkey('stamina-capture', captureHk, mainWindow)
-  else hotkeyActions.set('stamina-capture', { accelerator: captureHk, enabled: false })
+  if (captureEnabled && captureHk) registerSingleHotkey('resource-capture', captureHk, mainWindow)
+  else hotkeyActions.set('resource-capture', { accelerator: captureHk, enabled: false })
 
   if (chatEnabled && chatHk) registerSingleHotkey('ai-chat', chatHk, mainWindow)
   else hotkeyActions.set('ai-chat', { accelerator: chatHk, enabled: false })
@@ -178,20 +178,20 @@ app.whenReady().then(() => {
     if (enabled) {
       disabledTools.delete(toolId)
       // Re-register hotkey if it was previously disabled and settings allow
-      if (toolId === 'stamina-capture') {
-        const info = hotkeyActions.get('stamina-capture')
+      if (toolId === 'resource-capture') {
+        const info = hotkeyActions.get('resource-capture')
         const enabledFlag = (getStore().get('captureHotkeyEnabled') as boolean) ?? true
         if (enabledFlag && info?.accelerator) {
-          registerSingleHotkey('stamina-capture', info.accelerator, mainWindow)
+          registerSingleHotkey('resource-capture', info.accelerator, mainWindow)
         }
       }
     } else {
       disabledTools.add(toolId)
       // Unregister tool's hotkey
-      if (toolId === 'stamina-capture') {
-        unregisterSingleHotkey('stamina-capture')
-        hotkeyActions.set('stamina-capture', {
-          accelerator: hotkeyActions.get('stamina-capture')?.accelerator || '',
+      if (toolId === 'resource-capture') {
+        unregisterSingleHotkey('resource-capture')
+        hotkeyActions.set('resource-capture', {
+          accelerator: hotkeyActions.get('resource-capture')?.accelerator || '',
           enabled: false
         })
       }
@@ -208,7 +208,7 @@ app.whenReady().then(() => {
     const info = hotkeyActions.get(action)
     if (info?.enabled !== false) {
       // Check tool disabled state
-      if (action === 'stamina-capture' && disabledTools.has('stamina-capture')) return
+      if (action === 'resource-capture' && disabledTools.has('resource-capture')) return
       registerSingleHotkey(action, accelerator, mainWindow)
     } else {
       hotkeyActions.set(action, { accelerator, enabled: false })
@@ -221,7 +221,7 @@ app.whenReady().then(() => {
     const acc = info?.accelerator || ''
     if (enabled && acc) {
       // Don't register if tool is disabled
-      if (action === 'stamina-capture' && disabledTools.has('stamina-capture')) {
+      if (action === 'resource-capture' && disabledTools.has('resource-capture')) {
         hotkeyActions.set(action, { accelerator: acc, enabled: true })
         return
       }
@@ -242,7 +242,7 @@ app.whenReady().then(() => {
     for (const [action, info] of hotkeyActions) {
       if (info.enabled !== false) {
         // Skip if tool is disabled
-        if (action === 'stamina-capture' && disabledTools.has('stamina-capture')) continue
+        if (action === 'resource-capture' && disabledTools.has('resource-capture')) continue
         if (info.accelerator) {
           registerSingleHotkey(action, info.accelerator, mainWindow)
         }

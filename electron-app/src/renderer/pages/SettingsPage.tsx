@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useDeepseekStore } from '@/stores/deepseekStore'
 import { applyTheme } from '@/lib/theme'
@@ -23,10 +23,10 @@ const TABS: { id: TabId; label: string; icon: React.ComponentType<{ size?: numbe
 const DEFAULT_TITLE = '轻量化工具集'
 
 type HotkeyAction = 'capture' | 'chat'
-type HotkeyIPC = 'stamina-capture' | 'ai-chat'
+type HotkeyIPC = 'resource-capture' | 'ai-chat'
 
 function actionToIPC(a: HotkeyAction): HotkeyIPC {
-  return a === 'capture' ? 'stamina-capture' : 'ai-chat'
+  return a === 'capture' ? 'resource-capture' : 'ai-chat'
 }
 
 const MODIFIER_KEYS = new Set(['Control', 'Shift', 'Alt', 'CommandOrControl'])

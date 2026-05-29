@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import { parseResourcesViaAI, ParseResult } from '@/features/stamina-capture/api/deepseek'
-import { postResourceRecord, getAllTodayRecords } from '@/features/stamina-capture/api/backend'
+import { parseResourcesViaAI, ParseResult } from '@/features/resource-capture/api/deepseek'
+import { postResourceRecord, getAllTodayRecords } from '@/features/resource-capture/api/backend'
 
 type CaptureState = 'idle' | 'capturing' | 'ocr' | 'parsing' | 'posting' | 'done' | 'error'
 
@@ -85,7 +85,7 @@ export interface CapturedResource {
   gameApiName: string
 }
 
-export interface StaminaSnapshot {
+export interface ResourceSnapshot {
   remaining: number
   max: number
   recoveryMinutes: number
@@ -109,7 +109,7 @@ export interface CaptureHistoryEntry {
 interface CaptureStore {
   selectedGame: string
   selectedResourceType: string
-  staminaMap: Record<string, StaminaSnapshot | null>
+  resourceMap: Record<string, ResourceSnapshot | null>
   subResources: CapturedResource[]
   ocrText: string
   captureState: CaptureState
@@ -120,7 +120,7 @@ interface CaptureStore {
 
   setSelectedGame: (id: string) => void
   setSelectedResourceType: (rt: string) => void
-  setStamina: (s: StaminaSnapshot | null) => void
+  setResource: (s: ResourceSnapshot | null) => void
   setSubResources: (sr: CapturedResource[]) => void
   setOcrText: (text: string) => void
   setCaptureState: (state: CaptureState) => void
@@ -137,7 +137,7 @@ interface CaptureStore {
 export const useCaptureStore = create<CaptureStore>((set, get) => ({
   selectedGame: 'genshin',
   selectedResourceType: 'GenshinImpact_ORIGINAL_RESIN',
-  staminaMap: {},
+  resourceMap: {},
   subResources: [],
   ocrText: '',
   captureState: 'idle',
@@ -153,11 +153,11 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
     set({ selectedGame: id, selectedResourceType: defaultRT, subResources: [], ocrText: '' })
   },
   setSelectedResourceType: (rt) => set({ selectedResourceType: rt }),
-  setStamina: (s) => {
+  setResource: (s) => {
     const { selectedGame } = get()
     if (s) {
       const rt = get().selectedResourceType
-      set((prev) => ({ staminaMap: { ...prev.staminaMap, [rt]: s } }))
+      set((prev) => ({ resourceMap: { ...prev.resourceMap, [rt]: s } }))
     }
   },
   setSubResources: (sr) => set({ subResources: sr }),
@@ -182,7 +182,7 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
         set({ todayRecords: records })
         if (!get().backendOnline) set({ backendOnline: true })
         const now = Date.now()
-        const latest = new Map<string, StaminaSnapshot>()
+        const latest = new Map<string, ResourceSnapshot>()
         for (const r of records) {
           if (latest.has(r.resource_type)) continue
           const cfg = GAME_CONFIGS.find((g) => g.name === r.game_name)
@@ -200,7 +200,7 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
           })
         }
         if (latest.size > 0) {
-          set((prev) => { const u = { ...prev.staminaMap }; for (const [k, v] of latest) u[k] = v; return { staminaMap: u } })
+          set((prev) => { const u = { ...prev.resourceMap }; for (const [k, v] of latest) u[k] = v; return { resourceMap: u } })
         }
       }
     } catch { set({ backendOnline: false }) }
@@ -213,7 +213,7 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
         set({ todayRecords: records })
         if (!get().backendOnline) set({ backendOnline: true })
         const now = Date.now()
-        const latest = new Map<string, StaminaSnapshot>()
+        const latest = new Map<string, ResourceSnapshot>()
         let lastGameId: string | null = null
         for (const r of records) {
           const cfg = GAME_CONFIGS.find((g) => g.name === r.game_name)
@@ -232,10 +232,10 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
           if (rt.isPrimary) lastGameId = cfg.id
         }
         if (latest.size > 0) {
-          const u: Record<string, StaminaSnapshot> = { ...get().staminaMap }
+          const u: Record<string, ResourceSnapshot> = { ...get().resourceMap }
           for (const [k, v] of latest) u[k] = v
           set((prev) => ({
-            staminaMap: u,
+            resourceMap: u,
             selectedGame: lastGameId || prev.selectedGame
           }))
         }
@@ -336,18 +336,18 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
       )
 
       const primaryResult = aiResults.find((r) =>
-        resolvedGameConfig.resourceTypes.some((rt) => rt.isPrimary && r.max_stamina === rt.cap)
+        resolvedGameConfig.resourceTypes.some((rt) => rt.isPrimary && r.max_resource === rt.cap)
       )
 
       const subResults: CapturedResource[] = []
       for (const r of aiResults) {
         const matched = resolvedGameConfig.resourceTypes.find(
-          (rt) => !rt.isPrimary && r.max_stamina === rt.cap
+          (rt) => !rt.isPrimary && r.max_resource === rt.cap
         )
         if (matched) {
           subResults.push({
-            remaining: r.remaining_stamina,
-            max: r.max_stamina,
+            remaining: r.remaining_resource,
+            max: r.max_resource,
             config: matched,
             gameApiName: resolvedGameConfig.apiGameName
           })
@@ -356,9 +356,9 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
 
       if (primaryResult) {
         set((prev) => ({
-          staminaMap: {
-            ...prev.staminaMap,
-            [primaryRT?.id || resolvedGameConfig.id]: { remaining: primaryResult.remaining_stamina, max: primaryResult.max_stamina, recoveryMinutes: primaryRT?.recoveryMinutes || 0, lastCaptureTime: new Date().toISOString() },
+          resourceMap: {
+            ...prev.resourceMap,
+            [primaryRT?.id || resolvedGameConfig.id]: { remaining: primaryResult.remaining_resource, max: primaryResult.max_resource, recoveryMinutes: primaryRT?.recoveryMinutes || 0, lastCaptureTime: new Date().toISOString() },
             ...Object.fromEntries(subResults.map((sr) => [sr.config.id, { remaining: sr.remaining, max: sr.max, recoveryMinutes: sr.config.recoveryMinutes, lastCaptureTime: new Date().toISOString() }])),
           },
           subResources: subResults,
@@ -367,8 +367,8 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
       } else if (subResults.length > 0) {
         const first = subResults[0]
         set((prev) => ({
-          staminaMap: {
-            ...prev.staminaMap,
+          resourceMap: {
+            ...prev.resourceMap,
             [first.config.id]: { remaining: first.remaining, max: first.max, recoveryMinutes: first.config.recoveryMinutes, lastCaptureTime: new Date().toISOString() },
             ...Object.fromEntries(subResults.slice(1).map((sr) => [sr.config.id, { remaining: sr.remaining, max: sr.max, recoveryMinutes: sr.config.recoveryMinutes, lastCaptureTime: new Date().toISOString() }])),
           },
@@ -411,15 +411,15 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
         const primaryRT = resolvedGameConfig.resourceTypes.find((rt) => rt.isPrimary)
         for (const r of aiResults) {
           const matchedConfig = resolvedGameConfig.resourceTypes.find(
-            (rt) => r.max_stamina === rt.cap || (rt.isPrimary && r.max_stamina !== 0)
+            (rt) => r.max_resource === rt.cap || (rt.isPrimary && r.max_resource !== 0)
           )
-          if (matchedConfig && r.remaining_stamina !== null && r.max_stamina !== null) {
+          if (matchedConfig && r.remaining_resource !== null && r.max_resource !== null) {
             try {
               const record = await postResourceRecord({
                 game_name: resolvedGameConfig.name,
                 resource_type: matchedConfig.id,
-                current_resource: r.remaining_stamina,
-                max_resource: r.max_stamina,
+                current_resource: r.remaining_resource,
+                max_resource: r.max_resource,
                 capture_time: new Date().toISOString(),
                 platform: 'desktop'
               })
@@ -429,8 +429,8 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
                 gameId: resolvedGameConfig.id,
                 gameName: resolvedGameConfig.name,
                 resourceName: matchedConfig.label,
-                currentValue: r.remaining_stamina,
-                maxValue: r.max_stamina,
+                currentValue: r.remaining_resource,
+                maxValue: r.max_resource,
                 status: 'success',
                 processName: result.windowInfo?.processName,
                 ocrText: get().ocrText
@@ -442,8 +442,8 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
                 gameId: resolvedGameConfig.id,
                 gameName: resolvedGameConfig.name,
                 resourceName: matchedConfig.label,
-                currentValue: r.remaining_stamina,
-                maxValue: r.max_stamina,
+                currentValue: r.remaining_resource,
+                maxValue: r.max_resource,
                 status: 'fail',
                 failureReason: `后端提交失败: ${backendErr instanceof Error ? backendErr.message : String(backendErr)}`,
                 processName: result.windowInfo?.processName,
@@ -458,7 +458,7 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
 
         const primaryLabel = primaryRT?.label || '资源'
         const primaryValue = primaryResult
-          ? `${primaryResult.remaining_stamina}/${primaryResult.max_stamina}`
+          ? `${primaryResult.remaining_resource}/${primaryResult.max_resource}`
           : ''
         const subCount = subResults.length > 0 ? ` +${subResults.length}子资源` : ''
 

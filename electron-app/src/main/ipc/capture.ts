@@ -121,8 +121,9 @@ function createOverlay(processName: string, stepLabels: string[]): void {
       s: i === 0 ? 'running' : 'pending',
       l: label
     }))
+    // Reset overlay DOM state to prevent stale data from previous capture
     overlay.webContents.executeJavaScript(
-      `window._render(, , null)`
+      `window._render(${JSON.stringify(initialSteps)}, ${JSON.stringify(processName)}, null)`
     ).catch(() => {})
     overlay.show()
     overlay.setAlwaysOnTop(true, 'screen-saver')
@@ -169,12 +170,12 @@ function createOverlay(processName: string, stepLabels: string[]): void {
 
 function updateOverlaySteps(
   stepStates: { s: string; l: string }[],
-  processName: string
+  processName?: string
 ): void {
   if (!overlay || overlay.isDestroyed()) return
 
   overlay.webContents.executeJavaScript(
-    `window._render(${JSON.stringify(stepStates)}, ${JSON.stringify(processName)}, null)`
+    `window._render(${JSON.stringify(stepStates)}, ${JSON.stringify(processName ?? null)}, null)`
   ).catch(() => {})
 }
 
@@ -421,7 +422,7 @@ export function registerCaptureIpc(): void {
       // --- Update overlay: screenshot done, OCR running ---
       updateOverlaySteps(
         buildOverlaySteps({ screenshot: 'done', ocr: 'running', ai: 'pending' }),
-        '',
+        undefined,
       )
 
       const imageBase64 = imgBuffer.toString('base64')
@@ -447,7 +448,7 @@ export function registerCaptureIpc(): void {
       // --- Update overlay: OCR done (or error), AI pending ---
       updateOverlaySteps(
         buildOverlaySteps({ screenshot: 'done', ocr: ocrText ? 'done' : 'error', ai: 'pending' }),
-        '',
+        undefined,
       )
 
       return {

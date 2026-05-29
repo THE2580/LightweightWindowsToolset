@@ -1,4 +1,4 @@
-﻿import { useCaptureStore, GameConfig, ResourceTypeConfig } from '@/stores/captureStore'
+import { useCaptureStore, GameConfig, ResourceTypeConfig } from '@/stores/captureStore'
 import { useShallow } from 'zustand/shallow'
 import { ChevronDown } from 'lucide-react'
 
@@ -23,7 +23,7 @@ function GameSelector(): React.JSX.Element {
           value={selectedGame}
           onChange={(e) => setSelectedGame(e.target.value)}
           className="appearance-none h-9 pl-3 pr-8 rounded-md border border-border bg-background text-sm
-                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                     focus-visible:outline-none focus-visible:border-primary"
         >
           {gameConfigs.map((game) => (
             <option key={game.id} value={game.id}>
@@ -38,26 +38,24 @@ function GameSelector(): React.JSX.Element {
       </div>
 
       {/* Resource type selector */}
-      {(
-        <div className="relative">
-          <select
-            value={selectedResourceType}
-            onChange={(e) => setSelectedResourceType(e.target.value)}
-            className="appearance-none h-9 pl-3 pr-7 rounded-md border border-border bg-background text-xs
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {resourceTypes.map((rt) => (
-              <option key={rt.id} value={rt.id}>
-                {rt.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDown
-            size={12}
-            className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground"
-          />
-        </div>
-      )}
+      <div className="relative">
+        <select
+          value={selectedResourceType}
+          onChange={(e) => setSelectedResourceType(e.target.value)}
+          className="appearance-none h-9 pl-3 pr-7 rounded-md border border-border bg-background text-xs
+                     focus-visible:outline-none focus-visible:border-primary"
+        >
+          {resourceTypes.map((rt) => (
+            <option key={rt.id} value={rt.id}>
+              {rt.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDown
+          size={12}
+          className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground"
+        />
+      </div>
     </div>
   )
 }
