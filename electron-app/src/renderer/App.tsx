@@ -9,12 +9,14 @@ import PluginRoute from './lib/plugin-loader.tsx'
 import { usePluginStore } from './stores/pluginStore'
 import { useCaptureStore } from './stores/captureStore'
 import { useDeepseekStore } from './stores/deepseekStore'
+import { usePinnerStore } from './stores/pinnerStore'
 
 function AppListeners(): null {
   const navigate = useNavigate()
   const toggleToolEnabled = usePluginStore((s) => s.toggleToolEnabled)
   const toggleChat = usePluginStore((s) => s.toggleChat)
   const triggerBackgroundCapture = useCaptureStore((s) => s.triggerBackgroundCapture)
+  const togglePin = usePinnerStore((s) => s.togglePin)
   const loadApiKey = useDeepseekStore((s) => s.loadApiKey)
 
   // Preload API key on app startup so chat works without visiting settings first
@@ -35,6 +37,8 @@ function AppListeners(): null {
         triggerBackgroundCapture()
       } else if (action === 'ai-chat') {
         toggleChat()
+      } else if (action === 'window-pinner') {
+        togglePin()
       }
     })
     return () => {
@@ -42,7 +46,7 @@ function AppListeners(): null {
       unsubTool()
       unsubHotkey()
     }
-  }, [navigate, toggleToolEnabled, toggleChat, triggerBackgroundCapture])
+  }, [navigate, toggleToolEnabled, toggleChat, triggerBackgroundCapture, togglePin])
 
   return null
 }

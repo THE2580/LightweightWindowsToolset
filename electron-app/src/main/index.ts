@@ -7,6 +7,7 @@ import { registerSettingsIpc, getStore } from './ipc/settings'
 import { registerCaptureIpc } from './ipc/capture'
 import { registerQueueIpc, loadQueue, saveQueue } from './ipc/queue'
 import { registerBackendIpc } from './ipc/backend'
+import { registerPinnerIpc } from './ipc/pinner'
 
 let isQuitting = false
 
@@ -24,6 +25,7 @@ function registerSingleHotkey(action: string, accelerator: string, mainWindow: B
     const registered = globalShortcut.register(accelerator, () => {
       // Block if tool is disabled
       if (action === 'resource-capture' && disabledTools.has('resource-capture')) return
+      if (action === 'window-pinner' && disabledTools.has('window-pinner')) return
       mainWindow.webContents.send(`hotkey:${action}`, action)
     })
     if (registered) {
@@ -136,6 +138,11 @@ app.whenReady().then(() => {
 
   app.on('before-quit', () => {
     isQuitting = true
+    // Unpin all windows before quitting
+    try {
+      const { ipcMain: ipc } = require('electron')
+      ipc.emit('pinner:cleanup')
+    } catch { /* ok */ }
     destroyTray()
     globalShortcut.unregisterAll()
   })
@@ -163,6 +170,7 @@ app.whenReady().then(() => {
 
   const captureHk = storedToAccelerator((getStore().get('captureHotkey') as string) || '')
   const chatHk = storedToAccelerator((getStore().get('chatHotkey') as string) || '')
+  const pinnerHk = storedToAccelerator((getStore().get('pinnerHotkey') as string) || '')
   const captureEnabled = (getStore().get('captureHotkeyEnabled') as boolean) ?? true
   const chatEnabled = (getStore().get('chatHotkeyEnabled') as boolean) ?? true
 
@@ -172,6 +180,10 @@ app.whenReady().then(() => {
 
   if (chatEnabled && chatHk) registerSingleHotkey('ai-chat', chatHk, mainWindow)
   else hotkeyActions.set('ai-chat', { accelerator: chatHk, enabled: false })
+
+  const pinnerEnabled = (getStore().get('pinnerHotkeyEnabled') as boolean) ?? true
+  if (pinnerEnabled && pinnerHk) registerSingleHotkey('window-pinner', pinnerHk, mainWindow)
+  else hotkeyActions.set('window-pinner', { accelerator: pinnerHk, enabled: false })
 
   // Tool disable/enable — directly controls hotkey registration
   ipcMain.handle('tool:set-enabled', (_event, toolId: string, enabled: boolean) => {
@@ -185,6 +197,13 @@ app.whenReady().then(() => {
           registerSingleHotkey('resource-capture', info.accelerator, mainWindow)
         }
       }
+      if (toolId === 'window-pinner') {
+        const info = hotkeyActions.get('window-pinner')
+        const enabledFlag = (getStore().get('pinnerHotkeyEnabled') as boolean) ?? true
+        if (enabledFlag && info?.accelerator) {
+          registerSingleHotkey('window-pinner', info.accelerator, mainWindow)
+        }
+      }
     } else {
       disabledTools.add(toolId)
       // Unregister tool's hotkey
@@ -192,6 +211,13 @@ app.whenReady().then(() => {
         unregisterSingleHotkey('resource-capture')
         hotkeyActions.set('resource-capture', {
           accelerator: hotkeyActions.get('resource-capture')?.accelerator || '',
+          enabled: false
+        })
+      }
+      if (toolId === 'window-pinner') {
+        unregisterSingleHotkey('window-pinner')
+        hotkeyActions.set('window-pinner', {
+          accelerator: hotkeyActions.get('window-pinner')?.accelerator || '',
           enabled: false
         })
       }
@@ -205,14 +231,10 @@ app.whenReady().then(() => {
       hotkeyActions.set(action, { accelerator: '', enabled: hotkeyActions.get(action)?.enabled ?? true })
       return
     }
-    const info = hotkeyActions.get(action)
-    if (info?.enabled !== false) {
-      // Check tool disabled state
-      if (action === 'resource-capture' && disabledTools.has('resource-capture')) return
-      registerSingleHotkey(action, accelerator, mainWindow)
-    } else {
-      hotkeyActions.set(action, { accelerator, enabled: false })
-    }
+    // Check tool disabled state — blocked tools never register hotkeys
+    if (action === 'resource-capture' && disabledTools.has('resource-capture')) return
+    if (action === 'window-pinner' && disabledTools.has('window-pinner')) return
+    registerSingleHotkey(action, accelerator, mainWindow)
   })
 
   ipcMain.handle('hotkey:set-enabled', (_event, action: string, enabled: boolean) => {
@@ -222,6 +244,10 @@ app.whenReady().then(() => {
     if (enabled && acc) {
       // Don't register if tool is disabled
       if (action === 'resource-capture' && disabledTools.has('resource-capture')) {
+        hotkeyActions.set(action, { accelerator: acc, enabled: true })
+        return
+      }
+      if (action === 'window-pinner' && disabledTools.has('window-pinner')) {
         hotkeyActions.set(action, { accelerator: acc, enabled: true })
         return
       }
@@ -243,6 +269,7 @@ app.whenReady().then(() => {
       if (info.enabled !== false) {
         // Skip if tool is disabled
         if (action === 'resource-capture' && disabledTools.has('resource-capture')) continue
+        if (action === 'window-pinner' && disabledTools.has('window-pinner')) continue
         if (info.accelerator) {
           registerSingleHotkey(action, info.accelerator, mainWindow)
         }
@@ -273,6 +300,7 @@ app.whenReady().then(() => {
   registerCaptureIpc()
   registerQueueIpc()
   registerBackendIpc()
+  registerPinnerIpc()
 
   // queue:flush handler — invoked by renderer after a successful capture
   ipcMain.handle('queue:flush', async () => {

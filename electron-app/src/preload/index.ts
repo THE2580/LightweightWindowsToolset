@@ -60,11 +60,29 @@ const api = {
     setEnabled: (toolId: string, enabled: boolean): Promise<void> =>
       ipcRenderer.invoke('tool:set-enabled', toolId, enabled)
   },
+  pinner: {
+    toggle: (maxWindows: number, borderColor: string): Promise<{ success: boolean; action?: string; hwnd?: number; processName?: string; windowTitle?: string; reason?: string; message?: string }> =>
+      ipcRenderer.invoke('pinner:toggle', maxWindows, borderColor),
+    unpin: (hwnd: number): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('pinner:unpin', hwnd),
+    unpinAll: (): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('pinner:unpin-all'),
+    getList: (): Promise<{ hwnd: number; processName: string; windowTitle: string; pinnedAt: number; order: number }[]> =>
+      ipcRenderer.invoke('pinner:get-list'),
+    setBorderColor: (color: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('pinner:set-border-color', color),
+    onListUpdate: (callback: (list: { hwnd: number; processName: string; windowTitle: string; pinnedAt: number; order: number }[]) => void): (() => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, list: unknown) => callback(list as { hwnd: number; processName: string; windowTitle: string; pinnedAt: number; order: number }[])
+      ipcRenderer.on('pinner:list-update', handler)
+      return () => { ipcRenderer.removeListener('pinner:list-update', handler) }
+    },
+  },
   hotkey: {
     onHotkey: (callback: (action: string) => void): (() => void) => {
       const handler = (_event: Electron.IpcRendererEvent, action: string) => callback(action)
       ipcRenderer.on('hotkey:resource-capture', () => handler(null as any, 'resource-capture'))
       ipcRenderer.on('hotkey:ai-chat', () => handler(null as any, 'ai-chat'))
+      ipcRenderer.on('hotkey:window-pinner', () => handler(null as any, 'window-pinner'))
       return () => {
         ipcRenderer.removeAllListeners('hotkey:resource-capture')
         ipcRenderer.removeAllListeners('hotkey:ai-chat')

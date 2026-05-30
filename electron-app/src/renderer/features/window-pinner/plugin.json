@@ -1,1 +1,35 @@
-{ "id": "window-pinner", "name": "置顶焦点窗口", "version": "1.0.0", "description": "将任意窗口固定在屏幕最上层 (待定)", "icon": "pin", "entry": "./PinnerPage.tsx", "settings": [], "permissions": ["window-management"], "minWindow": { "width": 800, "height": 600 } }
+{
+  "id": "window-pinner",
+  "name": "置顶焦点窗口",
+  "version": "1.0.0",
+  "description": "将任意窗口固定在屏幕最上层，可设置边框颜色与同时置顶数量",
+  "icon": "pin",
+  "entry": "./PinnerPage.tsx",
+  "settings": [
+    {
+      "key": "pinnerMaxWindows",
+      "label": "最大同时置顶",
+      "type": "number",
+      "default": 5
+    },
+    {
+      "key": "pinnerBorderColor",
+      "label": "边框颜色",
+      "type": "string",
+      "default": "#2563EB"
+    },
+    {
+      "key": "pinnerHotkey",
+      "label": "置顶快捷键",
+      "type": "hotkey",
+      "default": ""
+    }
+  ],
+  "permissions": [
+    "window-management"
+  ],
+  "minWindow": {
+    "width": 800,
+    "height": 600
+  }
+}

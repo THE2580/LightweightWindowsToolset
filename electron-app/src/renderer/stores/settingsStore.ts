@@ -20,6 +20,8 @@ interface SettingsState {
   chatHotkey: string
   captureHotkeyEnabled: boolean
   chatHotkeyEnabled: boolean
+  pinnerHotkey: string
+  pinnerHotkeyEnabled: boolean
   captureRefreshInterval: number
   isLoaded: boolean
 
@@ -40,6 +42,8 @@ interface SettingsState {
   setChatHotkey: (keys: string[]) => Promise<void>
   setCaptureHotkeyEnabled: (v: boolean) => Promise<void>
   setChatHotkeyEnabled: (v: boolean) => Promise<void>
+  setPinnerHotkey: (keys: string[]) => Promise<void>
+  setPinnerHotkeyEnabled: (v: boolean) => Promise<void>
   setCaptureRefreshInterval: (v: number) => Promise<void>
 }
 
@@ -60,6 +64,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   chatHotkey: '',
   captureHotkeyEnabled: true,
   chatHotkeyEnabled: true,
+  pinnerHotkey: '',
+  pinnerHotkeyEnabled: true,
   captureRefreshInterval: 2,
   isLoaded: false,
 
@@ -83,6 +89,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         chatHotkey: (all.chatHotkey as string) || '',
         captureHotkeyEnabled: (all.captureHotkeyEnabled as boolean) ?? true,
         chatHotkeyEnabled: (all.chatHotkeyEnabled as boolean) ?? true,
+        pinnerHotkey: (all.pinnerHotkey as string) || '',
+        pinnerHotkeyEnabled: (all.pinnerHotkeyEnabled as boolean) ?? true,
         captureRefreshInterval: (all.captureRefreshInterval as number) || 2,
         isLoaded: true
       })
@@ -107,5 +115,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setChatHotkey: async (keys) => { const jsonStr = JSON.stringify(keys); const acc = keys.join('+'); await window.api.settings.set('chatHotkey', jsonStr); await window.api.hotkey.updateHotkey('ai-chat', acc); set({ chatHotkey: jsonStr }) },
   setCaptureHotkeyEnabled: async (v) => { await window.api.settings.set('captureHotkeyEnabled', v); await window.api.hotkey.setHotkeyEnabled('resource-capture', v); set({ captureHotkeyEnabled: v }) },
   setChatHotkeyEnabled: async (v) => { await window.api.settings.set('chatHotkeyEnabled', v); await window.api.hotkey.setHotkeyEnabled('ai-chat', v); set({ chatHotkeyEnabled: v }) },
+  setPinnerHotkey: async (keys) => { const jsonStr = JSON.stringify(keys); const acc = keys.join('+'); await window.api.settings.set('pinnerHotkey', jsonStr); await window.api.hotkey.updateHotkey('window-pinner', acc); set({ pinnerHotkey: jsonStr }) },
+  setPinnerHotkeyEnabled: async (v) => { await window.api.settings.set('pinnerHotkeyEnabled', v); await window.api.hotkey.setHotkeyEnabled('window-pinner', v); set({ pinnerHotkeyEnabled: v }) },
   setCaptureRefreshInterval: async (v) => { await window.api.settings.set('captureRefreshInterval', v); set({ captureRefreshInterval: v }) }
 }))

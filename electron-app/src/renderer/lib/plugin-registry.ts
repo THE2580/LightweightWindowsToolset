@@ -5,6 +5,7 @@
 import { lazy, ComponentType } from 'react'
 
 const CapturePage = lazy(() => import('@/features/resource-capture/CapturePage'))
+const PinnerPage = lazy(() => import('@/features/window-pinner/PinnerPage'))
 
 export interface BuiltinPlugin {
   id: string
@@ -28,11 +29,12 @@ export const BUILTIN_PLUGINS: BuiltinPlugin[] = [
   },
   {
     id: 'window-pinner',
-    name: '置顶窗口',
-    description: '将任意窗口固定在屏幕最上层',
+    name: '窗口置顶',
+    description: '将任意窗口固定在屏幕最上层，可设置边框颜色与同时置顶数量',
     icon: 'pin',
-    status: 'upcoming',
-    entry: './WindowPinner.tsx'
+    status: 'stable',
+    entry: './PinnerPage.tsx',
+    component: PinnerPage
   },
   {
     id: 'key-counter',

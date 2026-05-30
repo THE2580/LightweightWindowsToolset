@@ -22,11 +22,13 @@ const TABS: { id: TabId; label: string; icon: React.ComponentType<{ size?: numbe
 
 const DEFAULT_TITLE = '轻量化工具集'
 
-type HotkeyAction = 'capture' | 'chat'
-type HotkeyIPC = 'resource-capture' | 'ai-chat'
+type HotkeyAction = 'capture' | 'chat' | 'pinner'
+type HotkeyIPC = 'resource-capture' | 'ai-chat' | 'window-pinner'
 
 function actionToIPC(a: HotkeyAction): HotkeyIPC {
-  return a === 'capture' ? 'resource-capture' : 'ai-chat'
+  if (a === 'capture') return 'resource-capture'
+  if (a === 'chat') return 'ai-chat'
+  return 'window-pinner'
 }
 
 const MODIFIER_KEYS = new Set(['Control', 'Shift', 'Alt', 'CommandOrControl'])
@@ -116,11 +118,12 @@ function SettingsPage(): React.JSX.Element {
     chatExpandZoneVisible, chatExpandZoneWidth, chatExpandZoneHeight,
     backendUrl, deepseekModel, windowTitle, closeBehavior,
     captureHotkey, chatHotkey, captureHotkeyEnabled, chatHotkeyEnabled,
+    pinnerHotkey, pinnerHotkeyEnabled,
     setTheme, setAutoStart, setChatClickOutsideToClose, setChatAutoExpand,
     setChatExpandZoneVisible, setChatExpandZoneWidth, setChatExpandZoneHeight,
     setChatExpandZonePreview,
     setBackendUrl, setDeepseekModel, setWindowTitle, setCloseBehavior,
-    setCaptureHotkey, setChatHotkey, setCaptureHotkeyEnabled, setChatHotkeyEnabled,
+    setCaptureHotkey, setChatHotkey, setPinnerHotkey, setCaptureHotkeyEnabled, setChatHotkeyEnabled, setPinnerHotkeyEnabled,
     load
   } = useSettingsStore()
 
@@ -137,17 +140,23 @@ function SettingsPage(): React.JSX.Element {
   // Hotkey editing state
   const [editingCapture, setEditingCapture] = useState(false)
   const [editingChat, setEditingChat] = useState(false)
+  const [editingPinner, setEditingPinner] = useState(false)
   const [captureKeys, setCaptureKeys] = useState<string[]>([])
   const [chatKeys, setChatKeys] = useState<string[]>([])
+  const [pinnerKeys, setPinnerKeys] = useState<string[]>([])
   const [captureConflict, setCaptureConflict] = useState(false)
   const [chatConflict, setChatConflict] = useState(false)
+  const [pinnerConflict, setPinnerConflict] = useState(false)
   const [captureValidationError, setCaptureValidationError] = useState<string | null>(null)
   const [chatValidationError, setChatValidationError] = useState<string | null>(null)
+  const [pinnerValidationError, setPinnerValidationError] = useState<string | null>(null)
   const [activeCaptureSlot, setActiveCaptureSlot] = useState<number | null>(null)
   const [activeChatSlot, setActiveChatSlot] = useState<number | null>(null)
+  const [activePinnerSlot, setActivePinnerSlot] = useState<number | null>(null)
 
   const captureKeysRef = useRef<string[]>([])
   const chatKeysRef = useRef<string[]>([])
+  const pinnerKeysRef = useRef<string[]>([])
   const keyCaptureRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { load(); loadApiKey() }, [load, loadApiKey])
@@ -160,9 +169,11 @@ function SettingsPage(): React.JSX.Element {
 
   useEffect(() => { if (!editingCapture) setCaptureKeys(parseAccelerator(captureHotkey)) }, [captureHotkey, editingCapture])
   useEffect(() => { if (!editingChat) setChatKeys(parseAccelerator(chatHotkey)) }, [chatHotkey, editingChat])
+  useEffect(() => { if (!editingPinner) setPinnerKeys(parseAccelerator(pinnerHotkey)) }, [pinnerHotkey, editingPinner])
 
   useEffect(() => { captureKeysRef.current = captureKeys }, [captureKeys])
   useEffect(() => { chatKeysRef.current = chatKeys }, [chatKeys])
+  useEffect(() => { pinnerKeysRef.current = pinnerKeys }, [pinnerKeys])
 
   // Clear save-time errors when keys change
   useEffect(() => { setCaptureValidationError(null); setCaptureConflict(false) }, [captureKeys])
@@ -183,24 +194,35 @@ function SettingsPage(): React.JSX.Element {
 
   const startEdit = useCallback((which: HotkeyAction) => {
     try { window.api.hotkey.disableAllHotkeys() } catch { /* ok */ }
-    const saved = which === 'capture' ? captureHotkey : chatHotkey
+    const saved = which === 'capture' ? captureHotkey : which === 'pinner' ? pinnerHotkey : chatHotkey
     if (which === 'capture') {
       setEditingCapture(true)
       setEditingChat(false)
+      setEditingPinner(false)
       setCaptureValidationError(null)
       setCaptureConflict(false)
       const parsed = parseAccelerator(saved)
       setCaptureKeys(parsed.length > 0 ? parsed : [''])
       setTimeout(() => { keyCaptureRef.current?.focus() }, 0)
+    } else if (which === 'pinner') {
+      setEditingPinner(true)
+      setEditingCapture(false)
+      setEditingChat(false)
+      setPinnerValidationError(null)
+      setPinnerConflict(false)
+      const pp = parseAccelerator(saved)
+      setPinnerKeys(pp.length > 0 ? pp : [''])
+      setTimeout(() => { keyCaptureRef.current?.focus() }, 0)
     } else {
       setEditingChat(true)
       setEditingCapture(false)
+      setEditingPinner(false)
       setChatValidationError(null)
       setChatConflict(false)
       const parsedChat = parseAccelerator(saved)
       setChatKeys(parsedChat.length > 0 ? parsedChat : [''])
     }
-  }, [captureHotkey, chatHotkey])
+  }, [captureHotkey, chatHotkey, pinnerHotkey])
 
   const cancelEdit = useCallback((which: HotkeyAction) => {
     try { window.api.hotkey.enableAllHotkeys() } catch { /* ok */ }
@@ -210,6 +232,12 @@ function SettingsPage(): React.JSX.Element {
       setCaptureConflict(false)
       setCaptureValidationError(null)
       setActiveCaptureSlot(null)
+    } else if (which === 'pinner') {
+      setEditingPinner(false)
+      setPinnerKeys(parseAccelerator(pinnerHotkey))
+      setPinnerConflict(false)
+      setPinnerValidationError(null)
+      setActivePinnerSlot(null)
     } else {
       setEditingChat(false)
       setChatKeys(parseAccelerator(chatHotkey))
@@ -225,6 +253,11 @@ function SettingsPage(): React.JSX.Element {
         if (prev.length > 0 && !prev[prev.length - 1]) return prev
         return [...prev, '']
       })
+    } else if (which === 'pinner') {
+      setPinnerKeys((prev) => {
+        if (prev.length > 0 && !prev[prev.length - 1]) return prev
+        return [...prev, '']
+      })
     } else {
       setChatKeys((prev) => {
         if (prev.length > 0 && !prev[prev.length - 1]) return prev
@@ -237,6 +270,9 @@ function SettingsPage(): React.JSX.Element {
     if (which === 'capture') {
       setCaptureKeys((prev) => prev.slice(0, -1))
       setActiveCaptureSlot(null)
+    } else if (which === 'pinner') {
+      setPinnerKeys((prev) => prev.slice(0, -1))
+      setActivePinnerSlot(null)
     } else {
       setChatKeys((prev) => prev.slice(0, -1))
       setActiveChatSlot(null)
@@ -244,7 +280,7 @@ function SettingsPage(): React.JSX.Element {
   }, [])
 
   const saveHotkey = useCallback(async (which: HotkeyAction) => {
-    const keys = which === 'capture' ? captureKeysRef.current : chatKeysRef.current
+    const keys = which === 'capture' ? captureKeysRef.current : which === 'pinner' ? pinnerKeysRef.current : chatKeysRef.current
     const nonEmpty = keys.filter((k) => k)
     const deduped = nonEmpty.filter((k, i) => nonEmpty.indexOf(k) === i)
     const acc = deduped.length > 0 ? keysToAccelerator(deduped) : ''
@@ -254,6 +290,7 @@ function SettingsPage(): React.JSX.Element {
       const err = validateHotkeyKeys(deduped)
       if (err) {
         if (which === 'capture') { setCaptureValidationError(err); setCaptureConflict(false) }
+        else if (which === 'pinner') { setPinnerValidationError(err); setPinnerConflict(false) }
         else { setChatValidationError(err); setChatConflict(false) }
         return
       }
@@ -265,6 +302,7 @@ function SettingsPage(): React.JSX.Element {
       const conflictAction = await window.api.hotkey.checkConflict(acc, exclude)
       if (conflictAction) {
         if (which === 'capture') { setCaptureConflict(true); setCaptureValidationError(null) }
+        else if (which === 'pinner') { setPinnerConflict(true); setPinnerValidationError(null) }
         else { setChatConflict(true); setChatValidationError(null) }
         return
       }
@@ -276,6 +314,11 @@ function SettingsPage(): React.JSX.Element {
       setEditingCapture(false)
       setCaptureConflict(false)
       setCaptureValidationError(null)
+    } else if (which === 'pinner') {
+      await setPinnerHotkey(deduped)
+      setEditingPinner(false)
+      setPinnerConflict(false)
+      setPinnerValidationError(null)
     } else {
       await setChatHotkey(deduped)
       setEditingChat(false)
@@ -312,8 +355,18 @@ function SettingsPage(): React.JSX.Element {
         if (idx < 0) return prev
         const n = [...prev]; n[idx] = normalized; return n
       })
+    } else if (editingPinner && activePinnerSlot !== null) {
+      const slot = activePinnerSlot
+      setPinnerKeys((prev) => { const n = [...prev]; n[slot] = normalized; return n })
+      setActivePinnerSlot(null)
+    } else if (editingPinner) {
+      setPinnerKeys((prev) => {
+        const idx = prev.findIndex((k) => !k)
+        if (idx < 0) return prev
+        const n = [...prev]; n[idx] = normalized; return n
+      })
     }
-  }, [editingCapture, editingChat, activeCaptureSlot, activeChatSlot])
+  }, [editingCapture, editingChat, editingPinner, activeCaptureSlot, activeChatSlot, activePinnerSlot])
 
   const nonEmptyCount = (keys: string[]): number => keys.filter((k) => k).length
 
@@ -595,6 +648,21 @@ function SettingsPage(): React.JSX.Element {
               () => cancelEdit('chat'),
               activeChatSlot,
               'chat'
+            )}
+            {renderHotkeyRow(
+              '窗口置顶',
+              '置顶当前焦点窗口，再次触发取消',
+              pinnerHotkeyEnabled,
+              setPinnerHotkeyEnabled,
+              pinnerHotkey,
+              editingPinner,
+              pinnerKeys,
+              pinnerConflict,
+              pinnerValidationError,
+              () => startEdit('pinner'),
+              () => cancelEdit('pinner'),
+              activePinnerSlot,
+              'pinner'
             )}
             <p className="text-[10px] text-muted-foreground pt-1">快捷键格式：一个或多个修饰键（Ctrl/Shift/Alt/Win）在前，恰好一个普通键在后。不支持多字符组合（Ctrl+B+C 中间键会被 Electron 丢弃）。</p>
           </motion.div>
