@@ -83,6 +83,102 @@ function extractJson<T>(raw: string): T | null {
 
 // ── Win32 operations ──
 
+
+// ── Combined pin: foreground detection + SetWindowPos in one PS call ──
+
+interface PinResult {
+  hwnd: number
+  processName: string
+  windowTitle: string
+  isDesktop: boolean
+  rect: WindowRect | null
+  topmostOk: boolean
+}
+
+function pinForegroundWindow(): Promise<PinResult> {
+  const script = `
+$cs = @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public struct RECT_PIN {
+    public int Left; public int Top; public int Right; public int Bottom;
+}
+
+public class W32PIN {
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    [DllImport("user32.dll")]
+    public static extern bool GetWindowRect(IntPtr hWnd, out RECT_PIN lpRect);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetDesktopWindow();
+    [DllImport("user32.dll")]
+    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    [DllImport("user32.dll")]
+    public static extern bool IsWindow(IntPtr hWnd);
+    static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+    const uint SWP_NOMOVE = 0x0002;
+    const uint SWP_NOSIZE = 0x0001;
+    const uint SWP_NOACTIVATE = 0x0010;
+    const uint SWP_SHOWWINDOW = 0x0040;
+}
+"@
+Add-Type -TypeDefinition $cs *> $null
+
+$hwnd = [W32PIN]::GetForegroundWindow()
+if ($hwnd -eq [IntPtr]::Zero) {
+  Write-Output '{"hwnd":0,"processName":"","windowTitle":"","isDesktop":true,"rect":null,"topmostOk":false}'
+  exit 0
+}
+
+$procId = 0
+[W32PIN]::GetWindowThreadProcessId($hwnd, [ref]$procId)
+$pn = try { (Get-Process -Id $procId -ErrorAction Stop).ProcessName } catch { "unknown" }
+
+$sb = New-Object System.Text.StringBuilder(256)
+[W32PIN]::GetWindowText($hwnd, $sb, 256)
+$windowTitle = $sb.ToString()
+
+$desktopHwnd = [W32PIN]::GetDesktopWindow()
+$isDesktop = ($hwnd -eq $desktopHwnd) -or
+             ($pn -eq "explorer") -or
+             ($pn -eq "Progman") -or
+             ($pn -eq "ShellExperienceHost")
+
+$rect = New-Object RECT_PIN
+$hasRect = [W32PIN]::GetWindowRect($hwnd, [ref]$rect)
+$r = if ($hasRect) {
+  '{"left":' + $rect.Left + ',"top":' + $rect.Top + ',"right":' + $rect.Right + ',"bottom":' + $rect.Bottom + '}'
+} else { 'null' }
+
+$topmostOk = $false
+if (-not $isDesktop) {
+  if ([W32PIN]::IsWindow($hwnd)) {
+    $topmostOk = [W32PIN]::SetWindowPos($hwnd, [W32PIN]::HWND_TOPMOST, 0, 0, 0, 0,
+      [W32PIN]::SWP_NOMOVE -bor [W32PIN]::SWP_NOSIZE -bor [W32PIN]::SWP_NOACTIVATE -bor [W32PIN]::SWP_SHOWWINDOW)
+  }
+}
+$topStr = if ($topmostOk) { 'true' } else { 'false' }
+
+$wtEsc = $windowTitle -replace '"', '\\"'
+Write-Output ('{"hwnd":' + [int64]$hwnd + ',"processName":"' + $pn + '","windowTitle":"' + $wtEsc + '","isDesktop":' + (&{if($isDesktop){'true'}else{'false'}}) + ',"rect":' + $r + ',"topmostOk":' + $topStr + '}')
+`.trim()
+
+  return execPowerShell(script, 10000).then((stdout) => {
+    if (!stdout) return { hwnd: 0, processName: '', windowTitle: '', isDesktop: true, rect: null, topmostOk: false }
+    const start = stdout.indexOf('{')
+    const end = stdout.lastIndexOf('}')
+    if (start < 0 || end < 0) return { hwnd: 0, processName: '', windowTitle: '', isDesktop: true, rect: null, topmostOk: false }
+    try { return JSON.parse(stdout.substring(start, end + 1)) }
+    catch { return { hwnd: 0, processName: '', windowTitle: '', isDesktop: true, rect: null, topmostOk: false } }
+  })
+}
+
 function getForegroundWindowInfo(): Promise<ForegroundInfo> {
   const script = `
 $cs = @"
@@ -318,7 +414,7 @@ async function unpinInternal(updateBorder: boolean): Promise<boolean> {
   await setWindowTopmost(currentPinned.hwnd, false)
   currentPinned = null
   missingRectRetries = 0
-  if (updateBorder) destroyBorderOverlay()
+  destroyBorderOverlay()
   return true
 }
 
@@ -342,15 +438,14 @@ export function registerPinnerIpc(): void {
       stopPolling()
       return { success: true, action: 'unpin' }
     }
-    const fg = await getForegroundWindowInfo()
-    if (!fg || fg.isDesktop || fg.hwnd === 0) {
+    const pr = await pinForegroundWindow()
+    if (!pr || pr.isDesktop || pr.hwnd === 0) {
       return { success: false, reason: 'NO_FOREGROUND', message: '未检测到有效的前台窗口' }
     }
-    const ok = await setWindowTopmost(fg.hwnd, true)
-    if (!ok) return { success: false, reason: 'SET_FAILED', message: '设置窗口置顶失败' }
-    currentPinned = { hwnd: fg.hwnd, processName: fg.processName, windowTitle: fg.windowTitle, pinnedAt: Date.now(), borderColor: currentBorderColor }
-    if (fg.rect) {
-      const ov = createBorderOverlay(fg.rect, currentBorderColor)
+    if (!pr.topmostOk) return { success: false, reason: 'SET_FAILED', message: '设置窗口置顶失败' }
+    currentPinned = { hwnd: pr.hwnd, processName: pr.processName, windowTitle: pr.windowTitle, pinnedAt: Date.now(), borderColor: currentBorderColor }
+    if (pr.rect) {
+      const ov = createBorderOverlay(pr.rect, currentBorderColor)
       if (ov) borderOverlay = ov
     }
     startPolling()
