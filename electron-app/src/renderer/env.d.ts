@@ -20,6 +20,9 @@ interface Window {
       get: (key: string) => Promise<unknown>
       set: (key: string, value: unknown) => Promise<void>
       getAll: () => Promise<Record<string, unknown>>
+      getStoragePath: () => Promise<string>
+      setStoragePath: (newPath: string) => Promise<{ success: boolean; error?: string; newPath?: string }>
+      selectFolder: () => Promise<string | null>
     }
     capture: {
       trigger: () => Promise<{

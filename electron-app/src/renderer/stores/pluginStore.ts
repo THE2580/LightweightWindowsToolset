@@ -69,7 +69,6 @@ export const usePluginStore = create<PluginState>((set, get) => ({
     const enabled = !next.has(id)
     // Persist disabled state
     window.api.settings.set('disabledTools', JSON.stringify([...next]))
-    window.api.tray.notifyToolState(id, enabled)
     // Notify main process to unregister/re-register hotkey
     window.api.tool.setEnabled(id, enabled)
   },

@@ -107,7 +107,7 @@ function Sidebar({ onToggleChat }: SidebarProps): React.JSX.Element {
                     className={cn(
                       'w-7 h-4 rounded-full transition-colors duration-200 flex-shrink-0',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      enabled ? 'bg-primary' : 'bg-muted-foreground/30'
+                      enabled ? 'bg-primary' : 'bg-muted-foreground/35'
                     )}
                     aria-label={`${enabled ? 'Disable' : 'Enable'} ${plugin.name}`}
                   >

@@ -235,7 +235,7 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
         )
         const latest = new Map<string, ResourceSnapshot>()
         for (const r of sortedRecords) {
-          const cfg = GAME_CONFIGS.find((g) => g.name === r.game_name)
+          const cfg = GAME_CONFIGS.find((g) => r.game_name.startsWith(g.name) || r.resource_type.startsWith(g.apiGameName + "_"))
           if (!cfg) continue
           const rt = cfg.resourceTypes.find((t) => t.id === r.resource_type)
           if (!rt) continue
@@ -269,7 +269,7 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
           (a, b) => new Date(a.capture_time).getTime() - new Date(b.capture_time).getTime()
         )
         for (const r of sortedRecords) {
-          const cfg = GAME_CONFIGS.find((g) => g.name === r.game_name)
+          const cfg = GAME_CONFIGS.find((g) => r.game_name.startsWith(g.name) || r.resource_type.startsWith(g.apiGameName + "_"))
           if (!cfg) continue
           const rt = cfg.resourceTypes.find((t) => t.id === r.resource_type)
           if (!rt) continue

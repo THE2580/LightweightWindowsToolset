@@ -8,6 +8,7 @@ import { registerCaptureIpc } from './ipc/capture'
 import { registerQueueIpc, loadQueue, saveQueue } from './ipc/queue'
 import { registerBackendIpc } from './ipc/backend'
 import { registerPinmanIpc, startPinman, stopPinman, sendCommand, sendCommandFire } from './ipc/pinman'
+import { startBackend, stopBackend } from './ipc/backend-process'
 
 let isQuitting = false
 
@@ -142,6 +143,7 @@ app.whenReady().then(() => {
     try {
       const { ipcMain: ipc } = require('electron')
       stopPinman()
+      stopBackend()
     } catch { /* ok */ }
     destroyTray()
     globalShortcut.unregisterAll()
@@ -195,6 +197,7 @@ app.whenReady().then(() => {
         if (enabledFlag && info?.accelerator) {
           registerSingleHotkey('resource-capture', info.accelerator, mainWindow)
         }
+        startBackend()
       }
       if (toolId === 'window-pinner') {
         const info = hotkeyActions.get('window-pinner')
@@ -215,6 +218,7 @@ app.whenReady().then(() => {
           accelerator: hotkeyActions.get('resource-capture')?.accelerator || '',
           enabled: false
         })
+        stopBackend()
       }
       if (toolId === 'window-pinner') {
         hotkeyActions.set('window-pinner', {
@@ -332,6 +336,13 @@ app.whenReady().then(() => {
     startPinman(mainWindow, initHotkey)
   } else {
     console.log('[pinman] Skipped start: window-pinner tool is disabled')
+  }
+
+  // Start backend if resource-capture tool is enabled
+  if (!disabledTools.has('resource-capture')) {
+    startBackend()
+  } else {
+    console.log('[backend] Skipped start: resource-capture tool is disabled')
   }
 
   // Auto-pin this app on startup if enabled

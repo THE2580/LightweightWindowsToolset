@@ -58,7 +58,7 @@ function HomePage(): React.JSX.Element {
                 transition-all duration-150
                 ${grayed
                   ? 'border-border/40 opacity-50'
-                  : 'border-border hover:scale-[1.02] hover:shadow-md hover:border-primary/30 cursor-pointer'
+                  : 'border-border hover:shadow-md hover:border-primary/30 cursor-pointer'
                 }
               `}
             >

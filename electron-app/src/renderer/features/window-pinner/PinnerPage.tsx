@@ -155,7 +155,7 @@ function PinnerPage(): React.JSX.Element {
             </div>
           </div>
         ) : (
-          <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-gray-400">
+          <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-muted-foreground">
             暂无置顶窗口。按快捷键或点击置顶按钮来置顶。
           </div>
         )}
@@ -199,7 +199,7 @@ function PinnerPage(): React.JSX.Element {
               onChange={(e) => setMaxPinsInput(e.target.value)}
               onBlur={handleMaxPinsSave}
               onKeyDown={(e) => { if (e.key === 'Enter') handleMaxPinsSave() }}
-              className="w-16 px-2 py-1 text-sm border rounded"
+              className="w-16 px-2 py-1 text-sm border rounded bg-background"
             />
           </div>
         </div>

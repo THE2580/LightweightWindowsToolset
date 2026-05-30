@@ -25,6 +25,7 @@ interface SettingsState {
   pinnerAutoPinApp: boolean
   pinnerTopmostSelf: boolean
   captureRefreshInterval: number
+  storagePath: string
   isLoaded: boolean
 
   load: () => Promise<void>
@@ -49,6 +50,8 @@ interface SettingsState {
   setPinnerAutoPinApp: (v: boolean) => Promise<void>
   setPinnerTopmostSelf: (v: boolean) => Promise<void>
   setCaptureRefreshInterval: (v: number) => Promise<void>
+  loadStoragePath: () => Promise<void>
+  setStoragePath: (path: string) => Promise<{ success: boolean; error?: string }>
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -73,6 +76,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   pinnerAutoPinApp: false,
   pinnerTopmostSelf: false,
   captureRefreshInterval: 2,
+  storagePath: '',
   isLoaded: false,
 
   load: async () => {
@@ -127,5 +131,20 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setPinnerHotkeyEnabled: async (v) => { await window.api.settings.set('pinnerHotkeyEnabled', v); await window.api.hotkey.setHotkeyEnabled('window-pinner', v); set({ pinnerHotkeyEnabled: v }) },
   setPinnerAutoPinApp: async (v) => { await window.api.settings.set('pinnerAutoPinApp', v); set({ pinnerAutoPinApp: v }) },
   setPinnerTopmostSelf: async (v) => { await window.api.settings.set('pinnerTopmostSelf', v); await window.api.pinman.config('topmostSelf', v ? '1' : '0'); set({ pinnerTopmostSelf: v }) },
-  setCaptureRefreshInterval: async (v) => { await window.api.settings.set('captureRefreshInterval', v); set({ captureRefreshInterval: v }) }
+  setCaptureRefreshInterval: async (v) => { await window.api.settings.set('captureRefreshInterval', v); set({ captureRefreshInterval: v }) },
+
+  loadStoragePath: async () => {
+    try {
+      const p = await window.api.settings.getStoragePath()
+      set({ storagePath: p })
+    } catch { /* keep default */ }
+  },
+
+  setStoragePath: async (newPath) => {
+    const result = await window.api.settings.setStoragePath(newPath)
+    if (result.success && result.newPath) {
+      set({ storagePath: result.newPath })
+    }
+    return result
+  },
 }))

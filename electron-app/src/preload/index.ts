@@ -26,7 +26,11 @@ const api = {
     get: (key: string): Promise<unknown> => ipcRenderer.invoke('settings:get', key),
     set: (key: string, value: unknown): Promise<void> =>
       ipcRenderer.invoke('settings:set', key, value),
-    getAll: (): Promise<Record<string, unknown>> => ipcRenderer.invoke('settings:getAll')
+    getAll: (): Promise<Record<string, unknown>> => ipcRenderer.invoke('settings:getAll'),
+    getStoragePath: (): Promise<string> => ipcRenderer.invoke('settings:get-storage-path'),
+    setStoragePath: (newPath: string): Promise<{ success: boolean; error?: string; newPath?: string }> =>
+      ipcRenderer.invoke('settings:set-storage-path', newPath),
+    selectFolder: (): Promise<string | null> => ipcRenderer.invoke('settings:select-folder')
   },
   capture: {
     trigger: (): Promise<{ ocrText: string; imageBase64: string; success: boolean; errorCode?: string; errorMessage?: string }> => ipcRenderer.invoke('capture:trigger'),

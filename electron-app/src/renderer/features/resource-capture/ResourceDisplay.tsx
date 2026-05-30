@@ -101,13 +101,22 @@ function ResourceDisplay(): React.JSX.Element {
             </p>
           )}
           {displayRemaining < displayMax && resourceConfig.recoveryMinutes > 0 && (
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[10px] text-foreground font-medium">
               {(() => {
                 const totalMin = Math.floor((displayMax - displayRemaining) * resourceConfig.recoveryMinutes)
                 const eta = new Date(Date.now() + totalMin * 60000)
                 const hh = String(eta.getHours()).padStart(2, '0')
                 const mm = String(eta.getMinutes()).padStart(2, '0')
-                return `预计 ${hh}:${mm} 恢复满`
+                const now = new Date()
+                const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0)
+                const diffDays = Math.floor((eta.getTime() - todayEnd.getTime()) / 86400000) + 1
+                if (diffDays <= 0) {
+                  return `预计 ${hh}:${mm} 恢复满`
+                } else if (diffDays === 1) {
+                  return `预计 明天 ${hh}:${mm} 恢复满`
+                } else {
+                  return `预计 ${diffDays}天后 ${hh}:${mm} 恢复满`
+                }
               })()}
             </p>
           )}

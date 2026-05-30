@@ -10,15 +10,16 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import {
   Eye, EyeOff, Monitor, Sun, Moon, Wrench, Keyboard, RotateCcw,
-  Plus, Minus
+  Plus, Minus, FolderOpen, Info
 } from 'lucide-react'
 
-type TabId = 'general' | 'api' | 'hotkey'
+type TabId = 'general' | 'api' | 'hotkey' | 'about'
 
 const TABS: { id: TabId; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
   { id: 'general', label: '通用', icon: Monitor },
   { id: 'api', label: 'API 设置', icon: Wrench },
   { id: 'hotkey', label: '快捷键', icon: Keyboard },
+  { id: 'about', label: '关于', icon: Info },
 ]
 
 const DEFAULT_TITLE = '轻量化工具集'
@@ -125,6 +126,7 @@ function SettingsPage(): React.JSX.Element {
     setChatExpandZonePreview,
     setBackendUrl, setDeepseekModel, setWindowTitle, setCloseBehavior,
     setCaptureHotkey, setChatHotkey, setPinnerHotkey, setCaptureHotkeyEnabled, setChatHotkeyEnabled, setPinnerHotkeyEnabled,
+    storagePath, loadStoragePath, setStoragePath,
     load
   } = useSettingsStore()
 
@@ -134,11 +136,15 @@ function SettingsPage(): React.JSX.Element {
   const [searchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     const tab = searchParams.get('tab')
-    return (tab === 'general' || tab === 'api' || tab === 'hotkey') ? tab : 'general'
+    return (tab === 'general' || tab === 'api' || tab === 'hotkey' || tab === 'about') ? tab : 'general'
   })
   const [titleDraft, setTitleDraft] = useState(windowTitle)
   const [zoneWDraft, setZoneWDraft] = useState(chatExpandZoneWidth)
   const [zoneHDraft, setZoneHDraft] = useState(chatExpandZoneHeight)
+  const [storagePathDraft, setStoragePathDraft] = useState('')
+  const [storagePathEditing, setStoragePathEditing] = useState(false)
+  const [storagePathError, setStoragePathError] = useState<string | null>(null)
+  const [storagePathSuccess, setStoragePathSuccess] = useState(false)
   const [modelDraft, setModelDraft] = useState(deepseekModel)
   const [backendDraft, setBackendDraft] = useState(backendUrl)
 
@@ -164,13 +170,14 @@ function SettingsPage(): React.JSX.Element {
   const pinnerKeysRef = useRef<string[]>([])
   const keyCaptureRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { load(); loadApiKey() }, [load, loadApiKey])
+  useEffect(() => { load(); loadApiKey(); loadStoragePath() }, [load, loadApiKey, loadStoragePath])
   useEffect(() => { applyTheme(theme) }, [theme])
   useEffect(() => { if (apiKey) setApiKeyInput(apiKey) }, [apiKey])
   useEffect(() => { setModelDraft(deepseekModel) }, [deepseekModel])
   useEffect(() => { setBackendDraft(backendUrl) }, [backendUrl])
   useEffect(() => { setTitleDraft(windowTitle) }, [windowTitle])
   useEffect(() => { setZoneWDraft(chatExpandZoneWidth); setZoneHDraft(chatExpandZoneHeight) }, [chatExpandZoneWidth, chatExpandZoneHeight])
+  useEffect(() => { if (!storagePathEditing) setStoragePathDraft(storagePath) }, [storagePath, storagePathEditing])
 
   useEffect(() => { if (!editingCapture) setCaptureKeys(parseAccelerator(captureHotkey)) }, [captureHotkey, editingCapture])
   useEffect(() => { if (!editingChat) setChatKeys(parseAccelerator(chatHotkey)) }, [chatHotkey, editingChat])
@@ -334,6 +341,37 @@ function SettingsPage(): React.JSX.Element {
     try { await window.api.hotkey.enableAllHotkeys() } catch { /* ok */ }
   }, [setCaptureHotkey, setChatHotkey])
 
+
+  const handleSelectFolder = async () => {
+    const folder = await window.api.settings.selectFolder()
+    if (folder) {
+      setStoragePathDraft(folder)
+      setStoragePathEditing(true)
+      setStoragePathError(null)
+      setStoragePathSuccess(false)
+    }
+  }
+
+  const handleSaveStoragePath = async () => {
+    if (!storagePathDraft.trim()) return
+    setStoragePathError(null)
+    setStoragePathSuccess(false)
+    const result = await setStoragePath(storagePathDraft.trim())
+    if (result.success) {
+      setStoragePathEditing(false)
+      setStoragePathSuccess(true)
+    } else {
+      setStoragePathError(result.error || '')
+    }
+  }
+
+  const handleCancelStoragePath = () => {
+    setStoragePathDraft(storagePath)
+    setStoragePathEditing(false)
+    setStoragePathError(null)
+    setStoragePathSuccess(false)
+  }
+
   const handleKeyCapture = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     e.preventDefault()
     e.stopPropagation()
@@ -495,7 +533,7 @@ function SettingsPage(): React.JSX.Element {
                       (which === 'capture' ? activeCaptureSlot : activeChatSlot) === i
                         ? 'border-orange-500 bg-orange-100 ring-2 ring-orange-500/30'
                         : key
-                          ? 'border-yellow-500 bg-white'
+                          ? 'border-yellow-500 bg-background'
                           : 'border-dashed border-muted-foreground/30 bg-muted/50'
                     )}
                   >
@@ -519,7 +557,7 @@ function SettingsPage(): React.JSX.Element {
             {parseAccelerator(saved).map((k, i) => (
               <span key={i} className="flex items-center gap-1">
                 {i > 0 && <span className="text-muted-foreground text-[11px]">+</span>}
-                <span className="inline-flex items-center justify-center min-w-[36px] px-2 py-1 text-[11px] rounded border border-green-300 bg-white font-mono">
+                <span className="inline-flex items-center justify-center min-w-[36px] px-2 py-1 text-[11px] rounded border border-green-300 bg-background font-mono">
                   {k}
                 </span>
               </span>
@@ -581,6 +619,36 @@ function SettingsPage(): React.JSX.Element {
               <div><Label className="text-sm">关闭应用时</Label><p className="text-[11px] text-muted-foreground mt-0.5">点击关闭按钮的行为</p></div>
               <select value={closeBehavior} onChange={(e) => setCloseBehavior(e.target.value as 'quit' | 'tray')} className="h-8 w-28 rounded-md border border-border bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="quit">直接退出</option><option value="tray">缩小到托盘</option></select>
             </div>
+            <div className="py-3 border-b border-border/60">
+              <Label className="text-sm">存储路径</Label>
+              <p className="text-[11px] text-muted-foreground mt-0.5 mb-2">数据文件 config.json 存放目录，更改后自动迁移并重启生效</p>
+              <div className="flex gap-2 items-center">
+                <Input
+                  value={storagePathEditing ? storagePathDraft : storagePath || ''}
+                  onChange={(e) => { setStoragePathDraft(e.target.value); setStoragePathEditing(true); setStoragePathError(null); setStoragePathSuccess(false) }}
+                  placeholder="默认路径"
+                  readOnly={!storagePathEditing}
+                  className={cn('flex-1 h-8 text-xs font-mono', !storagePathEditing && 'text-muted-foreground')}
+                />
+                {!storagePathEditing ? (
+                  <Button size="sm" variant="outline" className="h-8 text-xs px-2 flex-shrink-0" onClick={handleSelectFolder}>
+                    <FolderOpen size={12} className="mr-1" />更改
+                  </Button>
+                ) : (
+                  <>
+                    <Button size="sm" className="h-8 text-xs px-3 flex-shrink-0" onClick={handleSaveStoragePath}>保存</Button>
+                    <Button size="sm" variant="ghost" className="h-8 text-xs px-2 flex-shrink-0" onClick={handleCancelStoragePath}>取消</Button>
+                  </>
+                )}
+              </div>
+              {storagePathSuccess && (
+                <p className="text-[10px] text-green-600 mt-1">数据已迁移，重启应用后生效</p>
+              )}
+              {storagePathError && (
+                <p className="text-[10px] text-red-500 mt-1">{storagePathError}</p>
+              )}
+            </div>
+
             <div className="flex items-center justify-between py-3 border-b border-border/60">
               <div><Label className="text-sm">AI 聊天点击外部关闭</Label><p className="text-[11px] text-muted-foreground mt-0.5">点击聊天面板外区域自动折叠</p></div>
               <button onClick={() => setChatClickOutsideToClose(!chatClickOutsideToClose)} className={cn('w-10 h-5 rounded-full transition-colors duration-200 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', chatClickOutsideToClose ? 'bg-primary' : 'bg-muted-foreground/25')}><div className={cn('w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200', chatClickOutsideToClose ? 'translate-x-5.5' : 'translate-x-0.5')} /></button>
@@ -672,6 +740,34 @@ function SettingsPage(): React.JSX.Element {
             <p className="text-[10px] text-muted-foreground pt-1">快捷键格式：一个或多个修饰键（Ctrl/Shift/Alt/Win）在前，恰好一个普通键在后。不支持多字符组合（Ctrl+B+C 中间键会被 Electron 丢弃）。</p>
           </motion.div>
         )}
+        {activeTab === 'about' && (
+          <motion.div key="about" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15, ease: 'easeOut' }} className="space-y-4">
+            <div className="py-3 border-b border-border/60">
+              <Label className="text-sm">LightweightWindowsToolset</Label>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Windows 桌面工具集</p>
+            </div>
+            <div className="py-3 border-b border-border/60">
+              <Label className="text-xs text-muted-foreground">作者</Label>
+              <p className="text-sm mt-0.5">THE2580</p>
+            </div>
+            <div className="py-3 border-b border-border/60">
+              <Label className="text-xs text-muted-foreground">GitHub</Label>
+              <p className="text-sm mt-0.5">
+                <a href="https://github.com/THE2580/LightweightWindowsToolset" target="_blank" rel="noreferrer" className="text-primary hover:underline">github.com/THE2580/LightweightWindowsToolset</a>
+              </p>
+            </div>
+            <div className="py-3 border-b border-border/60">
+              <Label className="text-xs text-muted-foreground">邮箱</Label>
+              <p className="text-sm mt-0.5">2021289500@qq.com</p>
+              <p className="text-sm">liangneng20060725@gmail.com</p>
+            </div>
+            <div className="py-3">
+              <Label className="text-xs text-muted-foreground">版本</Label>
+              <p className="text-sm mt-0.5 font-mono">1.0.0</p>
+            </div>
+          </motion.div>
+        )}
+
       </AnimatePresence>
     </div>
   )

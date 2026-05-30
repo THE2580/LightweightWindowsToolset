@@ -1,30 +1,8 @@
-import { Tray, Menu, nativeImage, BrowserWindow, app, ipcMain } from 'electron'
+import { Tray, Menu, nativeImage, BrowserWindow, app } from 'electron'
 import { join } from 'path'
-
-const TOOLS = [
-  { id: 'resource-capture', label: '游戏资源捕获' },
-]
-
-// Tool enabled states synced from renderer (default: all enabled)
-const toolStates = new Map<string, boolean>(
-  TOOLS.map((t) => [t.id, true])
-)
 
 let tray: Tray | null = null
 let mainWindowRef: BrowserWindow | null = null
-
-function buildToolSubmenu(): Electron.MenuItemConstructorOptions[] {
-  return TOOLS.map((tool) => ({
-    label: tool.label,
-    type: 'checkbox' as const,
-    checked: toolStates.get(tool.id) ?? true,
-    click: (): void => {
-      if (mainWindowRef) {
-        mainWindowRef.webContents.send('tray:toggle-tool', tool.id)
-      }
-    }
-  }))
-}
 
 function buildMenu(): Electron.Menu {
   if (!mainWindowRef) return Menu.buildFromTemplate([])
@@ -36,11 +14,6 @@ function buildMenu(): Electron.Menu {
         mainWindowRef!.show()
         mainWindowRef!.focus()
       }
-    },
-    { type: 'separator' },
-    {
-      label: '工具管理',
-      submenu: buildToolSubmenu()
     },
     { type: 'separator' },
     {
@@ -89,11 +62,6 @@ export function createTray(mainWindow: BrowserWindow): Tray {
   })
 
   tray.setContextMenu(buildMenu())
-
-  // Listen for tool state sync from renderer
-  ipcMain.handle('tray:update-tool-state', (_event, toolId: string, enabled: boolean) => {
-    toolStates.set(toolId, enabled)
-  })
 
   return tray
 }

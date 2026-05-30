@@ -1,7 +1,9 @@
-import { app, ipcMain, safeStorage } from 'electron'
+import { app, ipcMain, safeStorage, dialog } from 'electron'
 import Store from 'electron-store'
+import { getStorageDir, getStoragePathDisplay, setStoragePath } from '../utils/storage-path'
 
 const store = new Store({
+  cwd: getStorageDir(),
   defaults: {
     theme: 'system',
     autoStart: false,
@@ -75,6 +77,23 @@ export function registerSettingsIpc(): void {
       }
     }
     return all
+  })
+
+  ipcMain.handle('settings:get-storage-path', () => {
+    return getStoragePathDisplay()
+  })
+
+  ipcMain.handle('settings:set-storage-path', (_event, newPath: string) => {
+    return setStoragePath(newPath)
+  })
+
+  ipcMain.handle('settings:select-folder', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory', 'createDirectory'],
+      title: 'select data dir'
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
   })
 
   ipcMain.handle('settings:delete', (_event, key: string) => {

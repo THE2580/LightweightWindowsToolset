@@ -30,7 +30,6 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           'inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           'disabled:opacity-50 disabled:pointer-events-none',
-          'hover:scale-[1.02]',
           variants[variant],
           sizes[size],
           className
