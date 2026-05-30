@@ -159,7 +159,7 @@ $r = if ($hasRect) {
 $topmostOk = $false
 if (-not $isDesktop) {
   if ([W32PIN]::IsWindow($hwnd)) {
-    $topmostOk = [W32PIN]::SetWindowPos($hwnd, [W32PIN]::HWND_TOPMOST, 0, 0, 0, 0,
+    $topmostOk = [W32PIN]::SetWindowPos($hwnd, [IntPtr]::new(-1), 0, 0, 0, 0,
       [W32PIN]::SWP_NOMOVE -bor [W32PIN]::SWP_NOSIZE -bor [W32PIN]::SWP_NOACTIVATE -bor [W32PIN]::SWP_SHOWWINDOW)
   }
 }
@@ -213,7 +213,7 @@ if ($hwnd -eq [IntPtr]::Zero) {
 
 $procId = 0
 [W32FG]::GetWindowThreadProcessId($hwnd, [ref]$procId)
-$pn = try { (Get-Process -Id $procId -ErrorAction Stop).ProcessName } catch { "unknown" }
+$pn = try { $p = Get-Process -Id $procId -ErrorAction Stop; $p.ProcessName } catch { "unknown" }
 
 $sb = New-Object System.Text.StringBuilder(256)
 [W32FG]::GetWindowText($hwnd, $sb, 256)
