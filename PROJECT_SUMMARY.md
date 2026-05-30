@@ -1,9 +1,9 @@
 # LightweightWindowsToolset — 项目进展总结
 
-> 最后更新: 2026-05-30 (第十二轮)
+> 最后更新: 2026-05-30 (第十三轮)
 > 当前分支: main
-> 最新提交: f75b19f (feat: 添加待开发工具"今日按键统计")
-> 未提交改动: 窗口置顶工具完整实现、资源捕获多项修复、快捷键系统 window-pinner 支持
+> 最新提交: 4a52f7e (fix: 窗口置顶工具三个关键性能/稳定性修复)
+> 未提交改动: 无
 > 编译状态: ✅ 通过
 
 ---
@@ -151,7 +151,7 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 
 ---
 
-## 四、窗口置顶工具 ⚠️ (主体完成，性能/描边有严重bug)
+## 四、窗口置顶工具 ✅ (开发完成)
 
 ```
 快捷键 → PowerShell 获取前台 HWND → 已置顶? 取消 : 置顶
@@ -180,13 +180,13 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 - **设置持久化**: pinnerMaxWindows(默认5), pinnerBorderColor(默认#2563EB), pinnerHotkey
 - **快捷键**: window-pinner action，已集成到 main/index.ts 和 preload
 
-### 4.3 严重问题 🔴
+### 4.3 第十三轮修复 (三个严重问题已解决)
 
-| # | 问题 | 严重度 | 详情 |
-|---|------|--------|------|
-| 1 | PowerShell 进程洪水致 CPU 100% | 🔴 极高 | 每次置顶操作创建临时 PS 脚本并 execFile 启动 PowerShell 进程；400ms 轮询为每个置顶窗口调用 getWindowRect（又 fork PS 进程）；setWindowTopmost 同样 fork PS。大量 PS 进程堆积导致 CPU 飙升。需改为单次 PS 会话复用或改用 Node.js native addon / Edge.js |
-| 2 | 边框覆盖窗位置/大小错误 | 🔴 高 | 边框仅显示在窗口左上角一小块矩形，不能实时跟随窗口移动。根因: DPI scaleFactor 计算或 BrowserWindow 坐标系统与物理像素不匹配 |
-| 3 | 置顶窗口大概率自动取消 | 🔴 高 | 400ms 轮询中 `getWindowRect` 返回 null 时自动取消置顶。可能因 PS 进程超时/竞争条件导致误判窗口关闭 |
+| # | 问题 | 修复方式 |
+|---|------|----------|
+| 1 | PowerShell 进程洪水 CPU 100% | 400ms 轮询从 N 次 execFile 合并为单次批量 PS 脚本 `getAllWindowRects`（一次 PS 进程查询所有 HWND 的 rect） |
+| 2 | 边框覆盖窗位置/大小错误 | 移除 scaleFactor 除法——非 DPI-aware PS 进程的 GetWindowRect 已返回逻辑坐标 (DIP)，二次除法导致坐标缩小 |
+| 3 | 置顶窗口自动取消 | 增加 `missingRectRetries` 重试机制：连续 2 次 getWindowRect 返回 null 才取消置顶，容忍临时 PS 超时 |
 
 ### 4.4 文件清单
 
@@ -217,9 +217,6 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 | 2 | 历史记录未持久化（captureHistory 仅内存, 重启丢失） | 低 | 未修复 |
 | 3 | 托盘热键仍可触发捕获（缩小到托盘后可能误截本应用） | 低 | 未修复 |
 | 4 | 游戏分辨率与屏幕分辨率差异大时 OCR 识别率下降 | 中 | 已加 UI 提示，未根治 |
-| 5 | 窗口置顶 PowerShell 进程洪水 CPU 100% | 🔴 极高 | 待优化 |
-| 6 | 窗口置顶边框覆盖窗位置/大小错误 | 🔴 高 | 待修复 |
-| 7 | 窗口置顶窗口大概率自动取消置顶 | 🔴 高 | 待修复 |
 
 ---
 
@@ -245,15 +242,16 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 | 16 | hotkey:update 首次保存不注册 | 移除 info?.enabled !== false 判断 | 12 |
 | 17 | 窗口置顶快捷键录入无响应 | handleKeyCapture 补全 editingPinner 分支 | 12 |
 | 18 | 窗口置顶 topmost.ToString 报错 | TS 侧预计算 psBool | 12 |
+| 19 | 窗口置顶 PS 进程洪水 CPU 100% | 批量 getAllWindowRects 合并 N 次 execFile 为单次 | 13 |
+| 20 | 窗口置顶边框覆盖窗位置/大小错误 | 移除 scaleFactor 除法（非 DPI-aware PS 已返回逻辑坐标） | 13 |
+| 21 | 窗口置顶窗口误自动取消 | missingRectRetries 重试（连续 2 次 null 才取消） | 13 |
 | 19 | 设置页白屏 | 从git恢复后精确逐行添加pinner变量 | 12 |
 
 ---
 
 ## 八、最高优先级待办 🔴
 
-1. **全面优化窗口置顶工具性能** — PowerShell 进程洪水问题，每次置顶/轮询都 fork PS 进程导致 CPU 100%。需改为单次 PS 会话复用或 Node.js native addon
-2. **修复窗口置顶边框描边** — 边框仅显示窗口左上角一小块矩形，不能实时跟随窗口移动。根因在 DPI scaleFactor 计算或 BrowserWindow 坐标映射
-3. **修复窗口置顶自动取消问题** — 轮询中 getWindowRect 返回 null 误判窗口关闭，需增加重试/容错机制
+> 第十三轮已全部修复 ✅ — 详见第四节
 
 ---
 
