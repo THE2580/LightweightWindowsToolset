@@ -327,6 +327,8 @@ function physicalToDip(rect: WindowRect): { x: number; y: number; width: number;
 
 function createBorderOverlay(rect: WindowRect, color: string): BrowserWindow | null {
   try {
+    // Safety: destroy any existing overlay before creating a new one
+    destroyBorderOverlay()
     const b = physicalToDip(rect)
     if (b.width <= 10 || b.height <= 10) return null
 
@@ -411,7 +413,11 @@ function stopPolling(): void {
 
 async function unpinInternal(updateBorder: boolean): Promise<boolean> {
   if (!currentPinned) return false
-  await setWindowTopmost(currentPinned.hwnd, false)
+  try {
+    await setWindowTopmost(currentPinned.hwnd, false)
+  } catch {
+    // SetWindowPos may fail if window is already gone — still clean up
+  }
   currentPinned = null
   missingRectRetries = 0
   destroyBorderOverlay()
@@ -450,7 +456,7 @@ export function registerPinnerIpc(): void {
     }
     startPolling()
     broadcastState()
-    return { success: true, action: 'pin', hwnd: fg.hwnd, processName: fg.processName, windowTitle: fg.windowTitle }
+    return { success: true, action: 'pin', hwnd: pr.hwnd, processName: pr.processName, windowTitle: pr.windowTitle }
   })
 
   ipcMain.handle('pinner:unpin', async () => {
