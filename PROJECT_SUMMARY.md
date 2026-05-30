@@ -1,8 +1,9 @@
 # LightweightWindowsToolset — 项目进展总结
 
-> 最后更新: 2026-05-30 (第二十轮 — 状态总结)
+> 最后更新: 2026-05-30 (第二十一轮 — 窗口置顶收尾 + 工具启停架构)
 > 当前分支: main
-> 未提交改动: 大量（pinman 快捷键修复 + 边框移除 + 事件推送 + auto-pin）
+> 未提交改动: 无（已全部提交，共 5 commits）
+> 最新提交: 8b36f16 feat: 工具禁用=完全停止
 > 编译状态: ✅ 通过（electron-vite build 成功，pinman.exe Native AOT 编译成功）
 
 ---
@@ -221,6 +222,13 @@ stdin/stdout 行协议，一行命令对应一行响应：
 - ✅ 托盘气泡通知（pin/unpin 时显示窗口标题）
 - ✅ 应用退出自动清理所有置顶
 - ✅ 中文 UI
+- ✅ 弹窗通知替代气泡（BrowserWindow 淡出，无托盘气球依赖）
+- ✅ "置顶本应用时处于最顶部"选项（pinman 200ms WM_TIMER 重断言）
+- ✅ 工具禁用 = pinman.exe 完全停止（进程终止，内存释放，禁用状态持久化）
+- ✅ 设置页 ?tab=hotkey 直达快捷键标签
+- ✅ 快捷键 badge 化显示（JSON 解析 + font-mono 绿框）
+- ✅ 置顶后隐藏"置顶本窗口"按钮（selfHwnd 匹配检测）
+- ✅ 窗口列表可滚动（flex 布局）+ 长标题 hover 预览
 
 ### 5.8 已修复问题（第十九轮）
 
@@ -250,7 +258,7 @@ stdin/stdout 行协议，一行命令对应一行响应：
 | 2 | 历史记录未持久化（captureHistory 仅内存, 重启丢失） | 低 | 资源捕获 | 未修 |
 | 3 | 托盘热键仍可触发捕获（缩小到托盘后可能误截本应用） | 低 | 资源捕获 | 未修 |
 | 4 | 游戏分辨率与屏幕分辨率差异大时 OCR 识别率下降 | 中 | 资源捕获 | 未修 |
-| 5 | 首次启动时快捷键偶发不同步（用户反馈需进设置保存后才生效） | 低 | 窗口置顶 | 待验证 |
+| 5 | ~~首次启动时快捷键偶发不同步~~ | 低 | 窗口置顶 | ✅ 已修复——startPinman(win,hotkey) + 1s 延迟 CONFIG |
 
 ---
 
@@ -259,6 +267,12 @@ stdin/stdout 行协议，一行命令对应一行响应：
 **资源捕获**（第十一~十二轮）: OCR 弹窗闪现、弹窗状态机不同步、AI 超时卡住、进程名未映射、OCR 噪音、进度条数据未更新、恢复量计算不准、多资源切换体验、恢复时间取整+时钟、快捷键首次保存不注册、无效进程提示文案
 
 **窗口置顶(旧-PS方案)**（第十三~十七轮）: PS 进程洪水→批量查询、边框坐标 DPI 错误、置顶误自动取消→retry、多窗口简化→单窗口、边框 CSS→4-div 渲染、DPI 感知→SetProcessDpiAwareness、持久 PS 会话失败→回退 execFile、合并 toggle 双调用→单次、Add-Type 静态字段 null→IntPtr::new、变量名遗留→fg→pr、边框残留→try-catch+自清理
+
+**窗口置顶(新-pinman方案-第二十一轮)**:
+- 气泡不弹出 → Shell_NotifyIcon DllImport 缺 CharSet.Unicode 导致 Unicode 字符串按 ANSI 传递
+- 中文乱码 → pinman Console.OutputEncoding=UTF8（系统默认 GBK 与 Node.js readline UTF-8 不匹配）
+- 弹窗被置顶窗口遮挡 → did-finish-load 重断言 SetWindowPos(HWND_TOPMOST)
+- 工具禁用仅侧边栏隐藏 → 持久化 disabledTools 到 electron-store + 停止 pinman 进程
 
 **窗口置顶(新-pinman方案-第十八~十九轮)**:
 - EPIPE 崩溃 → stopPinman 三层保护
@@ -291,7 +305,8 @@ stdin/stdout 行协议，一行命令对应一行响应：
 | **IPC 并发控制** | **命令队列 + discardNextResponse** | 序列化 stdin 写入 + 防止火而忘响应污染 |
 | **事件推送** | **stderr @PINMAN_EVENT** | 不干扰 stdin/stdout 命令协议, 即时推送 |
 | **JSON 转义** | **char.IsControl() → \uXXXX** | 处理窗口标题中 mojibake 等任意控制字符 |
-| **置顶反馈** | **托盘气泡通知** | 替代窗口描边, 更轻量, 无 GDI 渲染开销 |
+| **置顶反馈** | **BrowserWindow 弹窗** | 替代托盘气泡，不依赖 Shell_NotifyIcon CharSet，支持淡出动画 |
+| **工具禁用** | **完全停止（持久化）** | 禁用 = 前端隐藏 + 快捷键注销 + 后台进程终止，状态存入 electron-store，重启保持 |
 
 ---
 
@@ -345,10 +360,9 @@ stdin/stdout 行协议，一行命令对应一行响应：
 | # | 事项 | 优先级 | 状态 |
 |---|------|--------|------|
 | 1 | 清理旧文件 `electron-app/src/main/ipc/pinner.ts`（已不被任何代码引用） | 低 | 未做 |
-| 2 | git commit 所有未提交改动 | 中 | 未做 |
-| 3 | 验证 #5 已知问题（首次启动快捷键偶发不同步）是否稳定复现，如需修复则排查 startPinman 1s 延迟 CONFIG 时序 | 低 | 未做 |
-| 4 | 资源捕获已知问题（后端伪报错、历史不持久化等，共 4 项） | 中 | 未修 |
-| 5 | 今日按键统计工具 | 低 | upcoming |
+| 2 | 资源捕获已知问题（后端伪报错、历史不持久化等，共 4 项） | 中 | 未修 |
+| 3 | 今日按键统计工具 | 低 | upcoming |
+| 4 | 托盘热键仍可触发捕获（缩小到托盘后可能误截本应用） | 低 | 未修 |
 
 ---
 
