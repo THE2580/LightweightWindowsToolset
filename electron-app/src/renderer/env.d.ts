@@ -50,12 +50,11 @@ interface Window {
       setEnabled: (toolId: string, enabled: boolean) => Promise<void>
     }
     pinner: {
-      toggle: (maxWindows: number, borderColor: string) => Promise<{ success: boolean; action?: string; hwnd?: number; processName?: string; windowTitle?: string; reason?: string; message?: string }>
-      unpin: (hwnd: number) => Promise<{ success: boolean }>
-      unpinAll: () => Promise<{ success: boolean }>
-      getList: () => Promise<{ hwnd: number; processName: string; windowTitle: string; pinnedAt: number; order: number }[]>
+      toggle: (borderColor: string) => Promise<{ success: boolean; action?: string; hwnd?: number; processName?: string; windowTitle?: string; reason?: string; message?: string }>
+      unpin: () => Promise<{ success: boolean }>
+      getState: () => Promise<{ hwnd: number; processName: string; windowTitle: string; pinnedAt: number } | null>
       setBorderColor: (color: string) => Promise<{ success: boolean }>
-      onListUpdate: (callback: (list: { hwnd: number; processName: string; windowTitle: string; pinnedAt: number; order: number }[]) => void) => (() => void)
+      onStateUpdate: (callback: (info: { hwnd: number; processName: string; windowTitle: string; pinnedAt: number } | null) => void) => (() => void)
     }
     hotkey: {
       onHotkey: (callback: (action: string) => void) => (() => void)

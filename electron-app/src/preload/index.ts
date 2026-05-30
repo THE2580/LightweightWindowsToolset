@@ -61,20 +61,18 @@ const api = {
       ipcRenderer.invoke('tool:set-enabled', toolId, enabled)
   },
   pinner: {
-    toggle: (maxWindows: number, borderColor: string): Promise<{ success: boolean; action?: string; hwnd?: number; processName?: string; windowTitle?: string; reason?: string; message?: string }> =>
-      ipcRenderer.invoke('pinner:toggle', maxWindows, borderColor),
-    unpin: (hwnd: number): Promise<{ success: boolean }> =>
-      ipcRenderer.invoke('pinner:unpin', hwnd),
-    unpinAll: (): Promise<{ success: boolean }> =>
-      ipcRenderer.invoke('pinner:unpin-all'),
-    getList: (): Promise<{ hwnd: number; processName: string; windowTitle: string; pinnedAt: number; order: number }[]> =>
-      ipcRenderer.invoke('pinner:get-list'),
+    toggle: (borderColor: string): Promise<{ success: boolean; action?: string; hwnd?: number; processName?: string; windowTitle?: string; reason?: string; message?: string }> =>
+      ipcRenderer.invoke('pinner:toggle', borderColor),
+    unpin: (): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('pinner:unpin'),
+    getState: (): Promise<{ hwnd: number; processName: string; windowTitle: string; pinnedAt: number } | null> =>
+      ipcRenderer.invoke('pinner:get-state'),
     setBorderColor: (color: string): Promise<{ success: boolean }> =>
       ipcRenderer.invoke('pinner:set-border-color', color),
-    onListUpdate: (callback: (list: { hwnd: number; processName: string; windowTitle: string; pinnedAt: number; order: number }[]) => void): (() => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, list: unknown) => callback(list as { hwnd: number; processName: string; windowTitle: string; pinnedAt: number; order: number }[])
-      ipcRenderer.on('pinner:list-update', handler)
-      return () => { ipcRenderer.removeListener('pinner:list-update', handler) }
+    onStateUpdate: (callback: (info: { hwnd: number; processName: string; windowTitle: string; pinnedAt: number } | null) => void): (() => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, info: unknown) => callback(info as { hwnd: number; processName: string; windowTitle: string; pinnedAt: number } | null)
+      ipcRenderer.on('pinner:state-update', handler)
+      return () => { ipcRenderer.removeListener('pinner:state-update', handler) }
     },
   },
   hotkey: {

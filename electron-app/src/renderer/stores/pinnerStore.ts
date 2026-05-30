@@ -5,39 +5,30 @@ export interface PinnedWindowInfo {
   processName: string
   windowTitle: string
   pinnedAt: number
-  order: number
 }
 
 interface PinnerStore {
-  pinnedWindows: PinnedWindowInfo[]
-  maxWindows: number
+  pinnedWindow: PinnedWindowInfo | null
   borderColor: string
   hotkeyEnabled: boolean
   isLoaded: boolean
 
-  setPinnedWindows: (list: PinnedWindowInfo[]) => void
-  setMaxWindows: (n: number) => void
+  setPinnedWindow: (info: PinnedWindowInfo | null) => void
   setBorderColor: (color: string) => void
   setHotkeyEnabled: (v: boolean) => void
   loadSettings: () => Promise<void>
   togglePin: () => Promise<void>
-  unpinWindow: (hwnd: number) => Promise<void>
-  unpinAll: () => Promise<void>
+  unpin: () => Promise<void>
   updateBorderColor: (color: string) => Promise<void>
 }
 
 export const usePinnerStore = create<PinnerStore>((set, get) => ({
-  pinnedWindows: [],
-  maxWindows: 5,
+  pinnedWindow: null,
   borderColor: '#2563EB',
   hotkeyEnabled: true,
   isLoaded: false,
 
-  setPinnedWindows: (list) => set({ pinnedWindows: list }),
-  setMaxWindows: (n) => {
-    set({ maxWindows: n })
-    window.api.settings.set('pinnerMaxWindows', n)
-  },
+  setPinnedWindow: (info) => set({ pinnedWindow: info }),
   setBorderColor: (color) => set({ borderColor: color }),
   setHotkeyEnabled: (v) => {
     set({ hotkeyEnabled: v })
@@ -46,11 +37,9 @@ export const usePinnerStore = create<PinnerStore>((set, get) => ({
 
   loadSettings: async () => {
     try {
-      const maxWindows = (await window.api.settings.get('pinnerMaxWindows')) as number
       const borderColor = (await window.api.settings.get('pinnerBorderColor')) as string
       const hotkeyEnabled = (await window.api.settings.get('pinnerHotkeyEnabled')) as boolean
       set({
-        maxWindows: maxWindows || 5,
         borderColor: borderColor || '#2563EB',
         hotkeyEnabled: hotkeyEnabled ?? true,
         isLoaded: true
@@ -61,9 +50,9 @@ export const usePinnerStore = create<PinnerStore>((set, get) => ({
   },
 
   togglePin: async () => {
-    const { maxWindows, borderColor } = get()
+    const { borderColor } = get()
     try {
-      const result = await window.api.pinner.toggle(maxWindows, borderColor)
+      const result = await window.api.pinner.toggle(borderColor)
       if (!result.success) {
         console.warn('[Pinner] Toggle failed:', result.message)
       }
@@ -72,19 +61,11 @@ export const usePinnerStore = create<PinnerStore>((set, get) => ({
     }
   },
 
-  unpinWindow: async (hwnd: number) => {
+  unpin: async () => {
     try {
-      await window.api.pinner.unpin(hwnd)
+      await window.api.pinner.unpin()
     } catch (e) {
       console.error('[Pinner] Unpin error:', e)
-    }
-  },
-
-  unpinAll: async () => {
-    try {
-      await window.api.pinner.unpinAll()
-    } catch (e) {
-      console.error('[Pinner] Unpin all error:', e)
     }
   },
 

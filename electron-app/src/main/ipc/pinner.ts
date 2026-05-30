@@ -10,7 +10,7 @@ interface PinnedWindow {
   hwnd: number
   processName: string
   windowTitle: string
-  pinnedAt: number // timestamp
+  pinnedAt: number
   borderColor: string
 }
 
@@ -29,19 +29,18 @@ interface ForegroundInfo {
   rect: WindowRect | null
 }
 
-// ── State ──
+// ── State (single window mode) ──
 
-const pinnedWindows = new Map<number, PinnedWindow>()
-const borderOverlays = new Map<number, BrowserWindow>()
-const missingRectRetries = new Map<number, number>() // hwnd → retry count
+let currentPinned: PinnedWindow | null = null
+let borderOverlay: BrowserWindow | null = null
+let missingRectRetries = 0
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let currentBorderColor = '#2563EB'
 const DEFAULT_BORDER_WIDTH = 3
-const MAX_RETRIES = 2 // number of consecutive null rects before unpinning
+const MAX_RETRIES = 2
 
 // ── PowerShell helpers ──
 
-/** Execute a PowerShell script via a temp file. Returns stdout or null on error. */
 function execPowerShell(script: string, timeoutMs: number): Promise<string | null> {
   return new Promise((resolve) => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'lwt-'))
@@ -62,7 +61,6 @@ function execPowerShell(script: string, timeoutMs: number): Promise<string | nul
   })
 }
 
-/** Extract a JSON object from PS output (may contain noise). */
 function extractJson<T>(raw: string): T | null {
   const start = raw.indexOf('{')
   const end = raw.lastIndexOf('}')
@@ -92,8 +90,6 @@ public class Win32Pin {
     public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
     [DllImport("user32.dll")]
     public static extern IntPtr GetDesktopWindow();
-    [DllImport("user32.dll")]
-    public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
 }
 "@
 Add-Type -TypeDefinition $cs *> $null
@@ -139,7 +135,6 @@ $result | ConvertTo-Json -Compress
 }
 
 function setWindowTopmost(hwnd: number, topmost: boolean): Promise<boolean> {
-  const flag = topmost ? '-1' : '-2'
   const psBool = topmost ? '$true' : '$false'
   const script = `
 $cs = @"
@@ -172,107 +167,54 @@ Write-Output $ok
   return execPowerShell(script, 8000).then((stdout) => stdout?.trim() === 'True')
 }
 
-/**
- * Batch query GetWindowRect + IsWindow for multiple HWNDs in a single PS process.
- * Returns a Map of hwnd → rect (null if window is gone or call failed).
- */
-function getAllWindowRects(hwnds: number[]): Promise<Map<number, WindowRect | null>> {
-  if (hwnds.length === 0) return Promise.resolve(new Map())
-
-  const hwndList = hwnds.join(',')
-
+/** Batch query GetWindowRect + IsWindow for a single HWND. Kept as batch-capable for future use. */
+function getWindowRect(hwnd: number): Promise<WindowRect | null> {
   const script = `
 $cs = @"
 using System;
 using System.Runtime.InteropServices;
 public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
-public class Win32Batch {
+public class Win32Rect {
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
     [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hWnd);
 }
 "@
 Add-Type -TypeDefinition $cs *> $null
-@{${hwndList}} | ForEach-Object {
-  $h = [IntPtr]$_
-  if ([Win32Batch]::IsWindow($h)) {
-    $r = New-Object RECT
-    if ([Win32Batch]::GetWindowRect($h, [ref]$r)) {
-      Write-Output "$_|$($r.Left),$($r.Top),$($r.Right),$($r.Bottom)"
-    } else {
-      Write-Output "$_|null"
-    }
-  } else {
-    Write-Output "$_|dead"
-  }
+if (-not [Win32Rect]::IsWindow([IntPtr]${hwnd})) { Write-Output 'null'; exit 0 }
+$r = New-Object RECT
+if ([Win32Rect]::GetWindowRect([IntPtr]${hwnd}, [ref]$r)) {
+  Write-Output "$($r.Left),$($r.Top),$($r.Right),$($r.Bottom)"
+} else {
+  Write-Output 'null'
 }
 `.trim()
 
   return execPowerShell(script, 5000).then((stdout) => {
-    const result = new Map<number, WindowRect | null>()
-    if (!stdout) {
-      // If the whole batch failed, mark all as null
-      for (const h of hwnds) result.set(h, null)
-      return result
+    if (!stdout || stdout === 'null') return null
+    const parts = stdout.trim().split(',').map(Number)
+    if (parts.length === 4 && parts.every(p => !isNaN(p))) {
+      return { left: parts[0], top: parts[1], right: parts[2], bottom: parts[3] }
     }
-
-    const lines = stdout.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
-    for (const line of lines) {
-      const sepIdx = line.indexOf('|')
-      if (sepIdx < 0) continue
-      const hwndStr = line.substring(0, sepIdx)
-      const data = line.substring(sepIdx + 1)
-      const hwnd = parseInt(hwndStr, 10)
-      if (isNaN(hwnd)) continue
-
-      if (data === 'null' || data === 'dead') {
-        result.set(hwnd, null)
-      } else {
-        const parts = data.split(',').map(Number)
-        if (parts.length === 4 && parts.every(p => !isNaN(p))) {
-          result.set(hwnd, { left: parts[0], top: parts[1], right: parts[2], bottom: parts[3] })
-        } else {
-          result.set(hwnd, null)
-        }
-      }
-    }
-    // Any HWND not in the output also gets null
-    for (const h of hwnds) {
-      if (!result.has(h)) result.set(h, null)
-    }
-    return result
+    return null
   })
-}
-
-// ── Coordinate conversion ──
-
-/**
- * Convert a rect from GetWindowRect (non-DPI-aware PowerShell) into
- * BrowserWindow coordinates. GetWindowRect from a non-DPI-aware process
- * returns coordinates already in DIP (logical) space matching BrowserWindow's
- * coordinate system, so no scaleFactor division is needed.
- */
-function physicalToDipRect(rect: WindowRect): { x: number; y: number; width: number; height: number } {
-  // GetWindowRect from non-DPI-aware PS returns DIP coordinates directly
-  const x = rect.left - DEFAULT_BORDER_WIDTH
-  const y = rect.top - DEFAULT_BORDER_WIDTH
-  const w = (rect.right - rect.left) + DEFAULT_BORDER_WIDTH * 2
-  const h = (rect.bottom - rect.top) + DEFAULT_BORDER_WIDTH * 2
-
-  return { x, y, width: w, height: h }
 }
 
 // ── Border overlay management ──
 
 function createBorderOverlay(hwnd: number, rect: WindowRect, color: string): BrowserWindow | null {
   try {
-    const bounds = physicalToDipRect(rect)
-    if (bounds.width <= 0 || bounds.height <= 0) return null
+    const bw = DEFAULT_BORDER_WIDTH
+    const x = rect.left - bw
+    const y = rect.top - bw
+    const w = (rect.right - rect.left) + bw * 2
+    const h = (rect.bottom - rect.top) + bw * 2
+
+    if (w <= 10 || h <= 10) return null
 
     const overlay = new BrowserWindow({
-      x: bounds.x,
-      y: bounds.y,
-      width: bounds.width,
-      height: bounds.height,
+      x, y,
+      width: w,
+      height: h,
       frame: false,
       transparent: true,
       alwaysOnTop: true,
@@ -280,7 +222,6 @@ function createBorderOverlay(hwnd: number, rect: WindowRect, color: string): Bro
       skipTaskbar: true,
       resizable: false,
       hasShadow: false,
-      type: 'toolbar',
       webPreferences: {
         sandbox: true,
         contextIsolation: true,
@@ -292,11 +233,20 @@ function createBorderOverlay(hwnd: number, rect: WindowRect, color: string): Bro
     overlay.setVisibleOnAllWorkspaces(true)
     overlay.setIgnoreMouseEvents(true)
 
-    const bw = DEFAULT_BORDER_WIDTH
+    // Use 4 absolutely-positioned divs to draw the border.
+    // CSS border on a transparent BrowserWindow renders unreliably.
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-      * { margin:0; padding:0; box-sizing:border-box; }
-      body { width:100%; height:100%; background:transparent; border:${bw}px solid ${color}; overflow:hidden; }
-    </style></head><body></body></html>`
+      * { margin:0; padding:0; }
+      html,body { width:100%; height:100%; overflow:hidden; background:transparent; }
+      .b { position:fixed; background:${color}; }
+      .bt { top:0; left:0; right:0; height:${bw}px; }
+      .bb { bottom:0; left:0; right:0; height:${bw}px; }
+      .bl { top:0; left:0; bottom:0; width:${bw}px; }
+      .br { top:0; right:0; bottom:0; width:${bw}px; }
+    </style></head><body>
+      <div class="b bt"></div><div class="b bb"></div>
+      <div class="b bl"></div><div class="b br"></div>
+    </body></html>`
 
     overlay.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
     return overlay
@@ -306,78 +256,48 @@ function createBorderOverlay(hwnd: number, rect: WindowRect, color: string): Bro
   }
 }
 
-function updateBorderOverlay(hwnd: number, rect: WindowRect): void {
-  const overlay = borderOverlays.get(hwnd)
-  if (!overlay || overlay.isDestroyed()) return
-
+function updateBorderOverlay(rect: WindowRect): void {
+  if (!borderOverlay || borderOverlay.isDestroyed()) return
   try {
-    const bounds = physicalToDipRect(rect)
-    if (bounds.width > 0 && bounds.height > 0) {
-      overlay.setBounds(bounds)
+    const bw = DEFAULT_BORDER_WIDTH
+    const x = rect.left - bw
+    const y = rect.top - bw
+    const w = (rect.right - rect.left) + bw * 2
+    const h = (rect.bottom - rect.top) + bw * 2
+    if (w > 10 && h > 10) {
+      borderOverlay.setBounds({ x, y, width: w, height: h })
     }
   } catch { /* window may be destroyed */ }
 }
 
-function destroyBorderOverlay(hwnd: number): void {
-  const overlay = borderOverlays.get(hwnd)
-  if (overlay && !overlay.isDestroyed()) {
-    overlay.close()
+function destroyBorderOverlay(): void {
+  if (borderOverlay && !borderOverlay.isDestroyed()) {
+    borderOverlay.close()
   }
-  borderOverlays.delete(hwnd)
+  borderOverlay = null
 }
 
-function destroyAllBorderOverlays(): void {
-  for (const [hwnd] of borderOverlays) {
-    destroyBorderOverlay(hwnd)
-  }
-}
+// ── Polling ──
 
-// ── Periodic position polling ──
+async function pollPinnedWindow(): Promise<void> {
+  if (!currentPinned) { stopPolling(); return }
 
-async function pollPinnedWindows(): Promise<void> {
-  const hwnds = Array.from(pinnedWindows.keys())
-  if (hwnds.length === 0) { stopPolling(); return }
-
-  const rects = await getAllWindowRects(hwnds)
-
-  const toRemove: number[] = []
-
-  for (const hwnd of hwnds) {
-    const rect = rects.get(hwnd)
-    if (rect) {
-      // Got a valid rect → reset retries, update overlay
-      missingRectRetries.delete(hwnd)
-      updateBorderOverlay(hwnd, rect)
-    } else {
-      // Window rect failed → check retry count
-      const retries = (missingRectRetries.get(hwnd) ?? 0) + 1
-      if (retries < MAX_RETRIES) {
-        missingRectRetries.set(hwnd, retries)
-      } else {
-        // Max retries exceeded → consider window gone
-        missingRectRetries.delete(hwnd)
-        toRemove.push(hwnd)
-      }
+  const rect = await getWindowRect(currentPinned.hwnd)
+  if (rect) {
+    missingRectRetries = 0
+    updateBorderOverlay(rect)
+  } else {
+    missingRectRetries++
+    if (missingRectRetries >= MAX_RETRIES) {
+      await unpinInternal(false)
+      broadcastState()
     }
-  }
-
-  // Clean up windows that exceeded retries
-  for (const hwnd of toRemove) {
-    await unpinWindowInternal(hwnd, false)
-  }
-
-  if (toRemove.length > 0) {
-    broadcastPinnedList()
-  }
-
-  if (pinnedWindows.size === 0) {
-    stopPolling()
   }
 }
 
 function startPolling(): void {
   if (pollTimer) return
-  pollTimer = setInterval(() => { pollPinnedWindows() }, 400)
+  pollTimer = setInterval(() => { pollPinnedWindow() }, 400)
 }
 
 function stopPolling(): void {
@@ -389,33 +309,31 @@ function stopPolling(): void {
 
 // ── Pin/Unpin logic ──
 
-async function unpinWindowInternal(hwnd: number, updateBorder: boolean): Promise<boolean> {
-  const pinned = pinnedWindows.get(hwnd)
-  if (!pinned) return false
+async function unpinInternal(updateBorder: boolean): Promise<boolean> {
+  if (!currentPinned) return false
 
-  await setWindowTopmost(hwnd, false)
-  pinnedWindows.delete(hwnd)
-  missingRectRetries.delete(hwnd)
+  await setWindowTopmost(currentPinned.hwnd, false)
+  currentPinned = null
+  missingRectRetries = 0
 
   if (updateBorder) {
-    destroyBorderOverlay(hwnd)
+    destroyBorderOverlay()
   }
 
   return true
 }
 
-function broadcastPinnedList(): void {
-  const list = Array.from(pinnedWindows.values()).map((pw, index) => ({
-    hwnd: pw.hwnd,
-    processName: pw.processName,
-    windowTitle: pw.windowTitle,
-    pinnedAt: pw.pinnedAt,
-    order: index + 1
-  }))
+function broadcastState(): void {
+  const info = currentPinned ? {
+    hwnd: currentPinned.hwnd,
+    processName: currentPinned.processName,
+    windowTitle: currentPinned.windowTitle,
+    pinnedAt: currentPinned.pinnedAt
+  } : null
 
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed() && win.webContents) {
-      win.webContents.send('pinner:list-update', list)
+      win.webContents.send('pinner:state-update', info)
     }
   }
 }
@@ -424,27 +342,21 @@ function broadcastPinnedList(): void {
 
 export function registerPinnerIpc(): void {
   // Toggle pin for foreground window
-  ipcMain.handle('pinner:toggle', async (_event, maxWindows: number, borderColor: string) => {
+  ipcMain.handle('pinner:toggle', async (_event, borderColor: string) => {
     if (borderColor) currentBorderColor = borderColor
+
+    // If already pinned → unpin
+    if (currentPinned) {
+      const oldTitle = currentPinned.windowTitle
+      await unpinInternal(true)
+      broadcastState()
+      stopPolling()
+      return { success: true, action: 'unpin', windowTitle: oldTitle }
+    }
 
     const fg = await getForegroundWindowInfo()
     if (!fg || fg.isDesktop || fg.hwnd === 0) {
       return { success: false, reason: 'NO_FOREGROUND', message: '未检测到有效的前台窗口' }
-    }
-
-    // Check if already pinned → unpin
-    if (pinnedWindows.has(fg.hwnd)) {
-      await unpinWindowInternal(fg.hwnd, true)
-      broadcastPinnedList()
-      return { success: true, action: 'unpin', hwnd: fg.hwnd, processName: fg.processName, windowTitle: fg.windowTitle }
-    }
-
-    // Check max windows limit
-    if (pinnedWindows.size >= maxWindows) {
-      const oldest = pinnedWindows.entries().next().value
-      if (oldest) {
-        await unpinWindowInternal(oldest[0], true)
-      }
     }
 
     // Pin
@@ -453,73 +365,59 @@ export function registerPinnerIpc(): void {
       return { success: false, reason: 'SET_FAILED', message: '设置窗口置顶失败' }
     }
 
-    pinnedWindows.set(fg.hwnd, {
+    currentPinned = {
       hwnd: fg.hwnd,
       processName: fg.processName,
       windowTitle: fg.windowTitle,
       pinnedAt: Date.now(),
       borderColor: currentBorderColor
-    })
+    }
 
-    // Create border overlay
     if (fg.rect) {
       const overlay = createBorderOverlay(fg.hwnd, fg.rect, currentBorderColor)
       if (overlay) {
-        borderOverlays.set(fg.hwnd, overlay)
+        borderOverlay = overlay
       }
     }
 
     startPolling()
-    broadcastPinnedList()
+    broadcastState()
 
     return { success: true, action: 'pin', hwnd: fg.hwnd, processName: fg.processName, windowTitle: fg.windowTitle }
   })
 
-  // Unpin specific window
-  ipcMain.handle('pinner:unpin', async (_event, hwnd: number) => {
-    const ok = await unpinWindowInternal(hwnd, true)
+  // Unpin current window
+  ipcMain.handle('pinner:unpin', async () => {
+    const ok = await unpinInternal(true)
     if (ok) {
-      broadcastPinnedList()
-      if (pinnedWindows.size === 0) stopPolling()
+      broadcastState()
+      stopPolling()
     }
     return { success: ok }
   })
 
-  // Unpin all windows
-  ipcMain.handle('pinner:unpin-all', async () => {
-    for (const [hwnd] of pinnedWindows) {
-      await unpinWindowInternal(hwnd, true)
+  // Get current pinned window
+  ipcMain.handle('pinner:get-state', () => {
+    if (!currentPinned) return null
+    return {
+      hwnd: currentPinned.hwnd,
+      processName: currentPinned.processName,
+      windowTitle: currentPinned.windowTitle,
+      pinnedAt: currentPinned.pinnedAt
     }
-    stopPolling()
-    broadcastPinnedList()
-    return { success: true }
   })
 
-  // Get current pinned list
-  ipcMain.handle('pinner:get-list', () => {
-    return Array.from(pinnedWindows.values()).map((pw, index) => ({
-      hwnd: pw.hwnd,
-      processName: pw.processName,
-      windowTitle: pw.windowTitle,
-      pinnedAt: pw.pinnedAt,
-      order: index + 1
-    }))
-  })
-
-  // Update border color for all pinned windows
-  ipcMain.handle('pinner:set-border-color', (_event, color: string) => {
+  // Update border color
+  ipcMain.handle('pinner:set-border-color', async (_event, color: string) => {
     currentBorderColor = color
-    for (const [hwnd, pinned] of pinnedWindows) {
-      pinned.borderColor = color
-      destroyBorderOverlay(hwnd)
-      // Batch rect query for all windows — reused via getAllWindowRects
-      getAllWindowRects([hwnd]).then((rects) => {
-        const rect = rects.get(hwnd)
-        if (rect) {
-          const overlay = createBorderOverlay(hwnd, rect, color)
-          if (overlay) borderOverlays.set(hwnd, overlay)
-        }
-      }).catch(() => {})
+    if (currentPinned) {
+      currentPinned.borderColor = color
+      destroyBorderOverlay()
+      const rect = await getWindowRect(currentPinned.hwnd)
+      if (rect) {
+        const overlay = createBorderOverlay(currentPinned.hwnd, rect, color)
+        if (overlay) borderOverlay = overlay
+      }
     }
     return { success: true }
   })
@@ -527,12 +425,12 @@ export function registerPinnerIpc(): void {
   // Cleanup on app quit
   ipcMain.handle('pinner:cleanup', async () => {
     stopPolling()
-    for (const [hwnd] of pinnedWindows) {
-      await setWindowTopmost(hwnd, false)
+    if (currentPinned) {
+      await setWindowTopmost(currentPinned.hwnd, false)
+      currentPinned = null
     }
-    pinnedWindows.clear()
-    missingRectRetries.clear()
-    destroyAllBorderOverlays()
+    missingRectRetries = 0
+    destroyBorderOverlay()
     return { success: true }
   })
 }

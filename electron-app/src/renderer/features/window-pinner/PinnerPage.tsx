@@ -1,10 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { usePinnerStore, PinnedWindowInfo } from '@/stores/pinnerStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useShallow } from 'zustand/shallow'
 import AnimatedRoute from '@/components/shared/AnimatedRoute'
-import { Pin, PinOff, Trash2, ChevronDown, Settings } from 'lucide-react'
-import { useState } from 'react'
+import { Pin, PinOff, ChevronDown, Settings } from 'lucide-react'
 
 const COLOR_PRESETS = [
   { label: '蓝', value: '#2563EB' },
@@ -32,26 +31,21 @@ function formatTime(ts: number): string {
 
 function PinnerPage(): React.JSX.Element {
   const {
-    pinnedWindows, setPinnedWindows,
-    maxWindows, setMaxWindows,
+    pinnedWindow, setPinnedWindow,
     borderColor,
     isLoaded, loadSettings,
-    togglePin, unpinWindow, unpinAll, updateBorderColor
+    togglePin, unpin, updateBorderColor
   } = usePinnerStore(useShallow((s) => ({
-    pinnedWindows: s.pinnedWindows,
-    setPinnedWindows: s.setPinnedWindows,
-    maxWindows: s.maxWindows,
-    setMaxWindows: s.setMaxWindows,
+    pinnedWindow: s.pinnedWindow,
+    setPinnedWindow: s.setPinnedWindow,
     borderColor: s.borderColor,
     isLoaded: s.isLoaded,
     loadSettings: s.loadSettings,
     togglePin: s.togglePin,
-    unpinWindow: s.unpinWindow,
-    unpinAll: s.unpinAll,
+    unpin: s.unpin,
     updateBorderColor: s.updateBorderColor
   })))
 
-  const [maxDraft, setMaxDraft] = useState(String(maxWindows))
   const [customColor, setCustomColor] = useState(borderColor)
   const pinnerHotkey = useSettingsStore((s) => s.pinnerHotkey)
   const hotkeyKeys = parseHotkeyKeys(pinnerHotkey)
@@ -60,26 +54,13 @@ function PinnerPage(): React.JSX.Element {
   useEffect(() => { loadSettings() }, [loadSettings])
 
   useEffect(() => {
-    // Listen for pinned list updates from main process
-    const cleanup = window.api.pinner.onListUpdate((list: PinnedWindowInfo[]) => {
-      setPinnedWindows(list)
+    const cleanup = window.api.pinner.onStateUpdate((info: PinnedWindowInfo | null) => {
+      setPinnedWindow(info)
     })
     return cleanup
-  }, [setPinnedWindows])
+  }, [setPinnedWindow])
 
-  useEffect(() => { setMaxDraft(String(maxWindows)) }, [maxWindows])
   useEffect(() => { setCustomColor(borderColor) }, [borderColor])
-
-  const handleMaxSave = () => {
-    const n = parseInt(maxDraft, 10)
-    if (isNaN(n) || n < 1) { setMaxDraft(String(maxWindows)); return }
-    setMaxWindows(Math.min(n, 10))
-  }
-
-  const handleMaxKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleMaxSave()
-    if (e.key === 'Escape') setMaxDraft(String(maxWindows))
-  }
 
   return (
     <AnimatedRoute>
@@ -88,14 +69,14 @@ function PinnerPage(): React.JSX.Element {
         <div className="flex items-center justify-between flex-shrink-0">
           <h1 className="text-lg font-bold">窗口置顶</h1>
           <div className="flex items-center gap-2">
-            {pinnedWindows.length > 0 && (
+            {pinnedWindow && (
               <button
-                onClick={unpinAll}
+                onClick={unpin}
                 className="flex items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground hover:text-destructive rounded-md hover:bg-destructive/10 transition-colors"
-                title="取消全部置顶"
+                title="取消置顶"
               >
-                <Trash2 size={12} />
-                全部取消
+                <PinOff size={12} />
+                取消置顶
               </button>
             )}
             <button
@@ -103,14 +84,14 @@ function PinnerPage(): React.JSX.Element {
               className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-white bg-primary hover:bg-primary/90 rounded-md transition-colors"
             >
               <Pin size={13} />
-              置顶当前窗口
+              {pinnedWindow ? '置顶新窗口' : '置顶当前窗口'}
             </button>
           </div>
         </div>
 
-        {/* Pinned windows list */}
+        {/* Pinned window state */}
         <div className="flex-1 min-h-0">
-          {pinnedWindows.length === 0 ? (
+          {!pinnedWindow ? (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground space-y-1.5">
               <Pin size={28} className="opacity-30" />
               <p className="text-[12px]">暂无置顶窗口</p>
@@ -121,7 +102,7 @@ function PinnerPage(): React.JSX.Element {
                     {hotkeyKeys.map((k, i) => (
                       <span key={i} className="inline-flex items-center gap-0.5">
                         {i > 0 && <span className="text-[9px]">+</span>}
-                        <kbd className="inline-flex items-center justify-center min-w-[20px] h-[16px] px-1 text-[10px] rounded border border-green-300 bg-card font-mono leading-none">
+                        <kbd className="inline-flex items-center justify-center min-w-[20px] h-[16px] px-1 text-[10px] rounded border border-border bg-card font-mono leading-none">
                           {k}
                         </kbd>
                       </span>
@@ -134,40 +115,18 @@ function PinnerPage(): React.JSX.Element {
               </p>
             </div>
           ) : (
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2 px-3 py-1.5 text-[10px] text-muted-foreground border-b border-border/60">
-                <span className="w-6 text-center">#</span>
-                <span className="flex-1">窗口标题</span>
-                <span className="w-20 text-right">进程</span>
-                <span className="w-14 text-right">时间</span>
-                <span className="w-8" />
-              </div>
-              {pinnedWindows.map((pw, i) => (
-                <div
-                  key={pw.hwnd}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-card hover:shadow-sm hover:ring-1 hover:ring-blue-300/30 transition-shadow duration-150"
-                >
-                  <span className="w-6 text-center font-mono text-[11px] font-semibold text-muted-foreground">
-                    {i + 1}
-                  </span>
-                  <span className="flex-1 text-[12px] truncate">
-                    {pw.windowTitle || '(无标题)'}
-                  </span>
-                  <span className="w-20 text-right text-[10px] text-muted-foreground truncate">
-                    {pw.processName}
-                  </span>
-                  <span className="w-14 text-right text-[10px] text-muted-foreground font-mono">
-                    {formatTime(pw.pinnedAt)}
-                  </span>
-                  <button
-                    onClick={() => unpinWindow(pw.hwnd)}
-                    className="w-8 flex items-center justify-center p-1 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                    title="取消置顶"
-                  >
-                    <PinOff size={13} />
-                  </button>
+            <div className="space-y-3">
+              <div
+                className="p-4 rounded-lg border-2 border-border bg-card"
+                style={{ borderColor: borderColor }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide">已置顶窗口</span>
+                  <span className="text-[10px] text-muted-foreground font-mono">{formatTime(pinnedWindow.pinnedAt)}</span>
                 </div>
-              ))}
+                <p className="text-[13px] font-medium truncate">{pinnedWindow.windowTitle || '(无标题)'}</p>
+                <p className="text-[11px] text-muted-foreground mt-1">进程: {pinnedWindow.processName}</p>
+              </div>
             </div>
           )}
         </div>
@@ -185,20 +144,6 @@ function PinnerPage(): React.JSX.Element {
 
           {showSettings && (
             <div className="space-y-3 pb-1">
-              {/* Max windows */}
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-muted-foreground w-24">最大同时置顶</span>
-                <input
-                  type="number" min="1" max="10"
-                  value={maxDraft}
-                  onChange={(e) => setMaxDraft(e.target.value)}
-                  onBlur={handleMaxSave}
-                  onKeyDown={handleMaxKeyDown}
-                  className="w-12 h-6.5 text-center text-[11px] rounded border border-border bg-background px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
-                <span className="text-[10px] text-muted-foreground">(1-10)</span>
-              </div>
-
               {/* Border color presets */}
               <div className="flex items-start gap-2">
                 <span className="text-[11px] text-muted-foreground w-24 mt-1.5">边框颜色</span>
