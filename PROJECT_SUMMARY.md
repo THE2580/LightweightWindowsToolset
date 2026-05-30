@@ -1,10 +1,9 @@
 # LightweightWindowsToolset — 项目进展总结
 
-> 最后更新: 2026-05-30 (第十七轮)
+> 最后更新: 2026-05-30 (第二十轮 — 状态总结)
 > 当前分支: main
-> 最新提交: 0f5a9d5 (fix: 变量名残留 fg→pr + unpinInternal 异常安全 + createBorderOverlay 自清理)
-> 未提交改动: 无
-> 编译状态: ✅ 通过
+> 未提交改动: 大量（pinman 快捷键修复 + 边框移除 + 事件推送 + auto-pin）
+> 编译状态: ✅ 通过（electron-vite build 成功，pinman.exe Native AOT 编译成功）
 
 ---
 
@@ -14,7 +13,7 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 
 **已完成工具**:
 - 游戏资源捕获（stable，开发完成）
-- 窗口置顶（stable，功能可用但架构不合适——需重写）
+- 窗口置顶（独立 C# Native AOT 进程 pinman.exe，多窗口 + 事件推送 + 气泡通知，✅ 稳定）
 
 **待开发工具**:
 - 今日按键统计（upcoming，仅注册）
@@ -34,9 +33,10 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 | 路由 | react-router-dom 7.x (HashRouter) |
 | 打包 | electron-builder 25.x |
 | 截图 | screenshot-desktop 1.15.0 (GDI) |
-| OCR | Windows.Media.Ocr (PowerShell 反射 AsTask<T> + task.Wait) |
+| OCR | Windows.Media.Ocr (PowerShell 反射) |
 | AI | DeepSeek API (`deepseek-v4-flash`) |
-| 窗口操作(置顶) | PowerShell/C# P/Invoke (SetWindowPos, GetWindowRect, IsWindow) |
+| **窗口置顶** | **pinman.exe — C# Native AOT（~1.2MB），P/Invoke Win32 API，stdin/stdout IPC + stderr 事件推送** |
+| .NET SDK | 9.0.304 (仅编译，运行时零依赖) |
 
 ---
 
@@ -45,9 +45,10 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 **环境**:
 - OS: Windows (2240×1400, 150% DPI)
 - Node.js: v24.12.0, npm: 11.6.2
+- .NET SDK: 9.0.304（`dotnet` 在 PATH）
 - Python: `E:\devtools\python\python-3.14.5\python.exe`
 - 代理: `socks5://127.0.0.1:7897`
-- 后端: `http://100.70.198.102:8000` (Tailscale, FastAPI + MySQL)
+- 后端: `http://100.70.198.102:8000` (Tailscale)
 - 根目录: `E:\codex_agent_project\LightweightWindowsToolset`
 
 **窗口**: 676×444 固定不可调, 侧边栏 155px/44px
@@ -56,19 +57,22 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 
 **设计约束**:
 - 禁止渐变球/光晕, 禁止负 letter-spacing
-- 禁止 UI 卡片嵌套卡片, 禁止 hover scale 动画(会导致 overflow 裁剪黑色伪影)
+- 禁止 UI 卡片嵌套卡片, 禁止 hover scale 动画
 
 **开发命令**: `cd electron-app && npm run dev`
 **构建命令**: `cd electron-app && npx electron-vite build`
-**打包命令**: `cd electron-app && npm run package`（打包前清理 dist + kill 轻量化工具集.exe, CSC_IDENTITY_AUTO_DISCOVERY=false）
+**pinman 构建**: `cd pinman && dotnet publish -c Release -r win-x64 --self-contained -p:PublishAot=true -p:DebugType=none -p:DebugSymbols=false`
+**打包命令**: `cd electron-app && npm run package`（打包前清理 dist + kill 进程, CSC_IDENTITY_AUTO_DISCOVERY=false）
 
-**窗口关闭**: 默认直接退出，可选缩小到托盘；托盘右键"退出"必须终止进程
+**开发服务器启动后**: 先 kill 已有 electron/pinman 进程再启动
 
-**Windows 文件写入**: 禁止 PowerShell Set-Content/Out-File/[System.IO.File]::WriteAllText 等 shell 写文件，必须使用 apply_patch 系列工具。Python 脚本用 apply_patch_add_file 创建后 exec_command 执行
+**窗口关闭**: 默认直接退出，可选缩小到托盘；托盘右键退出必须终止进程
 
-**中文字符串**: UTF-8 存储，严禁 PowerShell 管道传中文给 Python（会导致乱码）
+**Windows 文件写入**: 禁止 PowerShell Set-Content/Out-File/[System.IO.File]::WriteAllText 等 shell 写文件，必须使用 apply_patch 系列工具
 
-**已删除文件不要恢复**（如 tavily.ts），已移除功能不要重新实现（如联网搜索、测试模块）
+**中文字符串**: UTF-8 存储，严禁 PowerShell 管道传中文给 Python（会导致乱码）。Python 脚本中直接写中文即可
+
+**已删除文件不要恢复**（如 `tavily.ts`、`BorderWindow.cs`、`pinner.ts`），已移除功能不要重新实现（如联网搜索、测试模块、窗口边框）
 
 **设置页**: 编辑时显示保存按钮，保存成功后隐藏（不允许自动保存）
 
@@ -77,6 +81,7 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 - ≥2键、左修饰右普通、仅一个普通键
 - 录入时禁用全局快捷键
 - 工具禁用 = 快捷键禁用，新工具默认无快捷键（空字符串）
+- **窗口置顶快捷键由 pinman.exe 原生 RegisterHotKey 管理**，不再用 Electron globalShortcut
 
 **AI 聊天**: 内置功能非工具，不在工具列表和开关中
 
@@ -103,14 +108,10 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 - 工具禁用 = 快捷键注销 (`tool:set-enabled` IPC)
 - 已注册: 游戏资源捕获(stable), 窗口置顶(stable), 今日按键统计(upcoming)
 
-### 3.4 快捷键系统
-- globalShortcut 注册/注销, 支持 resource-capture / ai-chat / window-pinner
-- 追加式录入 + 保存时校验 + 冲突检测
-
-### 3.5 AI 聊天
+### 3.4 AI 聊天
 - ChatSidebar SSE 流式对话, 右侧滑入滑出
 
-### 3.6 开机自启
+### 3.5 开机自启
 - `app.setLoginItemSettings()` 实时开关
 
 ---
@@ -137,35 +138,99 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 
 ---
 
-## 五、窗口置顶工具 ⚠️ (功能可用，架构不合适，待重写)
+## 五、窗口置顶工具 — pinman.exe ✅ (开发完成，稳定)
 
-### 5.1 当前状态
+### 5.1 架构
 
-**能工作**: 快捷键/按钮置顶前台窗口，再次触发取消（单窗口模式），8 色边框预设，已置顶窗口卡片显示。
+独立 C# Native AOT 编译的原生 Windows 进程，零运行时依赖。置顶/取消置顶通过托盘气泡通知反馈（无窗口描边）。
 
-**实现方式**: PowerShell `execFile` 调用 C# P/Invoke（SetWindowPos / GetWindowRect / IsWindow），每次操作冷启动一个 PS 进程。边框用透明 `BrowserWindow` + 4 个绝对定位 div 渲染。400ms `setInterval` 轮询窗口位置（`pollingActive` 锁防重叠），`missingRectRetries` 连续 2 次 null 才取消置顶。DPI 感知通过每个 PS 脚本注入 `SetProcessDpiAwareness(1)` + Node 侧 `screen.scaleFactor` 除法统一。
+| 指标 | 实际 |
+|------|------|
+| 二进制体积 | ~1.2 MB 单文件 |
+| 内存占用 | ~3-5 MB（idle 后） |
+| 快捷键响应 | `RegisterHotKey` <1ms |
+| 置顶操作 | 直接 `SetWindowPos`，零 Electron 开销 |
+| IPC | stdin/stdout 行协议 + stderr 事件推送 |
 
-### 5.2 核心问题（不复修，直接重写）
-
-| # | 问题 | 说明 |
-|---|------|------|
-| 1 | PS 进程冷启动开销 | 每次 execFile 启动 200-500ms，操作响应不够快 |
-| 2 | 架构与轻量定位不符 | Electron 本身 ~100MB 基线 + PS 进程，与"轻量工具集"理念矛盾 |
-| 3 | 边框跟随延迟 | 受 PS 启动时间制约，无法做到丝滑跟随 |
-| 4 | DPI 坐标反复踩坑 | 之前除/不除 scaleFactor 来回摇摆多轮才稳定 |
-| 5 | 上层依赖脆弱 | Electron BrowserWindow 边框、IPC 串行化、PS 脚本语法坑 |
-
-### 5.3 文件清单
+### 5.2 源码结构
 
 | 文件 | 职责 |
 |------|------|
-| `electron-app/src/main/ipc/pinner.ts` | 主进程：PS execFile、SetWindowPos、边框 BrowserWindow、轮询 |
-| `electron-app/src/renderer/stores/pinnerStore.ts` | 状态管理（单窗口） |
-| `electron-app/src/renderer/features/window-pinner/PinnerPage.tsx` | UI 页面 |
+| `pinman/pinman.csproj` | .NET 9 Native AOT 项目配置 |
+| `pinman/app.manifest` | DPI PerMonitorV2 声明 |
+| `pinman/Native.cs` | 全部 Win32 P/Invoke 声明和常量 |
+| `pinman/Program.cs` | 入口、消息循环、WM_HOTKEY、IPC 命令处理、托盘气泡、事件推送 |
+| `pinman/PinEntry.cs` | 单个置顶窗口状态模型（TargetHwnd + TimerId） |
+| `pinman/StdioIpc.cs` | stdin/stdout 行协议 IPC（200ms WM_TIMER 轮询） |
+| `electron-app/resources/pinman.exe` | 编译产物副本 |
+| `electron-app/src/main/ipc/pinman.ts` | Electron 端：spawn + 命令队列（含 fire 标志 + discardNextResponse）+ 事件转发 |
 
-### 5.4 重写方向
+**⚠️ 已删除 `pinman/BorderWindow.cs`**（第十九轮移除窗口描边），不可恢复。
 
-参考 GitHub 开源窗口置顶工具（AutoHotkey/Python/C# 等轻量实现），用独立轻量进程替代当前的 Electron 内嵌方案。关键词：零 Electron 依赖、Native Win32 API、内存 < 5MB、快捷键内核级响应。
+### 5.3 IPC 协议
+
+stdin/stdout 行协议，一行命令对应一行响应：
+
+| 命令 | 响应 | 说明 |
+|------|------|------|
+| `PING` | `PONG` | 心跳 |
+| `TOGGLE` | `OK` | 切换前台窗口置顶 |
+| `PIN <hwnd>` | `OK` | 程序化置顶指定窗口 |
+| `UNPIN <hwnd>` | `OK` | 取消指定窗口 |
+| `UNPINALL` | `OK` | 全部取消 |
+| `STATUS` | `OK {"pinned":N,...}` | 状态 JSON（单行，不含控制字符） |
+| `CONFIG maxPins=N` | `OK` | 设置最大置顶数（1-100） |
+| `CONFIG hotkey=Alt+P` | `OK` | 设置快捷键 |
+| `SHUTDOWN` | `OK` | 退出 |
+
+**stderr 事件**（即时推送，非轮询）:
+
+| 格式 | 说明 |
+|------|------|
+| `@PINMAN_EVENT pinned {"hwnd":N,"title":"..."}` | 窗口被置顶 |
+| `@PINMAN_EVENT unpinned {"hwnd":N}` | 窗口取消置顶 |
+
+### 5.4 命令队列机制（Electron 端关键实现）
+
+`pinman.ts` 维护一个命令队列，所有 stdin 写入通过队列序列化：
+
+- **`sendCommand(cmd)`**: 常规命令，入队 + 等待响应（最多 5s 超时）
+- **`sendCommandFire(cmd)`**: 火而忘，入队 + `fire: true` 标志。队列处理时写入后设 `discardNextResponse = true`，RL handler 丢弃该响应后才继续处理下一个队列项
+- **`discardNextResponse`**: 防止 fire 命令的响应污染后续命令的 `pendingResolve`
+
+### 5.5 STATUS JSON 转义
+
+`JsonEsc()` 在 `Program.cs` 中，用 `char.IsControl(c)` 覆盖全部 U+0000~U+001F 控制字符，转义为 `\uXXXX`。同时转义 `\`、`"`、`\n`、`\r`、`\t`、`\b`、`\f`。确保 STATUS 响应永远是合法单行 JSON，不会因窗口标题含 mojibake 而断裂。
+
+### 5.6 前端状态管理
+
+- `pinnerStore.ts`: 多窗口状态 + 事件监听 `listenEvents()` + 1s 轮询后备
+- `PinnerPage.tsx`: 多窗口列表（仅显示标题+取消按钮），最大置顶数输入，启动时自动置顶本应用开关
+- 已移除边框颜色预设和边框宽度控件（第十九轮）
+
+### 5.7 已实现功能 ✅
+
+- ✅ 多窗口同时置顶（可配置上限 1-100）
+- ✅ 原生 RegisterHotKey，快捷键即时响应
+- ✅ stderr `@PINMAN_EVENT` 事件推送，前端 <1s 更新
+- ✅ 1s 轮询 STATUS 作为后备
+- ✅ 首次启动热键自动加载（`startPinman(win, hotkey)` 参数 + 1s 延迟 CONFIG）
+- ✅ 设置页保存热键即时生效（`sendCommandFire` 走队列）
+- ✅ `PIN <hwnd>` 程序化置顶命令
+- ✅ "启动时自动置顶本应用"设置（`pinnerAutoPinApp` 开关）
+- ✅ 托盘气泡通知（pin/unpin 时显示窗口标题）
+- ✅ 应用退出自动清理所有置顶
+- ✅ 中文 UI
+
+### 5.8 已修复问题（第十九轮）
+
+| # | 问题 | 根因 | 修复 |
+|---|------|------|------|
+| 🔴 | 快捷键不触发 | `sendCommandFire` 绕过队列直接写 stdin，响应污染后续命令的 `pendingResolve` | `sendCommandFire` 走队列 + `discardNextResponse` 丢弃响应 |
+| 🔴 | 首次启动热键不加载 | 启动时 `sendCommandFire` 在 pinman 就绪前发送失败 | `startPinman` 接受 hotkey 参数，1s init 阶段统一发送 |
+| 🔴 | 多窗口列表不显示 | `JsonEsc` 只转义 `\` `"`，窗口标题含 `\r`/`\n` 时 JSON 断裂 | `char.IsControl()` 覆盖全部控制字符 → `\uXXXX` |
+| 🔴 | 事件推送完全失效 | `@PINMAN_EVENT` 解析 off-by-one，type 永为空 | `line.substring('@PINMAN_EVENT '.length)` 修正 |
+| 🟡 | 轮询响应慢（3s） | 纯轮询无推送 | stderr 事件推送 + 轮询降为 1s |
 
 ---
 
@@ -179,21 +244,35 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 
 ## 七、已知问题 ⚠️
 
-| # | 问题 | 严重度 | 所属 |
-|---|------|--------|------|
-| 1 | 后端伪报错（写入成功但前端提示 unreachable） | 中 | 资源捕获 |
-| 2 | 历史记录未持久化（captureHistory 仅内存, 重启丢失） | 低 | 资源捕获 |
-| 3 | 托盘热键仍可触发捕获（缩小到托盘后可能误截本应用） | 低 | 资源捕获 |
-| 4 | 游戏分辨率与屏幕分辨率差异大时 OCR 识别率下降 | 中 | 资源捕获 |
-| 5 | 窗口置顶方案与轻量定位矛盾，需整体重写 | 🔴 高 | 窗口置顶 |
+| # | 问题 | 严重度 | 所属 | 状态 |
+|---|------|--------|------|------|
+| 1 | 后端伪报错（写入成功但前端提示 unreachable） | 中 | 资源捕获 | 未修 |
+| 2 | 历史记录未持久化（captureHistory 仅内存, 重启丢失） | 低 | 资源捕获 | 未修 |
+| 3 | 托盘热键仍可触发捕获（缩小到托盘后可能误截本应用） | 低 | 资源捕获 | 未修 |
+| 4 | 游戏分辨率与屏幕分辨率差异大时 OCR 识别率下降 | 中 | 资源捕获 | 未修 |
+| 5 | 首次启动时快捷键偶发不同步（用户反馈需进设置保存后才生效） | 低 | 窗口置顶 | 待验证 |
 
 ---
 
-## 八、已修复问题（摘要）
+## 八、已修复问题（历史摘要）
 
-**资源捕获**: OCR 弹窗闪现(11)、弹窗状态机不同步(11)、AI 超时卡住(11)、进程名未映射(11)、OCR 噪音(11)、进度条数据未更新(12)、恢复量计算不准(12)、多资源切换体验(12)、恢复时间取整+时钟(12)、快捷键首次保存不注册(12)、无效进程提示文案(12)
+**资源捕获**（第十一~十二轮）: OCR 弹窗闪现、弹窗状态机不同步、AI 超时卡住、进程名未映射、OCR 噪音、进度条数据未更新、恢复量计算不准、多资源切换体验、恢复时间取整+时钟、快捷键首次保存不注册、无效进程提示文案
 
-**窗口置顶**: PS 进程洪水→批量查询(13)、边框坐标 DPI 错误(13)、置顶误自动取消→retry(13)、多窗口简化→单窗口(14)、边框 CSS→4-div 渲染(14)、DPI 感知→SetProcessDpiAwareness(15)、持久 PS 会话失败→回退 execFile(15)、合并 toggle 双调用→单次(16)、Add-Type 静态字段 null→IntPtr::new(16)、变量名遗留→fg→pr(16)、边框残留→try-catch+自清理(17)
+**窗口置顶(旧-PS方案)**（第十三~十七轮）: PS 进程洪水→批量查询、边框坐标 DPI 错误、置顶误自动取消→retry、多窗口简化→单窗口、边框 CSS→4-div 渲染、DPI 感知→SetProcessDpiAwareness、持久 PS 会话失败→回退 execFile、合并 toggle 双调用→单次、Add-Type 静态字段 null→IntPtr::new、变量名遗留→fg→pr、边框残留→try-catch+自清理
+
+**窗口置顶(新-pinman方案-第十八~十九轮)**:
+- EPIPE 崩溃 → stopPinman 三层保护
+- sendCommand 并发覆盖 pendingResolve → 命令队列序列化
+- 热键转发动态 import() 失效 → 直接 import
+- CreateSolidBrush/GetStockObject DllImport 错误 → gdi32 修复
+- pinman.exe spawn 路径错误 → 修复
+- PinnerPage 英文 → 全中文化
+- TCP named pipe 在 Native AOT 下不可用 → stdin/stdout IPC
+- **快捷键不触发**（第十九轮）→ `sendCommandFire` 走队列 + `discardNextResponse`
+- **首次启动热键不加载**（第十九轮）→ `startPinman(win, hotkey)`
+- **多窗口列表不显示**（第十九轮）→ `char.IsControl()` 全覆盖转义
+- **事件推送失效**（第十九轮）→ `@PINMAN_EVENT` 解析 off-by-one 修正
+- 边框渲染系统完整移除（第十九轮）→ 改为气泡通知
 
 ---
 
@@ -204,25 +283,39 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 | OCR 引擎 | Windows.Media.Ocr via PS 反射 | 零安装 |
 | 截图 | screenshot-desktop GDI 全屏 | 快, DPI 补偿 |
 | 后端 HTTP | 主进程 Node.js http | 绕过 socks5 代理 |
-| 弹窗管理 | 渲染进程统一, 每次新建 BrowserWindow | 状态一致, 无复用残留 |
-| OCR 预处理 | NearestNeighbor 自适应放大, 不加灰度 | 保留锐利边缘和颜色对比度 |
+| 弹窗管理 | 渲染进程统一, 每次新建 BrowserWindow | 状态一致 |
+| OCR 预处理 | NearestNeighbor 自适应放大 | 保留锐利边缘 |
 | 快捷键存储 | JSON 数组 | 消除 + 分隔符歧义 |
-| 并发控制 | captureState === 'idle' | 防止频繁 OCR |
-| capture_time | utcNow() = new Date().toISOString() | UTC 时间 |
-| 窗口置顶操作 | PowerShell/C# P/Invoke | 避免 native addon 编译依赖 |
+| **窗口置顶核心** | **C# Native AOT 独立进程** | 脱离 Electron 依赖, 1.2MB, 内核级 RegisterHotKey |
+| **IPC 方案** | **stdin/stdout 行协议** | Native AOT 下最可靠, TCP/named pipe 有兼容问题 |
+| **IPC 并发控制** | **命令队列 + discardNextResponse** | 序列化 stdin 写入 + 防止火而忘响应污染 |
+| **事件推送** | **stderr @PINMAN_EVENT** | 不干扰 stdin/stdout 命令协议, 即时推送 |
+| **JSON 转义** | **char.IsControl() → \uXXXX** | 处理窗口标题中 mojibake 等任意控制字符 |
+| **置顶反馈** | **托盘气泡通知** | 替代窗口描边, 更轻量, 无 GDI 渲染开销 |
 
 ---
 
 ## 十、关键文件地图
 
-### 主进程
+### pinman C# 项目 (独立进程)
 | 文件 | 职责 |
 |------|------|
-| `electron-app/src/main/index.ts` | 入口, tray, 快捷键注册, 三工具 hotkey 管理 |
+| `pinman/pinman.csproj` | .NET 9 Native AOT 项目配置 |
+| `pinman/app.manifest` | DPI PerMonitorV2 声明 |
+| `pinman/Native.cs` | 全部 Win32 P/Invoke 声明和常量 |
+| `pinman/Program.cs` | 入口、消息循环、WM_HOTKEY、IPC 命令处理、Status JSON 构建、JsonEsc、事件推送 |
+| `pinman/PinEntry.cs` | PinEntry 数据模型（仅 TargetHwnd + TimerId） |
+| `pinman/StdioIpc.cs` | stdin/stdout 行协议 IPC |
+| `electron-app/resources/pinman.exe` | 编译产物副本 |
+
+### 主进程 (Electron)
+| 文件 | 职责 |
+|------|------|
+| `electron-app/src/main/index.ts` | 入口, tray, 快捷键(仅 capture/chat), pinman 生命周期, auto-pin 逻辑 |
 | `electron-app/src/main/ipc/capture.ts` | 前景检测, 截图+OCR, 弹窗 IPC |
 | `electron-app/src/main/ipc/backend.ts` | 主进程 HTTP 后端通信 |
 | `electron-app/src/main/ipc/queue.ts` | 重试队列持久化 |
-| `electron-app/src/main/ipc/pinner.ts` | 窗口置顶：PS execFile、SetWindowPos、边框 BrowserWindow、轮询 |
+| `electron-app/src/main/ipc/pinman.ts` | pinman.exe spawn + stdin/stdout IPC + 命令队列(含 fire/discard) + stderr 事件解析转发 |
 | `electron-app/src/main/utils/ocr.ts` | OCR PS 脚本 |
 
 ### 渲染进程
@@ -230,11 +323,11 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 |------|------|
 | `electron-app/src/renderer/App.tsx` | 入口, hotkey 监听分发 |
 | `electron-app/src/renderer/stores/captureStore.ts` | 资源捕获管线编排 |
-| `electron-app/src/renderer/stores/pinnerStore.ts` | 窗口置顶状态管理 |
-| `electron-app/src/renderer/stores/settingsStore.ts` | 设置持久化 |
+| `electron-app/src/renderer/stores/pinnerStore.ts` | 多窗口状态 + 事件监听 + 1s 后备轮询 |
+| `electron-app/src/renderer/stores/settingsStore.ts` | 设置持久化（含 pinnerAutoPinApp） |
 | `electron-app/src/renderer/stores/pluginStore.ts` | 工具启用/禁用管理 |
 | `electron-app/src/renderer/features/resource-capture/` | 资源捕获页面组件 |
-| `electron-app/src/renderer/features/window-pinner/PinnerPage.tsx` | 窗口置顶 UI |
+| `electron-app/src/renderer/features/window-pinner/PinnerPage.tsx` | 多窗口列表、最大置顶数、auto-pin 开关 |
 | `electron-app/src/renderer/pages/SettingsPage.tsx` | 设置页 |
 | `electron-app/src/renderer/pages/HomePage.tsx` | 首页 |
 | `electron-app/src/renderer/lib/plugin-registry.ts` | BUILTIN_PLUGINS 注册 |
@@ -242,20 +335,25 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 ### 预加载
 | 文件 | 职责 |
 |------|------|
-| `electron-app/src/preload/index.ts` | contextBridge API |
-| `electron-app/src/renderer/env.d.ts` | TypeScript 类型声明 |
+| `electron-app/src/preload/index.ts` | contextBridge API（含 pinman.onEvent） |
+| `electron-app/src/renderer/env.d.ts` | TypeScript 类型声明（含 PinStatus） |
 
 ---
 
-## 十一、最高优先级待办
+## 十一、当前待办
 
-1. **研究 GitHub 开源窗口置顶工具** — 分析 AutoHotkey/Python/C# 等轻量实现方案
-2. **重写窗口置顶工具** — 脱离 Electron 依赖，用独立轻量进程实现，内存 < 5MB
+| # | 事项 | 优先级 | 状态 |
+|---|------|--------|------|
+| 1 | 清理旧文件 `electron-app/src/main/ipc/pinner.ts`（已不被任何代码引用） | 低 | 未做 |
+| 2 | git commit 所有未提交改动 | 中 | 未做 |
+| 3 | 验证 #5 已知问题（首次启动快捷键偶发不同步）是否稳定复现，如需修复则排查 startPinman 1s 延迟 CONFIG 时序 | 低 | 未做 |
+| 4 | 资源捕获已知问题（后端伪报错、历史不持久化等，共 4 项） | 中 | 未修 |
+| 5 | 今日按键统计工具 | 低 | upcoming |
 
 ---
 
 ## 十二、提交规范
 
 - 原子化 commit，中文 message（feat:/fix:/chore:/style:/docs:）
-- 提交前验证: `npx electron-vite build` 编译通过
+- 提交前验证: `npx electron-vite build` 编译通过 + `dotnet publish` 编译通过
 - 分支前缀: `codex/`
