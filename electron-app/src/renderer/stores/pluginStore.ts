@@ -14,7 +14,7 @@ interface PluginInfo {
 
 export type ToolStatus = 'stable' | 'upcoming'
 
-// Tools that are not yet implemented 鈥?cannot be enabled
+// Tools that are not yet implemented — cannot be enabled
 const UPCOMING_TOOLS = new Set<string>(
   BUILTIN_PLUGINS.filter((p) => p.status === 'upcoming').map((p) => p.id)
 )
@@ -36,6 +36,7 @@ interface PluginState {
   isToolEnabled: (id: string) => boolean
   isToolUpcoming: (id: string) => boolean
   getToolStatus: (id: string) => ToolStatus
+  loadDisabledTools: () => Promise<void>
 }
 
 export const usePluginStore = create<PluginState>((set, get) => ({
@@ -66,6 +67,8 @@ export const usePluginStore = create<PluginState>((set, get) => ({
     }
     set({ disabledTools: next })
     const enabled = !next.has(id)
+    // Persist disabled state
+    window.api.settings.set('disabledTools', JSON.stringify([...next]))
     window.api.tray.notifyToolState(id, enabled)
     // Notify main process to unregister/re-register hotkey
     window.api.tool.setEnabled(id, enabled)
@@ -78,7 +81,17 @@ export const usePluginStore = create<PluginState>((set, get) => ({
 
   isToolUpcoming: (id) => UPCOMING_TOOLS.has(id),
 
-  getToolStatus: (id) => UPCOMING_TOOLS.has(id) ? 'upcoming' : 'stable'
+  getToolStatus: (id) => UPCOMING_TOOLS.has(id) ? 'upcoming' : 'stable',
+
+  loadDisabledTools: async () => {
+    try {
+      const raw = await window.api.settings.get('disabledTools') as string | undefined
+      if (raw) {
+        const arr: string[] = JSON.parse(raw)
+        set({ disabledTools: new Set(arr) })
+      }
+    } catch { /* ignore */ }
+  }
 }))
 
 export function initPluginStore(): void {

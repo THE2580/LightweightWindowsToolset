@@ -199,6 +199,9 @@ app.whenReady().then(() => {
       if (toolId === 'window-pinner') {
         const info = hotkeyActions.get('window-pinner')
         const enabledFlag = (getStore().get('pinnerHotkeyEnabled') as boolean) ?? true
+        // Start pinman if not running
+        const pinnerHkTemp = (storedToAccelerator((getStore().get('pinnerHotkey') as string) || '')) || 'Alt+P'
+        startPinman(mainWindow, pinnerHkTemp)
         if (enabledFlag && info?.accelerator) {
           sendCommandFire('CONFIG hotkey=' + info.accelerator)
         }
@@ -218,6 +221,8 @@ app.whenReady().then(() => {
           accelerator: hotkeyActions.get('window-pinner')?.accelerator || '',
           enabled: false
         })
+        // Fully stop pinman — kill process, free ~3-5MB
+        stopPinman()
       }
     }
   })
@@ -312,9 +317,22 @@ app.whenReady().then(() => {
   registerQueueIpc()
   registerBackendIpc()
   registerPinmanIpc()
+
+  // Load persisted disabled-tools state and check window-pinner before starting pinman
+  const disabledRaw = getStore().get('disabledTools') as string | undefined
+  let disabledList: string[] = []
+  if (disabledRaw) {
+    try { disabledList = JSON.parse(disabledRaw) } catch { /* ignore */ }
+  }
+  for (const id of disabledList) disabledTools.add(id)
+
   // Pass current hotkey to startPinman so the initial config includes it
   const initHotkey = (storedToAccelerator((getStore().get('pinnerHotkey') as string) || '')) || 'Alt+P'
-  startPinman(mainWindow, initHotkey)
+  if (!disabledTools.has('window-pinner')) {
+    startPinman(mainWindow, initHotkey)
+  } else {
+    console.log('[pinman] Skipped start: window-pinner tool is disabled')
+  }
 
   // Auto-pin this app on startup if enabled
   const autoPin = (getStore().get('pinnerAutoPinApp') as boolean) ?? false

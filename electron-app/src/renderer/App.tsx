@@ -24,6 +24,12 @@ function AppListeners(): null {
     loadApiKey()
   }, [loadApiKey])
 
+  // Load persisted disabled-tools state on startup
+  const loadDisabledTools = usePluginStore((s) => s.loadDisabledTools)
+  useEffect(() => {
+    loadDisabledTools()
+  }, [loadDisabledTools])
+
 
   useEffect(() => {
     const unsubNav = window.api.tray.onNavigate((path) => {

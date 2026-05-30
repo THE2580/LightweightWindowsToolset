@@ -80,7 +80,7 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 - 追加式录入，保存时一次性检测，JSON 数组存储
 - ≥2键、左修饰右普通、仅一个普通键
 - 录入时禁用全局快捷键
-- 工具禁用 = 快捷键禁用，新工具默认无快捷键（空字符串）
+- 工具禁用 = 完全停止（前端入口隐藏 + 快捷键注销 + 后台进程终止[如有]），禁用状态持久化重启保持，新工具默认无快捷键（空字符串）
 - **窗口置顶快捷键由 pinman.exe 原生 RegisterHotKey 管理**，不再用 Electron globalShortcut
 
 **AI 聊天**: 内置功能非工具，不在工具列表和开关中
@@ -105,7 +105,7 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 
 ### 3.3 插件/工具系统
 - `BUILTIN_PLUGINS` 静态注册, stable/upcoming 两态
-- 工具禁用 = 快捷键注销 (`tool:set-enabled` IPC)
+- 工具禁用 = 完全停止：前端入口隐藏 + 快捷键注销 + 后台进程终止（禁用状态持久化，重启保持）
 - 已注册: 游戏资源捕获(stable), 窗口置顶(stable), 今日按键统计(upcoming)
 
 ### 3.4 AI 聊天
