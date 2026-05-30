@@ -57,7 +57,7 @@ let psBusy = false
 
 function startPsSession(): ChildProcess {
   psReady = false
-  psProc = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', '-'], {
+  psProc = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', '-'], {
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   })
@@ -123,7 +123,7 @@ function drainPsQueue(): void {
 
   // Unique completion marker per job
   const marker = `_DONE_${Date.now()}_${Math.random().toString(36).slice(2)}_`
-  const cmd = `& '${sf.replace(/\\/g, '\\\\')}' | Out-File -FilePath '${of.replace(/\\/g, '\\\\')}' -Encoding UTF8; Write-Output '${marker}'\n`
+  const cmd = `& '${sf}' | Out-File -FilePath '${of}' -Encoding UTF8; Write-Output '${marker}'\n`
 
   let acc = ''
   const onData = (data: Buffer) => {
