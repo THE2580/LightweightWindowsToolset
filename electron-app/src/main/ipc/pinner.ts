@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, screen } from 'electron'
+import { ipcMain, BrowserWindow } from 'electron'
 import { execFile } from 'child_process'
 import { writeFileSync, mkdtempSync, unlinkSync, rmdirSync } from 'fs'
 import { join } from 'path'
@@ -33,15 +33,45 @@ interface ForegroundInfo {
 
 const pinnedWindows = new Map<number, PinnedWindow>()
 const borderOverlays = new Map<number, BrowserWindow>()
+const missingRectRetries = new Map<number, number>() // hwnd → retry count
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let currentBorderColor = '#2563EB'
 const DEFAULT_BORDER_WIDTH = 3
+const MAX_RETRIES = 2 // number of consecutive null rects before unpinning
 
 // ── PowerShell helpers ──
 
-function getForegroundWindowInfo(): Promise<ForegroundInfo> {
+/** Execute a PowerShell script via a temp file. Returns stdout or null on error. */
+function execPowerShell(script: string, timeoutMs: number): Promise<string | null> {
   return new Promise((resolve) => {
-    const script = `
+    const tmpDir = mkdtempSync(join(tmpdir(), 'lwt-'))
+    const psPath = join(tmpDir, 's.ps1')
+    writeFileSync(psPath, script, 'utf-8')
+
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', psPath],
+      { timeout: timeoutMs, windowsHide: true },
+      (err, stdout) => {
+        try { unlinkSync(psPath) } catch { /* ok */ }
+        try { rmdirSync(tmpDir) } catch { /* ok */ }
+        if (err || !stdout) { resolve(null); return }
+        resolve(stdout.trim())
+      }
+    )
+  })
+}
+
+/** Extract a JSON object from PS output (may contain noise). */
+function extractJson<T>(raw: string): T | null {
+  const start = raw.indexOf('{')
+  const end = raw.lastIndexOf('}')
+  if (start < 0 || end < 0) return null
+  try { return JSON.parse(raw.substring(start, end + 1)) } catch { return null }
+}
+
+function getForegroundWindowInfo(): Promise<ForegroundInfo> {
+  const script = `
 $cs = @"
 using System;
 using System.Runtime.InteropServices;
@@ -102,44 +132,16 @@ $result = @{hwnd=[int64]$hwnd; processName=$pn; windowTitle=$windowTitle; isDesk
 $result | ConvertTo-Json -Compress
 `.trim()
 
-    const tmpDir = mkdtempSync(join(tmpdir(), 'lwt-pin-'))
-    const psPath = join(tmpDir, 'fg.ps1')
-    writeFileSync(psPath, script, 'utf-8')
-
-    execFile('powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', psPath],
-      { timeout: 10000, windowsHide: true },
-      (err, stdout) => {
-        try { unlinkSync(psPath) } catch { /* ok */ }
-        try { rmdirSync(tmpDir) } catch { /* ok */ }
-
-        if (err || !stdout) {
-          resolve({ hwnd: 0, processName: '', windowTitle: '', isDesktop: true, rect: null })
-          return
-        }
-        try {
-          const raw = stdout.trim()
-          const jsonStart = raw.indexOf('{')
-          const jsonEnd = raw.lastIndexOf('}')
-          if (jsonStart < 0 || jsonEnd < 0) {
-            resolve({ hwnd: 0, processName: '', windowTitle: '', isDesktop: true, rect: null })
-            return
-          }
-          const info: ForegroundInfo = JSON.parse(raw.substring(jsonStart, jsonEnd + 1))
-          resolve(info)
-        } catch {
-          resolve({ hwnd: 0, processName: '', windowTitle: '', isDesktop: true, rect: null })
-        }
-      }
-    )
+  return execPowerShell(script, 10000).then((stdout) => {
+    if (!stdout) return { hwnd: 0, processName: '', windowTitle: '', isDesktop: true, rect: null }
+    return extractJson<ForegroundInfo>(stdout) ?? { hwnd: 0, processName: '', windowTitle: '', isDesktop: true, rect: null }
   })
 }
 
 function setWindowTopmost(hwnd: number, topmost: boolean): Promise<boolean> {
-  return new Promise((resolve) => {
-    const flag = topmost ? '-1' : '-2'
+  const flag = topmost ? '-1' : '-2'
   const psBool = topmost ? '$true' : '$false'
-    const script = `
+  const script = `
 $cs = @"
 using System;
 using System.Runtime.InteropServices;
@@ -167,90 +169,110 @@ $ok = [Win32Top]::Toggle([IntPtr]${hwnd}, ${psBool})
 Write-Output $ok
 `.trim()
 
-    const tmpDir = mkdtempSync(join(tmpdir(), 'lwt-top-'))
-    const psPath = join(tmpDir, 'top.ps1')
-    writeFileSync(psPath, script, 'utf-8')
-
-    execFile('powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', psPath],
-      { timeout: 8000, windowsHide: true },
-      (err, stdout) => {
-        try { unlinkSync(psPath) } catch { /* ok */ }
-        try { rmdirSync(tmpDir) } catch { /* ok */ }
-        if (err) { resolve(false); return }
-        resolve(stdout?.trim() === 'True')
-      }
-    )
-  })
+  return execPowerShell(script, 8000).then((stdout) => stdout?.trim() === 'True')
 }
 
-function getWindowRect(hwnd: number): Promise<WindowRect | null> {
-  return new Promise((resolve) => {
-    const script = `
+/**
+ * Batch query GetWindowRect + IsWindow for multiple HWNDs in a single PS process.
+ * Returns a Map of hwnd → rect (null if window is gone or call failed).
+ */
+function getAllWindowRects(hwnds: number[]): Promise<Map<number, WindowRect | null>> {
+  if (hwnds.length === 0) return Promise.resolve(new Map())
+
+  const hwndList = hwnds.join(',')
+
+  const script = `
 $cs = @"
 using System;
 using System.Runtime.InteropServices;
 public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
-public class Win32Rect {
-    [DllImport("user32.dll")]
-    public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-    [DllImport("user32.dll")]
-    public static extern bool IsWindow(IntPtr hWnd);
+public class Win32Batch {
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+    [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hWnd);
 }
 "@
 Add-Type -TypeDefinition $cs *> $null
-if (-not [Win32Rect]::IsWindow([IntPtr]${hwnd})) { Write-Output 'null'; exit 0 }
-$r = New-Object RECT
-if ([Win32Rect]::GetWindowRect([IntPtr]${hwnd}, [ref]$r)) {
-  @{left=$r.Left; top=$r.Top; right=$r.Right; bottom=$r.Bottom} | ConvertTo-Json -Compress
-} else {
-  Write-Output 'null'
+@{${hwndList}} | ForEach-Object {
+  $h = [IntPtr]$_
+  if ([Win32Batch]::IsWindow($h)) {
+    $r = New-Object RECT
+    if ([Win32Batch]::GetWindowRect($h, [ref]$r)) {
+      Write-Output "$_|$($r.Left),$($r.Top),$($r.Right),$($r.Bottom)"
+    } else {
+      Write-Output "$_|null"
+    }
+  } else {
+    Write-Output "$_|dead"
+  }
 }
 `.trim()
 
-    const tmpDir = mkdtempSync(join(tmpdir(), 'lwt-rect-'))
-    const psPath = join(tmpDir, 'rect.ps1')
-    writeFileSync(psPath, script, 'utf-8')
+  return execPowerShell(script, 5000).then((stdout) => {
+    const result = new Map<number, WindowRect | null>()
+    if (!stdout) {
+      // If the whole batch failed, mark all as null
+      for (const h of hwnds) result.set(h, null)
+      return result
+    }
 
-    execFile('powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', psPath],
-      { timeout: 5000, windowsHide: true },
-      (err, stdout) => {
-        try { unlinkSync(psPath) } catch { /* ok */ }
-        try { rmdirSync(tmpDir) } catch { /* ok */ }
-        if (err || !stdout) { resolve(null); return }
-        try {
-          const raw = stdout.trim()
-          if (raw === 'null') { resolve(null); return }
-          const jsonStart = raw.indexOf('{')
-          const jsonEnd = raw.lastIndexOf('}')
-          if (jsonStart < 0) { resolve(null); return }
-          resolve(JSON.parse(raw.substring(jsonStart, jsonEnd + 1)))
-        } catch { resolve(null) }
+    const lines = stdout.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+    for (const line of lines) {
+      const sepIdx = line.indexOf('|')
+      if (sepIdx < 0) continue
+      const hwndStr = line.substring(0, sepIdx)
+      const data = line.substring(sepIdx + 1)
+      const hwnd = parseInt(hwndStr, 10)
+      if (isNaN(hwnd)) continue
+
+      if (data === 'null' || data === 'dead') {
+        result.set(hwnd, null)
+      } else {
+        const parts = data.split(',').map(Number)
+        if (parts.length === 4 && parts.every(p => !isNaN(p))) {
+          result.set(hwnd, { left: parts[0], top: parts[1], right: parts[2], bottom: parts[3] })
+        } else {
+          result.set(hwnd, null)
+        }
       }
-    )
+    }
+    // Any HWND not in the output also gets null
+    for (const h of hwnds) {
+      if (!result.has(h)) result.set(h, null)
+    }
+    return result
   })
+}
+
+// ── Coordinate conversion ──
+
+/**
+ * Convert a rect from GetWindowRect (non-DPI-aware PowerShell) into
+ * BrowserWindow coordinates. GetWindowRect from a non-DPI-aware process
+ * returns coordinates already in DIP (logical) space matching BrowserWindow's
+ * coordinate system, so no scaleFactor division is needed.
+ */
+function physicalToDipRect(rect: WindowRect): { x: number; y: number; width: number; height: number } {
+  // GetWindowRect from non-DPI-aware PS returns DIP coordinates directly
+  const x = rect.left - DEFAULT_BORDER_WIDTH
+  const y = rect.top - DEFAULT_BORDER_WIDTH
+  const w = (rect.right - rect.left) + DEFAULT_BORDER_WIDTH * 2
+  const h = (rect.bottom - rect.top) + DEFAULT_BORDER_WIDTH * 2
+
+  return { x, y, width: w, height: h }
 }
 
 // ── Border overlay management ──
 
 function createBorderOverlay(hwnd: number, rect: WindowRect, color: string): BrowserWindow | null {
   try {
-    const bw = DEFAULT_BORDER_WIDTH
-    const primaryDisplay = screen.getPrimaryDisplay()
-    const scaleFactor = primaryDisplay.scaleFactor
-
-    const x = Math.round(rect.left / scaleFactor) - bw
-    const y = Math.round(rect.top / scaleFactor) - bw
-    const w = Math.round((rect.right - rect.left) / scaleFactor) + bw * 2
-    const h = Math.round((rect.bottom - rect.top) / scaleFactor) + bw * 2
-
-    if (w <= 0 || h <= 0) return null
+    const bounds = physicalToDipRect(rect)
+    if (bounds.width <= 0 || bounds.height <= 0) return null
 
     const overlay = new BrowserWindow({
-      x, y,
-      width: w,
-      height: h,
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
       frame: false,
       transparent: true,
       alwaysOnTop: true,
@@ -270,6 +292,7 @@ function createBorderOverlay(hwnd: number, rect: WindowRect, color: string): Bro
     overlay.setVisibleOnAllWorkspaces(true)
     overlay.setIgnoreMouseEvents(true)
 
+    const bw = DEFAULT_BORDER_WIDTH
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
       * { margin:0; padding:0; box-sizing:border-box; }
       body { width:100%; height:100%; background:transparent; border:${bw}px solid ${color}; overflow:hidden; }
@@ -288,17 +311,9 @@ function updateBorderOverlay(hwnd: number, rect: WindowRect): void {
   if (!overlay || overlay.isDestroyed()) return
 
   try {
-    const bw = DEFAULT_BORDER_WIDTH
-    const primaryDisplay = screen.getPrimaryDisplay()
-    const scaleFactor = primaryDisplay.scaleFactor
-
-    const x = Math.round(rect.left / scaleFactor) - bw
-    const y = Math.round(rect.top / scaleFactor) - bw
-    const w = Math.round((rect.right - rect.left) / scaleFactor) + bw * 2
-    const h = Math.round((rect.bottom - rect.top) / scaleFactor) + bw * 2
-
-    if (w > 0 && h > 0) {
-      overlay.setBounds({ x, y, width: w, height: h })
+    const bounds = physicalToDipRect(rect)
+    if (bounds.width > 0 && bounds.height > 0) {
+      overlay.setBounds(bounds)
     }
   } catch { /* window may be destroyed */ }
 }
@@ -320,24 +335,43 @@ function destroyAllBorderOverlays(): void {
 // ── Periodic position polling ──
 
 async function pollPinnedWindows(): Promise<void> {
+  const hwnds = Array.from(pinnedWindows.keys())
+  if (hwnds.length === 0) { stopPolling(); return }
+
+  const rects = await getAllWindowRects(hwnds)
+
   const toRemove: number[] = []
 
-  for (const [hwnd] of pinnedWindows) {
-    const rect = await getWindowRect(hwnd)
-    if (!rect) {
-      // Window no longer exists
-      toRemove.push(hwnd)
-      continue
+  for (const hwnd of hwnds) {
+    const rect = rects.get(hwnd)
+    if (rect) {
+      // Got a valid rect → reset retries, update overlay
+      missingRectRetries.delete(hwnd)
+      updateBorderOverlay(hwnd, rect)
+    } else {
+      // Window rect failed → check retry count
+      const retries = (missingRectRetries.get(hwnd) ?? 0) + 1
+      if (retries < MAX_RETRIES) {
+        missingRectRetries.set(hwnd, retries)
+      } else {
+        // Max retries exceeded → consider window gone
+        missingRectRetries.delete(hwnd)
+        toRemove.push(hwnd)
+      }
     }
-    updateBorderOverlay(hwnd, rect)
   }
 
+  // Clean up windows that exceeded retries
   for (const hwnd of toRemove) {
     await unpinWindowInternal(hwnd, false)
   }
 
   if (toRemove.length > 0) {
     broadcastPinnedList()
+  }
+
+  if (pinnedWindows.size === 0) {
+    stopPolling()
   }
 }
 
@@ -361,6 +395,7 @@ async function unpinWindowInternal(hwnd: number, updateBorder: boolean): Promise
 
   await setWindowTopmost(hwnd, false)
   pinnedWindows.delete(hwnd)
+  missingRectRetries.delete(hwnd)
 
   if (updateBorder) {
     destroyBorderOverlay(hwnd)
@@ -378,7 +413,6 @@ function broadcastPinnedList(): void {
     order: index + 1
   }))
 
-  // Send to all renderer windows
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed() && win.webContents) {
       win.webContents.send('pinner:list-update', list)
@@ -407,7 +441,6 @@ export function registerPinnerIpc(): void {
 
     // Check max windows limit
     if (pinnedWindows.size >= maxWindows) {
-      // Remove oldest (first inserted)
       const oldest = pinnedWindows.entries().next().value
       if (oldest) {
         await unpinWindowInternal(oldest[0], true)
@@ -476,11 +509,12 @@ export function registerPinnerIpc(): void {
   // Update border color for all pinned windows
   ipcMain.handle('pinner:set-border-color', (_event, color: string) => {
     currentBorderColor = color
-    // Destroy and recreate all overlays with new color
     for (const [hwnd, pinned] of pinnedWindows) {
       pinned.borderColor = color
       destroyBorderOverlay(hwnd)
-      getWindowRect(hwnd).then((rect) => {
+      // Batch rect query for all windows — reused via getAllWindowRects
+      getAllWindowRects([hwnd]).then((rects) => {
+        const rect = rects.get(hwnd)
         if (rect) {
           const overlay = createBorderOverlay(hwnd, rect, color)
           if (overlay) borderOverlays.set(hwnd, overlay)
@@ -497,6 +531,7 @@ export function registerPinnerIpc(): void {
       await setWindowTopmost(hwnd, false)
     }
     pinnedWindows.clear()
+    missingRectRetries.clear()
     destroyAllBorderOverlays()
     return { success: true }
   })
