@@ -7,7 +7,7 @@ import { registerSettingsIpc, getStore } from './ipc/settings'
 import { registerCaptureIpc } from './ipc/capture'
 import { registerQueueIpc, loadQueue, saveQueue } from './ipc/queue'
 import { registerBackendIpc } from './ipc/backend'
-import { registerPinnerIpc } from './ipc/pinner'
+import { registerPinmanIpc, startPinman, stopPinman, sendCommand, sendCommandFire } from './ipc/pinman'
 
 let isQuitting = false
 
@@ -141,7 +141,7 @@ app.whenReady().then(() => {
     // Unpin all windows before quitting
     try {
       const { ipcMain: ipc } = require('electron')
-      ipc.emit('pinner:cleanup')
+      stopPinman()
     } catch { /* ok */ }
     destroyTray()
     globalShortcut.unregisterAll()
@@ -182,8 +182,7 @@ app.whenReady().then(() => {
   else hotkeyActions.set('ai-chat', { accelerator: chatHk, enabled: false })
 
   const pinnerEnabled = (getStore().get('pinnerHotkeyEnabled') as boolean) ?? true
-  if (pinnerEnabled && pinnerHk) registerSingleHotkey('window-pinner', pinnerHk, mainWindow)
-  else hotkeyActions.set('window-pinner', { accelerator: pinnerHk, enabled: false })
+  hotkeyActions.set('window-pinner', { accelerator: pinnerHk, enabled: pinnerEnabled })
 
   // Tool disable/enable — directly controls hotkey registration
   ipcMain.handle('tool:set-enabled', (_event, toolId: string, enabled: boolean) => {
@@ -201,7 +200,7 @@ app.whenReady().then(() => {
         const info = hotkeyActions.get('window-pinner')
         const enabledFlag = (getStore().get('pinnerHotkeyEnabled') as boolean) ?? true
         if (enabledFlag && info?.accelerator) {
-          registerSingleHotkey('window-pinner', info.accelerator, mainWindow)
+          sendCommandFire('CONFIG hotkey=' + info.accelerator)
         }
       }
     } else {
@@ -215,7 +214,6 @@ app.whenReady().then(() => {
         })
       }
       if (toolId === 'window-pinner') {
-        unregisterSingleHotkey('window-pinner')
         hotkeyActions.set('window-pinner', {
           accelerator: hotkeyActions.get('window-pinner')?.accelerator || '',
           enabled: false
@@ -233,7 +231,12 @@ app.whenReady().then(() => {
     }
     // Check tool disabled state — blocked tools never register hotkeys
     if (action === 'resource-capture' && disabledTools.has('resource-capture')) return
-    if (action === 'window-pinner' && disabledTools.has('window-pinner')) return
+    if (action === 'window-pinner') {
+      if (disabledTools.has('window-pinner')) return
+      hotkeyActions.set(action, { accelerator, enabled: true })
+      sendCommandFire('CONFIG hotkey=' + accelerator)
+      return
+    }
     registerSingleHotkey(action, accelerator, mainWindow)
   })
 
@@ -247,8 +250,11 @@ app.whenReady().then(() => {
         hotkeyActions.set(action, { accelerator: acc, enabled: true })
         return
       }
-      if (action === 'window-pinner' && disabledTools.has('window-pinner')) {
-        hotkeyActions.set(action, { accelerator: acc, enabled: true })
+      if (action === 'window-pinner') {
+        hotkeyActions.set(action, { accelerator: acc, enabled })
+        if (!disabledTools.has('window-pinner') && enabled) {
+          sendCommandFire('CONFIG hotkey=' + acc)
+        }
         return
       }
       registerSingleHotkey(action, acc, mainWindow)
@@ -269,7 +275,12 @@ app.whenReady().then(() => {
       if (info.enabled !== false) {
         // Skip if tool is disabled
         if (action === 'resource-capture' && disabledTools.has('resource-capture')) continue
-        if (action === 'window-pinner' && disabledTools.has('window-pinner')) continue
+        if (action === 'window-pinner') {
+          if (!disabledTools.has('window-pinner') && info.accelerator) {
+            sendCommandFire('CONFIG hotkey=' + info.accelerator)
+          }
+          continue
+        }
         if (info.accelerator) {
           registerSingleHotkey(action, info.accelerator, mainWindow)
         }
@@ -300,7 +311,39 @@ app.whenReady().then(() => {
   registerCaptureIpc()
   registerQueueIpc()
   registerBackendIpc()
-  registerPinnerIpc()
+  registerPinmanIpc()
+  // Pass current hotkey to startPinman so the initial config includes it
+  const initHotkey = (storedToAccelerator((getStore().get('pinnerHotkey') as string) || '')) || 'Alt+P'
+  startPinman(mainWindow, initHotkey)
+
+  // Auto-pin this app on startup if enabled
+  const autoPin = (getStore().get('pinnerAutoPinApp') as boolean) ?? false
+  // Always send selfHwnd and topmostSelf config to pinman
+  setTimeout(async () => {
+    try {
+      const hbuf = mainWindow.getNativeWindowHandle()
+      if (hbuf && hbuf.length >= 4) {
+        const hwnd = hbuf.readInt32LE(0) >>> 0  // unsigned 32-bit
+        await sendCommand(`CONFIG selfHwnd=${hwnd}`)
+        const topmostSelf = (getStore().get('pinnerTopmostSelf') as boolean) ?? false
+        if (topmostSelf) await sendCommand('CONFIG topmostSelf=1')
+        console.log('[pinman] Self hwnd config sent:', hwnd, 'topmostSelf:', topmostSelf)
+      }
+    } catch (e) { console.error('[pinman] Self hwnd config failed:', e) }
+  }, 1500)
+
+  if (autoPin) {
+    setTimeout(async () => {
+      try {
+        const hbuf = mainWindow.getNativeWindowHandle()
+        if (hbuf && hbuf.length >= 4) {
+          const hwnd = hbuf.readInt32LE(0) >>> 0  // unsigned 32-bit
+          console.log('[pinman] Auto-pin app window, hwnd:', hwnd)
+          await sendCommand(`PIN ${hwnd}`)
+        }
+      } catch (e) { console.error('[pinman] Auto-pin failed:', e) }
+    }, 2000)
+  }
 
   // queue:flush handler — invoked by renderer after a successful capture
   ipcMain.handle('queue:flush', async () => {

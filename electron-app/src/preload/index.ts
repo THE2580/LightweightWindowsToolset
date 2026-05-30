@@ -1,5 +1,19 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+// Types for pinman communication
+export interface PinEntry {
+  hwnd: number
+  title: string
+  color: string
+}
+
+export interface PinStatus {
+  pinned: number
+  maxPins: number
+  hotkeyActive: boolean
+  windows: PinEntry[]
+}
+
 const api = {
   window: {
     minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
@@ -60,19 +74,18 @@ const api = {
     setEnabled: (toolId: string, enabled: boolean): Promise<void> =>
       ipcRenderer.invoke('tool:set-enabled', toolId, enabled)
   },
-  pinner: {
-    toggle: (borderColor: string): Promise<{ success: boolean; action?: string; hwnd?: number; processName?: string; windowTitle?: string; reason?: string; message?: string }> =>
-      ipcRenderer.invoke('pinner:toggle', borderColor),
-    unpin: (): Promise<{ success: boolean }> =>
-      ipcRenderer.invoke('pinner:unpin'),
-    getState: (): Promise<{ hwnd: number; processName: string; windowTitle: string; pinnedAt: number } | null> =>
-      ipcRenderer.invoke('pinner:get-state'),
-    setBorderColor: (color: string): Promise<{ success: boolean }> =>
-      ipcRenderer.invoke('pinner:set-border-color', color),
-    onStateUpdate: (callback: (info: { hwnd: number; processName: string; windowTitle: string; pinnedAt: number } | null) => void): (() => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, info: unknown) => callback(info as { hwnd: number; processName: string; windowTitle: string; pinnedAt: number } | null)
-      ipcRenderer.on('pinner:state-update', handler)
-      return () => { ipcRenderer.removeListener('pinner:state-update', handler) }
+  pinman: {
+    toggle: (): Promise<string> => ipcRenderer.invoke('pinman:toggle'),
+    pinHwnd: (hwnd: number): Promise<string> => ipcRenderer.invoke('pinman:pin-hwnd', hwnd),
+    unpin: (hwnd: number): Promise<string> => ipcRenderer.invoke('pinman:unpin', hwnd),
+    unpinAll: (): Promise<string> => ipcRenderer.invoke('pinman:unpin-all'),
+    status: (): Promise<PinStatus> => ipcRenderer.invoke('pinman:status'),
+    config: (key: string, value: string): Promise<string> => ipcRenderer.invoke('pinman:config', key, value),
+    ping: (): Promise<string> => ipcRenderer.invoke('pinman:ping'),
+    onEvent: (callback: (event: { type: string; hwnd: number; title?: string }) => void): (() => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: { type: string; hwnd: number; title?: string }) => callback(data)
+      ipcRenderer.on('pinman:event', handler)
+      return () => { ipcRenderer.removeListener('pinman:event', handler) }
     },
   },
   hotkey: {
@@ -80,7 +93,7 @@ const api = {
       const handler = (_event: Electron.IpcRendererEvent, action: string) => callback(action)
       ipcRenderer.on('hotkey:resource-capture', () => handler(null as any, 'resource-capture'))
       ipcRenderer.on('hotkey:ai-chat', () => handler(null as any, 'ai-chat'))
-      ipcRenderer.on('hotkey:window-pinner', () => handler(null as any, 'window-pinner'))
+      // window-pinner hotkey is now handled directly by pinman.exe (no Electron IPC needed)
       return () => {
         ipcRenderer.removeAllListeners('hotkey:resource-capture')
         ipcRenderer.removeAllListeners('hotkey:ai-chat')

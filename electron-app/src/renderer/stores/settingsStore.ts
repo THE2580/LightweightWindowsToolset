@@ -22,6 +22,8 @@ interface SettingsState {
   chatHotkeyEnabled: boolean
   pinnerHotkey: string
   pinnerHotkeyEnabled: boolean
+  pinnerAutoPinApp: boolean
+  pinnerTopmostSelf: boolean
   captureRefreshInterval: number
   isLoaded: boolean
 
@@ -44,6 +46,8 @@ interface SettingsState {
   setChatHotkeyEnabled: (v: boolean) => Promise<void>
   setPinnerHotkey: (keys: string[]) => Promise<void>
   setPinnerHotkeyEnabled: (v: boolean) => Promise<void>
+  setPinnerAutoPinApp: (v: boolean) => Promise<void>
+  setPinnerTopmostSelf: (v: boolean) => Promise<void>
   setCaptureRefreshInterval: (v: number) => Promise<void>
 }
 
@@ -66,6 +70,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   chatHotkeyEnabled: true,
   pinnerHotkey: '',
   pinnerHotkeyEnabled: true,
+  pinnerAutoPinApp: false,
+  pinnerTopmostSelf: false,
   captureRefreshInterval: 2,
   isLoaded: false,
 
@@ -91,6 +97,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         chatHotkeyEnabled: (all.chatHotkeyEnabled as boolean) ?? true,
         pinnerHotkey: (all.pinnerHotkey as string) || '',
         pinnerHotkeyEnabled: (all.pinnerHotkeyEnabled as boolean) ?? true,
+        pinnerAutoPinApp: (all.pinnerAutoPinApp as boolean) ?? false,
+        pinnerTopmostSelf: (all.pinnerTopmostSelf as boolean) ?? false,
         captureRefreshInterval: (all.captureRefreshInterval as number) || 2,
         isLoaded: true
       })
@@ -117,5 +125,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setChatHotkeyEnabled: async (v) => { await window.api.settings.set('chatHotkeyEnabled', v); await window.api.hotkey.setHotkeyEnabled('ai-chat', v); set({ chatHotkeyEnabled: v }) },
   setPinnerHotkey: async (keys) => { const jsonStr = JSON.stringify(keys); const acc = keys.join('+'); await window.api.settings.set('pinnerHotkey', jsonStr); await window.api.hotkey.updateHotkey('window-pinner', acc); set({ pinnerHotkey: jsonStr }) },
   setPinnerHotkeyEnabled: async (v) => { await window.api.settings.set('pinnerHotkeyEnabled', v); await window.api.hotkey.setHotkeyEnabled('window-pinner', v); set({ pinnerHotkeyEnabled: v }) },
+  setPinnerAutoPinApp: async (v) => { await window.api.settings.set('pinnerAutoPinApp', v); set({ pinnerAutoPinApp: v }) },
+  setPinnerTopmostSelf: async (v) => { await window.api.settings.set('pinnerTopmostSelf', v); await window.api.pinman.config('topmostSelf', v ? '1' : '0'); set({ pinnerTopmostSelf: v }) },
   setCaptureRefreshInterval: async (v) => { await window.api.settings.set('captureRefreshInterval', v); set({ captureRefreshInterval: v }) }
 }))

@@ -1,184 +1,207 @@
-import { useEffect, useState } from 'react'
-import { usePinnerStore, PinnedWindowInfo } from '@/stores/pinnerStore'
+import { useEffect, useState, useCallback } from 'react'
+import { usePinnerStore } from '@/stores/pinnerStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useShallow } from 'zustand/shallow'
 import AnimatedRoute from '@/components/shared/AnimatedRoute'
-import { Pin, PinOff, ChevronDown, Settings } from 'lucide-react'
-
-const COLOR_PRESETS = [
-  { label: '蓝', value: '#2563EB' },
-  { label: '绿', value: '#10B981' },
-  { label: '橙', value: '#F59E0B' },
-  { label: '红', value: '#EF4444' },
-  { label: '紫', value: '#8B5CF6' },
-  { label: '粉', value: '#EC4899' },
-  { label: '青', value: '#06B6D4' },
-  { label: '黄', value: '#EAB308' },
-]
-
-function parseHotkeyKeys(jsonStr: string): string[] {
-  if (!jsonStr) return []
-  try { return JSON.parse(jsonStr) } catch { return jsonStr.split('+') }
-}
-
-function formatTime(ts: number): string {
-  const d = new Date(ts)
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  const ss = String(d.getSeconds()).padStart(2, '0')
-  return `${hh}:${mm}:${ss}`
-}
+import { Pin, PinOff, X, RefreshCw } from 'lucide-react'
+import { Settings } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 
 function PinnerPage(): React.JSX.Element {
+  const navigate = useNavigate()
   const {
-    pinnedWindow, setPinnedWindow,
-    borderColor,
-    isLoaded, loadSettings,
-    togglePin, unpin, updateBorderColor
+    pinnedWindows, maxPins,
+    isLoaded, isPinmanRunning,
+    selfHwnd,
+    loadSettings, refreshStatus, togglePin,
+    unpin, unpinAll, setMaxPins,
+    checkPinman, listenEvents,
   } = usePinnerStore(useShallow((s) => ({
-    pinnedWindow: s.pinnedWindow,
-    setPinnedWindow: s.setPinnedWindow,
-    borderColor: s.borderColor,
+    pinnedWindows: s.pinnedWindows,
+    maxPins: s.maxPins,
     isLoaded: s.isLoaded,
+    selfHwnd: s.selfHwnd,
+    isPinmanRunning: s.isPinmanRunning,
     loadSettings: s.loadSettings,
+    refreshStatus: s.refreshStatus,
     togglePin: s.togglePin,
     unpin: s.unpin,
-    updateBorderColor: s.updateBorderColor
+    unpinAll: s.unpinAll,
+    setMaxPins: s.setMaxPins,
+    checkPinman: s.checkPinman,
+    listenEvents: s.listenEvents,
   })))
 
-  const [customColor, setCustomColor] = useState(borderColor)
-  const pinnerHotkey = useSettingsStore((s) => s.pinnerHotkey)
-  const hotkeyKeys = parseHotkeyKeys(pinnerHotkey)
-  const [showSettings, setShowSettings] = useState(false)
+  const {
+    pinnerHotkey, pinnerAutoPinApp, setPinnerAutoPinApp,
+    pinnerTopmostSelf, setPinnerTopmostSelf,
+  } = useSettingsStore(
+    useShallow((s) => ({
+      pinnerHotkey: s.pinnerHotkey,
+      pinnerAutoPinApp: s.pinnerAutoPinApp,
+      setPinnerAutoPinApp: s.setPinnerAutoPinApp,
+      pinnerTopmostSelf: s.pinnerTopmostSelf,
+      setPinnerTopmostSelf: s.setPinnerTopmostSelf,
+    }))
+  )
 
   useEffect(() => { loadSettings() }, [loadSettings])
 
   useEffect(() => {
-    const cleanup = window.api.pinner.onStateUpdate((info: PinnedWindowInfo | null) => {
-      setPinnedWindow(info)
-    })
-    return cleanup
-  }, [setPinnedWindow])
+    if (isLoaded) {
+      refreshStatus()
+      const interval = setInterval(refreshStatus, 1000)
+      return () => clearInterval(interval)
+    }
+  }, [isLoaded, refreshStatus])
 
-  useEffect(() => { setCustomColor(borderColor) }, [borderColor])
+  useEffect(() => { return listenEvents() }, [listenEvents])
+
+  const [maxPinsInput, setMaxPinsInput] = useState(String(maxPins))
+  useEffect(() => { setMaxPinsInput(String(maxPins)) }, [maxPins])
+
+  const handleMaxPinsSave = useCallback(() => {
+    const n = parseInt(maxPinsInput)
+    if (n >= 1 && n <= 100) setMaxPins(n)
+  }, [maxPinsInput, setMaxPins])
+
+  const isSelfPinned = selfHwnd !== 0 && pinnedWindows.some(w => w.hwnd === selfHwnd)
 
   return (
     <AnimatedRoute>
-      <div className="flex flex-col h-full space-y-3 pr-1">
-        {/* Header */}
-        <div className="flex items-center justify-between flex-shrink-0">
-          <h1 className="text-lg font-bold">窗口置顶</h1>
-          <div className="flex items-center gap-2">
-            {pinnedWindow && (
+      <div className="flex flex-col h-full p-4 gap-3">
+        {/* Status bar */}
+        <div className="shrink-0 flex items-center justify-between text-xs">
+          <span className={isPinmanRunning ? 'text-green-600' : 'text-red-500'}>
+            {isPinmanRunning ? 'PinMan 运行中' : 'PinMan 未运行'}
+          </span>
+          <button onClick={checkPinman} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="检查 pinman 状态">
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Pinned count + Toggle button */}
+        <div className="shrink-0 flex items-center justify-between">
+          <span className="text-sm font-medium">
+            已置顶: {pinnedWindows.length} / {maxPins}
+          </span>
+          <div className="flex gap-2">
+            {!isSelfPinned && (
               <button
-                onClick={unpin}
-                className="flex items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground hover:text-destructive rounded-md hover:bg-destructive/10 transition-colors"
-                title="取消置顶"
+                onClick={togglePin}
+                disabled={!isPinmanRunning}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <PinOff size={12} />
-                取消置顶
+                <Pin className="w-4 h-4" />
+                置顶本窗口
               </button>
             )}
-            <button
-              onClick={togglePin}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-white bg-primary hover:bg-primary/90 rounded-md transition-colors"
-            >
-              <Pin size={13} />
-              {pinnedWindow ? '置顶新窗口' : '置顶当前窗口'}
-            </button>
+            {pinnedWindows.length > 0 && (
+              <button onClick={unpinAll} className="flex items-center gap-1 px-3 py-1.5 text-sm bg-red-500 text-white rounded-md hover:bg-red-600">
+                <PinOff className="w-4 h-4" />
+                全部取消
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Pinned window state */}
-        <div className="flex-1 min-h-0">
-          {!pinnedWindow ? (
-            <div className="flex flex-col items-center justify-center h-full text-muted-foreground space-y-1.5">
-              <Pin size={28} className="opacity-30" />
-              <p className="text-[12px]">暂无置顶窗口</p>
-              <p className="text-[10px]">
-                点击上方按钮或使用
-                {hotkeyKeys.length > 0 ? (
-                  <span className="inline-flex items-center gap-0.5 align-middle mx-0.5">
-                    {hotkeyKeys.map((k, i) => (
-                      <span key={i} className="inline-flex items-center gap-0.5">
-                        {i > 0 && <span className="text-[9px]">+</span>}
-                        <kbd className="inline-flex items-center justify-center min-w-[20px] h-[16px] px-1 text-[10px] rounded border border-border bg-card font-mono leading-none">
-                          {k}
-                        </kbd>
-                      </span>
-                    ))}
+        {/* Hotkey display */}
+        <div className="shrink-0 text-xs text-gray-500">
+          <button
+            onClick={() => navigate('/settings?tab=hotkey')}
+            className="inline-flex items-center p-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 hover:text-blue-600 mr-1 align-text-bottom" title="设置快捷键"
+          >
+            <Settings size={12} />
+          </button>
+          当前快捷键:
+          {pinnerHotkey ? (
+            <span className="inline-flex items-center gap-1 flex-wrap ml-1">
+              {(() => {
+                try { const keys: string[] = JSON.parse(pinnerHotkey); return keys as string[] } catch { return [] }
+              })().map((k: string, i: number) => (
+                <span key={i} className="inline-flex items-center gap-1">
+                  {i > 0 && <span className="text-muted-foreground text-[11px]">+</span>}
+                  <span className="inline-flex items-center justify-center min-w-[32px] px-2 py-0.5 text-[11px] rounded border border-green-300 bg-white font-mono dark:bg-gray-800 dark:border-green-700">
+                    {k}
                   </span>
-                ) : (
-                  <span className="italic">(未设置)</span>
-                )}
-                置顶当前前台窗口
-              </p>
-            </div>
+                </span>
+              ))}
+            </span>
           ) : (
-            <div className="space-y-3">
-              <div
-                className="p-4 rounded-lg border-2 border-border bg-card"
-                style={{ borderColor: borderColor }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide">已置顶窗口</span>
-                  <span className="text-[10px] text-muted-foreground font-mono">{formatTime(pinnedWindow.pinnedAt)}</span>
-                </div>
-                <p className="text-[13px] font-medium truncate">{pinnedWindow.windowTitle || '(无标题)'}</p>
-                <p className="text-[11px] text-muted-foreground mt-1">进程: {pinnedWindow.processName}</p>
-              </div>
-            </div>
+            <span className="text-xs text-muted-foreground italic ml-1">未配置</span>
           )}
         </div>
 
-        {/* Bottom settings bar */}
-        <div className="flex-shrink-0 border-t border-border pt-2.5">
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors mb-2"
-          >
-            <Settings size={12} />
-            置顶设置
-            <ChevronDown size={10} className={`transition-transform ${showSettings ? 'rotate-180' : ''}`} />
-          </button>
-
-          {showSettings && (
-            <div className="space-y-3 pb-1">
-              {/* Border color presets */}
-              <div className="flex items-start gap-2">
-                <span className="text-[11px] text-muted-foreground w-24 mt-1.5">边框颜色</span>
-                <div className="flex-1">
-                  <div className="flex flex-wrap gap-1.5">
-                    {COLOR_PRESETS.map((cp) => (
-                      <button
-                        key={cp.value}
-                        onClick={() => updateBorderColor(cp.value)}
-                        className={`w-6 h-6 rounded-full border-2 transition-all duration-150 ${
-                          borderColor === cp.value
-                            ? 'border-foreground scale-110 ring-2 ring-primary/30'
-                            : 'border-transparent hover:scale-105'
-                        }`}
-                        style={{ backgroundColor: cp.value }}
-                        title={cp.label}
-                      />
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-2">
-                    <span className="text-[10px] text-muted-foreground">自定义</span>
-                    <input
-                      type="color"
-                      value={customColor}
-                      onChange={(e) => { setCustomColor(e.target.value); updateBorderColor(e.target.value) }}
-                      className="w-6 h-5 rounded border border-border cursor-pointer bg-transparent p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none"
-                    />
-                    {customColor !== borderColor && (
-                      <span className="text-[10px] text-muted-foreground font-mono">{borderColor}</span>
-                    )}
-                  </div>
-                </div>
-              </div>
+        {/* Pinned windows list — scrollable, fills remaining space */}
+        {pinnedWindows.length > 0 ? (
+          <div className="flex-1 min-h-0 border rounded-md flex flex-col overflow-hidden">
+            <div className="shrink-0 text-xs font-medium px-2 py-1 bg-gray-100 dark:bg-gray-800 border-b">
+              已置顶窗口
             </div>
-          )}
+            <div className="flex-1 overflow-y-auto divide-y">
+              {pinnedWindows.map((w) => (
+                <div key={w.hwnd} className="flex items-center justify-between px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-900">
+                  <span className="truncate" title={w.title || `hwnd:${w.hwnd}`}>{w.title || `hwnd:${w.hwnd}`}</span>
+
+                  <button
+                    onClick={() => unpin(w.hwnd)}
+                    className="p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900 shrink-0"
+                    title="取消"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-gray-400">
+            暂无置顶窗口。按快捷键或点击置顶按钮来置顶。
+          </div>
+        )}
+
+        {/* Settings — fixed at bottom */}
+        <div className="shrink-0 border-t pt-3 space-y-3">
+          {/* Topmost self toggle */}
+          <div className="flex items-center justify-between py-1">
+            <div>
+              <span className="text-sm">置顶本应用时处于最顶部</span>
+              <p className="text-[11px] text-muted-foreground">本应用被置顶时始终位于其他置顶窗口之上</p>
+            </div>
+            <button
+              onClick={() => setPinnerTopmostSelf(!pinnerTopmostSelf)}
+              className={`w-10 h-5 rounded-full transition-colors duration-200 flex-shrink-0 ${pinnerTopmostSelf ? 'bg-primary' : 'bg-muted-foreground/25'}`}
+            >
+              <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${pinnerTopmostSelf ? 'translate-x-5.5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+
+          {/* Auto-pin app */}
+          <div className="flex items-center justify-between py-1">
+            <div>
+              <span className="text-sm">启动时自动置顶本应用</span>
+              <p className="text-[11px] text-muted-foreground">打开工具时自动将自身窗口置顶</p>
+            </div>
+            <button
+              onClick={() => setPinnerAutoPinApp(!pinnerAutoPinApp)}
+              className={`w-10 h-5 rounded-full transition-colors duration-200 flex-shrink-0 ${pinnerAutoPinApp ? 'bg-primary' : 'bg-muted-foreground/25'}`}
+            >
+              <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${pinnerAutoPinApp ? 'translate-x-5.5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+
+          {/* Max pins */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm">最大置顶数:</span>
+            <input
+              type="number" min={1} max={100}
+              value={maxPinsInput}
+              onChange={(e) => setMaxPinsInput(e.target.value)}
+              onBlur={handleMaxPinsSave}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleMaxPinsSave() }}
+              className="w-16 px-2 py-1 text-sm border rounded"
+            />
+          </div>
         </div>
       </div>
     </AnimatedRoute>

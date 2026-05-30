@@ -1,81 +1,131 @@
+/**
+ * Store for window pinning — communicates with pinman.exe via IPC.
+ */
 import { create } from 'zustand'
 
 export interface PinnedWindowInfo {
   hwnd: number
-  processName: string
-  windowTitle: string
-  pinnedAt: number
+  title: string
 }
 
 interface PinnerStore {
-  pinnedWindow: PinnedWindowInfo | null
-  borderColor: string
-  hotkeyEnabled: boolean
+  pinnedWindows: PinnedWindowInfo[]
+  maxPins: number
+  hotkeyActive: boolean
+  selfHwnd: number
   isLoaded: boolean
+  isPinmanRunning: boolean
 
-  setPinnedWindow: (info: PinnedWindowInfo | null) => void
-  setBorderColor: (color: string) => void
-  setHotkeyEnabled: (v: boolean) => void
   loadSettings: () => Promise<void>
+  refreshStatus: () => Promise<void>
   togglePin: () => Promise<void>
-  unpin: () => Promise<void>
-  updateBorderColor: (color: string) => Promise<void>
+  pinHwnd: (hwnd: number) => Promise<void>
+  unpin: (hwnd: number) => Promise<void>
+  unpinAll: () => Promise<void>
+  setMaxPins: (n: number) => Promise<void>
+  setHotkey: (hotkey: string) => Promise<void>
+  checkPinman: () => Promise<void>
+  listenEvents: () => () => void
 }
 
 export const usePinnerStore = create<PinnerStore>((set, get) => ({
-  pinnedWindow: null,
-  borderColor: '#2563EB',
-  hotkeyEnabled: true,
+  pinnedWindows: [],
+  maxPins: 10,
+  hotkeyActive: false,
+  selfHwnd: 0,
   isLoaded: false,
-
-  setPinnedWindow: (info) => set({ pinnedWindow: info }),
-  setBorderColor: (color) => set({ borderColor: color }),
-  setHotkeyEnabled: (v) => {
-    set({ hotkeyEnabled: v })
-    window.api.settings.set('pinnerHotkeyEnabled', v)
-  },
+  isPinmanRunning: false,
 
   loadSettings: async () => {
     try {
-      const borderColor = (await window.api.settings.get('pinnerBorderColor')) as string
-      const hotkeyEnabled = (await window.api.settings.get('pinnerHotkeyEnabled')) as boolean
+      const maxPins = (await window.api.settings.get('pinnerMaxPins') as number) || 10
+      set({ maxPins, isLoaded: true })
+    } catch { /* settings not available yet */ }
+  },
+
+  refreshStatus: async () => {
+    try {
+      const status = await window.api.pinman.status()
       set({
-        borderColor: borderColor || '#2563EB',
-        hotkeyEnabled: hotkeyEnabled ?? true,
-        isLoaded: true
+        pinnedWindows: status.windows.map(w => ({
+          hwnd: w.hwnd,
+          title: w.title,
+        })),
+        maxPins: status.maxPins,
+        hotkeyActive: status.hotkeyActive,
+        selfHwnd: (status as Record<string, unknown>).selfHwnd as number || 0,
+        isPinmanRunning: true,
       })
     } catch {
-      set({ isLoaded: true })
+      set({ isPinmanRunning: false })
     }
   },
 
   togglePin: async () => {
-    const { borderColor } = get()
     try {
-      const result = await window.api.pinner.toggle(borderColor)
-      if (!result.success) {
-        console.warn('[Pinner] Toggle failed:', result.message)
-      }
-    } catch (e) {
-      console.error('[Pinner] Toggle error:', e)
+      await window.api.pinman.toggle()
+      await get().refreshStatus()
+    } catch { /* pinman not running */ }
+  },
+
+  pinHwnd: async (hwnd: number) => {
+    try {
+      await window.api.pinman.pinHwnd(hwnd)
+      await get().refreshStatus()
+    } catch { /* ignore */ }
+  },
+
+  unpin: async (hwnd: number) => {
+    try {
+      await window.api.pinman.unpin(hwnd)
+      await get().refreshStatus()
+    } catch { /* ignore */ }
+  },
+
+  unpinAll: async () => {
+    try {
+      await window.api.pinman.unpinAll()
+      await get().refreshStatus()
+    } catch { /* ignore */ }
+  },
+
+  setMaxPins: async (n: number) => {
+    set({ maxPins: n })
+    try {
+      await window.api.pinman.config('maxPins', String(n))
+      await window.api.settings.set('pinnerMaxPins', n)
+    } catch { /* ignore */ }
+  },
+
+  setHotkey: async (hotkey: string) => {
+    try {
+      await window.api.pinman.config('hotkey', hotkey)
+    } catch { /* ignore */ }
+  },
+
+  checkPinman: async () => {
+    try {
+      const resp = await window.api.pinman.ping()
+      set({ isPinmanRunning: resp === 'PONG' })
+    } catch {
+      set({ isPinmanRunning: false })
     }
   },
 
-  unpin: async () => {
+  listenEvents: () => {
     try {
-      await window.api.pinner.unpin()
-    } catch (e) {
-      console.error('[Pinner] Unpin error:', e)
-    }
+      return window.api.pinman.onEvent((event) => {
+        const { type, hwnd, title } = event
+        if (type === 'pinned') {
+          set((state) => ({
+            pinnedWindows: [...state.pinnedWindows, { hwnd, title: title || '' }],
+          }))
+        } else if (type === 'unpinned') {
+          set((state) => ({
+            pinnedWindows: state.pinnedWindows.filter((w) => w.hwnd !== hwnd),
+          }))
+        }
+      })
+    } catch { return () => {} }
   },
-
-  updateBorderColor: async (color: string) => {
-    set({ borderColor: color })
-    await window.api.settings.set('pinnerBorderColor', color)
-    try {
-      await window.api.pinner.setBorderColor(color)
-    } catch (e) {
-      console.error('[Pinner] Update border color error:', e)
-    }
-  }
 }))

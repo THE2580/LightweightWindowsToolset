@@ -1,5 +1,12 @@
 /// <reference types="vite/client" />
 
+interface PinStatus {
+  pinned: number
+  maxPins: number
+  hotkeyActive: boolean
+  windows: { hwnd: number; title: string; color: string }[]
+}
+
 interface Window {
   api: {
     window: {
@@ -55,6 +62,16 @@ interface Window {
       getState: () => Promise<{ hwnd: number; processName: string; windowTitle: string; pinnedAt: number } | null>
       setBorderColor: (color: string) => Promise<{ success: boolean }>
       onStateUpdate: (callback: (info: { hwnd: number; processName: string; windowTitle: string; pinnedAt: number } | null) => void) => (() => void)
+    }
+    pinman: {
+      toggle: () => Promise<string>
+      pinHwnd: (hwnd: number) => Promise<string>
+      unpin: (hwnd: number) => Promise<string>
+      unpinAll: () => Promise<string>
+      status: () => Promise<PinStatus>
+      config: (key: string, value: string) => Promise<string>
+      ping: () => Promise<string>
+      onEvent: (callback: (event: { type: string; hwnd: number; title?: string }) => void) => (() => void)
     }
     hotkey: {
       onHotkey: (callback: (action: string) => void) => (() => void)
