@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useDeepseekStore } from '@/stores/deepseekStore'
 import { applyTheme } from '@/lib/theme'
@@ -130,7 +131,11 @@ function SettingsPage(): React.JSX.Element {
   const { apiKey, loadApiKey } = useDeepseekStore()
   const [apiKeyInput, setApiKeyInput] = useState('')
   const [showKey, setShowKey] = useState(false)
-  const [activeTab, setActiveTab] = useState<TabId>('general')
+  const [searchParams] = useSearchParams()
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    const tab = searchParams.get('tab')
+    return (tab === 'general' || tab === 'api' || tab === 'hotkey') ? tab : 'general'
+  })
   const [titleDraft, setTitleDraft] = useState(windowTitle)
   const [zoneWDraft, setZoneWDraft] = useState(chatExpandZoneWidth)
   const [zoneHDraft, setZoneHDraft] = useState(chatExpandZoneHeight)

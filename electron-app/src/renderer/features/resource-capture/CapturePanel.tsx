@@ -2,6 +2,8 @@ import { useCaptureStore } from '@/stores/captureStore'
 import { useShallow } from 'zustand/shallow'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { Keyboard } from 'lucide-react'
+import { Settings } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 
 function parseHotkeyKeys(jsonStr: string): string[] {
   if (!jsonStr) return []
@@ -13,6 +15,7 @@ function CapturePanel(): React.JSX.Element {
     useShallow((s) => ({ selectedGame: s.selectedGame, getGameConfig: s.getGameConfig }))
   )
   const captureHotkey = useSettingsStore((s) => s.captureHotkey)
+  const navigate = useNavigate()
   const gameConfig = getGameConfig(selectedGame)
   const gameName = gameConfig?.name || '游戏'
   const keys = parseHotkeyKeys(captureHotkey)
@@ -21,6 +24,12 @@ function CapturePanel(): React.JSX.Element {
     <div className="rounded-lg border border-border bg-card shadow-sm p-4 hover:shadow-md hover:ring-1 hover:ring-blue-300/40 transition-shadow duration-150">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-[13px] font-semibold">快捷键</h3>
+        <button
+          onClick={() => navigate('/settings?tab=hotkey')}
+          className="p-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 hover:text-blue-600" title="设置快捷键"
+        >
+          <Settings size={12} />
+        </button>
       </div>
       <div className="flex items-start gap-2.5">
         <Keyboard size={14} className="text-muted-foreground mt-0.5 flex-shrink-0" />
@@ -42,6 +51,7 @@ function CapturePanel(): React.JSX.Element {
           ) : (
             <span className="italic mx-0.5">未配置</span>
           )}
+          <br />
           截图自动识别
         </div>
       </div>
