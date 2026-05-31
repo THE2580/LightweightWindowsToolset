@@ -1,10 +1,10 @@
 # LightweightWindowsToolset — 项目进展总结
 
-> 最后更新: 2026-05-30 (第二十一轮 — 窗口置顶收尾 + 工具启停架构)
+> 最后更新: 2026-05-31 (第二十三轮 — 按键统计 Native AOT + 开发者日志 + pinman 全局同步 + 资源 latest/UTC)
 > 当前分支: main
-> 未提交改动: 无（已全部提交，共 5 commits）
-> 最新提交: 8b36f16 feat: 工具禁用=完全停止
-> 编译状态: ✅ 通过（electron-vite build 成功，pinman.exe Native AOT 编译成功）
+> 未提交改动: 有（第二十三轮尚未提交；详见第十四节）
+> 最新已提交: c94832a feat: dark mode, storage migration, about page, backend integration, ETA cross-day
+> 编译状态: ✅ 通过（electron-vite build、pinman.exe Native AOT、keystats.exe Native AOT、便携版打包均成功）
 
 ---
 
@@ -14,10 +14,8 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 
 **已完成工具**:
 - 游戏资源捕获（stable，开发完成）
-- 窗口置顶（独立 C# Native AOT 进程 pinman.exe，多窗口 + 事件推送 + 气泡通知，✅ 稳定）
-
-**待开发工具**:
-- 今日按键统计（upcoming，仅注册）
+- 窗口置顶（独立 C# Native AOT 进程 pinman.exe，多窗口 + 事件推送 + 弹窗通知，✅ 稳定）
+- 今日按键统计（独立 C# Native AOT 进程 keystats.exe，Raw Input + 本地持久化 + 趋势图，✅ stable）
 
 ### 技术栈
 
@@ -37,6 +35,7 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 | OCR | Windows.Media.Ocr (PowerShell 反射) |
 | AI | DeepSeek API (`deepseek-v4-flash`) |
 | **窗口置顶** | **pinman.exe — C# Native AOT（~1.2MB），P/Invoke Win32 API，stdin/stdout IPC + stderr 事件推送** |
+| **按键统计** | **keystats.exe — C# Native AOT（~1.8MB），Raw Input，stdin/stdout IPC + 本地 JSON** |
 | .NET SDK | 9.0.304 (仅编译，运行时零依赖) |
 
 ---
@@ -63,9 +62,10 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 **开发命令**: `cd electron-app && npm run dev`
 **构建命令**: `cd electron-app && npx electron-vite build`
 **pinman 构建**: `cd pinman && dotnet publish -c Release -r win-x64 --self-contained -p:PublishAot=true -p:DebugType=none -p:DebugSymbols=false`
+**keystats 构建**: `cd keystats && dotnet publish -c Release -r win-x64 --self-contained -p:PublishAot=true -p:DebugType=none -p:DebugSymbols=false`
 **打包命令**: `cd electron-app && npm run package`（打包前清理 dist + kill 进程, CSC_IDENTITY_AUTO_DISCOVERY=false）
 
-**开发服务器启动后**: 先 kill 已有 electron/pinman 进程再启动
+**开发服务器启动后**: 先 kill 已有 electron/pinman/keystats 进程再启动
 
 **窗口关闭**: 默认直接退出，可选缩小到托盘；托盘右键退出必须终止进程
 
@@ -99,15 +99,16 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 - 自定义标题栏, 侧边栏折叠动画, 主题切换
 
 ### 3.2 设置页面
-- 三标签: 通用 / API 设置 / 快捷键
-- 通用: 窗口标题, 开机自启, 主题模式, 关闭行为
+- 固定标签: 通用 / API 设置 / 快捷键 / 关于
+- 开发者模式开启后动态显示: 控制台日志
+- 通用: 窗口标题, 开机自启, 主题模式, 关闭行为, 存储路径, 开发者模式
 - API: DeepSeek Key (加密), 模型名称, 后端地址
 - 快捷键: 追加式录入, 保存时校验, JSON 数组存储, 已支持三个工具
 
 ### 3.3 插件/工具系统
 - `BUILTIN_PLUGINS` 静态注册, stable/upcoming 两态
 - 工具禁用 = 完全停止：前端入口隐藏 + 快捷键注销 + 后台进程终止（禁用状态持久化，重启保持）
-- 已注册: 游戏资源捕获(stable), 窗口置顶(stable), 今日按键统计(upcoming)
+- 已注册: 游戏资源捕获(stable), 窗口置顶(stable), 今日按键统计(stable)
 
 ### 3.4 AI 聊天
 - ChatSidebar SSE 流式对话, 右侧滑入滑出
@@ -242,11 +243,13 @@ stdin/stdout 行协议，一行命令对应一行响应：
 
 ---
 
-## 六、待开发工具
+## 六、工具开发状态
 
-### 6.1 今日按键统计 (upcoming)
-- 仅注册，侧边栏显示"即将推出"
-- 描述: 统计每日键盘鼠标按键次数，隔天自动重置，按键排行
+### 6.1 今日按键统计 ✅ (stable)
+- 已由 upcoming 切换为 stable。
+- 独立 `keystats.exe` 使用 Raw Input 全局监听键盘和鼠标左/右/中键。
+- 页面包含今日总数、键盘/鼠标拆分、日/月/年趋势、TOP 20 排行、虚拟键鼠可视化。
+- 物理键盘与鼠标测试通过。
 
 ---
 
@@ -259,6 +262,7 @@ stdin/stdout 行协议，一行命令对应一行响应：
 | 3 | 托盘热键仍可触发捕获（缩小到托盘后可能误截本应用） | 低 | 资源捕获 | 未修 |
 | 4 | 游戏分辨率与屏幕分辨率差异大时 OCR 识别率下降 | 中 | 资源捕获 | 未修 |
 | 5 | ~~首次启动时快捷键偶发不同步~~ | 低 | 窗口置顶 | ✅ 已修复——startPinman(win,hotkey) + 1s 延迟 CONFIG |
+| 6 | ~~不在窗口置顶标签页时，原生快捷键执行后前端状态延迟到进入页面才刷新~~ | 中 | 窗口置顶 | ✅ 已修复——监听与 1s 轮询提升到 App 生命周期 |
 
 ---
 
@@ -307,6 +311,12 @@ stdin/stdout 行协议，一行命令对应一行响应：
 | **JSON 转义** | **char.IsControl() → \uXXXX** | 处理窗口标题中 mojibake 等任意控制字符 |
 | **置顶反馈** | **BrowserWindow 弹窗** | 替代托盘气泡，不依赖 Shell_NotifyIcon CharSet，支持淡出动画 |
 | **工具禁用** | **完全停止（持久化）** | 禁用 = 前端隐藏 + 快捷键注销 + 后台进程终止，状态存入 electron-store，重启保持 |
+| **深色模式** | **@variant class-selector** | Tailwind v4 dark: 变体改用 .dark class 选择器，手动与系统统一 |
+| **后端生命周期** | **随工具启停** | FastAPI 不再单独自启动，由 backend-process.ts 跟随资源捕获工具状态 |
+| **存储迁移** | **引导文件 + 仅迁配置** | 改路径后仅复制 config.json，Chromium 缓存继续留 userData |
+| **按键统计监听** | **Raw Input + RIDEV_INPUTSINK** | 只统计不拦截输入；避免低级 Hook 和 Electron 原生 addon |
+| **按键统计持久化** | **userData/keystats.json 按日保存** | 输入事件仅内存自增，每 10 秒落盘，查询时聚合月/年 |
+| **开发者日志** | **主进程内存环形缓冲 + renderer console 转发** | 最近 500 条日志，开发者模式动态显示日志页 |
 
 ---
 
@@ -323,6 +333,16 @@ stdin/stdout 行协议，一行命令对应一行响应：
 | `pinman/StdioIpc.cs` | stdin/stdout 行协议 IPC |
 | `electron-app/resources/pinman.exe` | 编译产物副本 |
 
+### keystats C# 项目 (独立进程)
+| 文件 | 职责 |
+|------|------|
+| `keystats/keystats.csproj` | .NET 9 Native AOT 项目配置 |
+| `keystats/app.manifest` | DPI PerMonitorV2 声明 |
+| `keystats/Native.cs` | Raw Input Win32 P/Invoke |
+| `keystats/Program.cs` | 消息循环、WM_INPUT、IPC、键名映射 |
+| `keystats/StatsStore.cs` | 按日 JSON 持久化 |
+| `electron-app/resources/keystats.exe` | 编译产物副本 |
+
 ### 主进程 (Electron)
 | 文件 | 职责 |
 |------|------|
@@ -331,6 +351,8 @@ stdin/stdout 行协议，一行命令对应一行响应：
 | `electron-app/src/main/ipc/backend.ts` | 主进程 HTTP 后端通信 |
 | `electron-app/src/main/ipc/queue.ts` | 重试队列持久化 |
 | `electron-app/src/main/ipc/pinman.ts` | pinman.exe spawn + stdin/stdout IPC + 命令队列(含 fire/discard) + stderr 事件解析转发 |
+| `electron-app/src/main/ipc/keystats.ts` | keystats.exe spawn + 生命周期 + IPC + stderr 日志转发 |
+| `electron-app/src/main/ipc/logs.ts` | 主进程日志缓冲与 renderer 广播 |
 | `electron-app/src/main/utils/ocr.ts` | OCR PS 脚本 |
 
 ### 渲染进程
@@ -339,10 +361,13 @@ stdin/stdout 行协议，一行命令对应一行响应：
 | `electron-app/src/renderer/App.tsx` | 入口, hotkey 监听分发 |
 | `electron-app/src/renderer/stores/captureStore.ts` | 资源捕获管线编排 |
 | `electron-app/src/renderer/stores/pinnerStore.ts` | 多窗口状态 + 事件监听 + 1s 后备轮询 |
+| `electron-app/src/renderer/stores/keyStatsStore.ts` | 按键统计快照 + 2s 页面刷新 |
 | `electron-app/src/renderer/stores/settingsStore.ts` | 设置持久化（含 pinnerAutoPinApp） |
 | `electron-app/src/renderer/stores/pluginStore.ts` | 工具启用/禁用管理 |
 | `electron-app/src/renderer/features/resource-capture/` | 资源捕获页面组件 |
 | `electron-app/src/renderer/features/window-pinner/PinnerPage.tsx` | 多窗口列表、最大置顶数、auto-pin 开关 |
+| `electron-app/src/renderer/features/key-counter/KeyCounterPage.tsx` | 按键统计页面、SVG 趋势图、TOP 20、虚拟键鼠 |
+| `electron-app/src/renderer/features/settings/ConsoleLogPanel.tsx` | 开发者控制台日志页 |
 | `electron-app/src/renderer/pages/SettingsPage.tsx` | 设置页 |
 | `electron-app/src/renderer/pages/HomePage.tsx` | 首页 |
 | `electron-app/src/renderer/lib/plugin-registry.ts` | BUILTIN_PLUGINS 注册 |
@@ -361,8 +386,8 @@ stdin/stdout 行协议，一行命令对应一行响应：
 |---|------|--------|------|
 | 1 | 清理旧文件 `electron-app/src/main/ipc/pinner.ts`（已不被任何代码引用） | 低 | 未做 |
 | 2 | 资源捕获已知问题（后端伪报错、历史不持久化等，共 4 项） | 中 | 未修 |
-| 3 | 今日按键统计工具 | 低 | upcoming |
-| 4 | 托盘热键仍可触发捕获（缩小到托盘后可能误截本应用） | 低 | 未修 |
+| 3 | 托盘热键仍可触发捕获（缩小到托盘后可能误截本应用） | 低 | 未修 |
+| 4 | 清理/提交第二十三轮改动；不要误提交 Python `__pycache__` 和 QA 截图日志 | 高 | 未做 |
 
 ---
 
@@ -371,3 +396,122 @@ stdin/stdout 行协议，一行命令对应一行响应：
 - 原子化 commit，中文 message（feat:/fix:/chore:/style:/docs:）
 - 提交前验证: `npx electron-vite build` 编译通过 + `dotnet publish` 编译通过
 - 分支前缀: `codex/`
+
+---
+
+## 十三、第二十三轮新增：今日按键统计工具
+
+### 13.1 架构
+
+- 新增独立 C# Native AOT 进程 `keystats.exe`，与 `pinman.exe` 同级。
+- 使用 Win32 Raw Input：`RegisterRawInputDevices + RIDEV_INPUTSINK + WM_INPUT`。
+- 不使用 Electron 原生 Node addon，不使用低级键盘 Hook。
+- 工具启用时启动；工具禁用、应用退出时保存并终止进程。
+- 私有内存实测约 `3.18 MB`。
+
+### 13.2 统计范围
+
+- 监听全部键盘按键按下事件。
+- 监听鼠标左键、右键、中键按下事件。
+- 按日保存原始计数。
+- 前端按查询视图即时聚合：最近 30 天、最近 12 个月、最近 5 年。
+- 提供今日总计、键盘计数、鼠标计数、TOP 20 按键排行与热门按键折线图。
+- 提供虚拟键盘与鼠标可视化，悬浮按键显示今日按下次数。
+- 统计卡片、趋势区、排行区、键鼠区统一增加轻量 hover 阴影、上浮和蓝色边框反馈。
+
+### 13.3 持久化与 IPC
+
+- 数据固定存放于 Electron `userData/keystats.json`，不随自定义配置目录迁移。
+- 输入事件只更新内存字典，不执行磁盘 I/O。
+- 每 10 秒自动落盘，退出时再次落盘。
+- stdin/stdout 行协议：`PING`、`SNAPSHOT`、`SAVE`、`SHUTDOWN`。
+- stderr 日志协议：`@KEYSTATS_LOG <level> <message>`，由 Electron 转入开发者控制台。
+
+### 13.4 关键文件
+
+| 文件 | 职责 |
+|------|------|
+| `keystats/Program.cs` | Raw Input 消息循环、IPC、按键名称映射 |
+| `keystats/Native.cs` | Win32 Raw Input P/Invoke |
+| `keystats/StatsStore.cs` | 按日 JSON 持久化 |
+| `electron-app/resources/keystats.exe` | Native AOT 编译产物副本 |
+| `electron-app/src/main/ipc/keystats.ts` | Electron 端进程生命周期与 IPC |
+| `electron-app/src/renderer/stores/keyStatsStore.ts` | 渲染层状态 |
+| `electron-app/src/renderer/features/key-counter/KeyCounterPage.tsx` | 统计页面与 SVG 图表 |
+
+---
+
+## 十四、第二十三轮完整交接快照
+
+### 14.1 资源捕获 latest / UTC 修复
+
+- 桌面端拉取资源数据由 `GET /api/resource/today` 改为 `GET /api/resource/latest`。
+- 新接口按 `(game_name, resource_type)` 返回全历史最新记录；当天无记录时会回退到昨天或更早的最新值。
+- FastAPI 写入时将带时区时间统一转为 UTC 后存入 MySQL `DATETIME`。
+- API 返回 `capture_time` 明确带 `Z`，避免前端将无时区字符串误按本地时间解析。
+- 旧 `/api/resource/today` 保留兼容 Android 端，并改为 UTC 零点边界。
+- 后端源码位于相邻仓库：`E:\codex_agent_project\AndroidGameInfoTools\backend\main.py`。
+
+### 14.2 开发者模式与日志页
+
+- 设置 → 通用新增“开发者模式”开关，持久化到 electron-store。
+- 开启后设置页动态显示“控制台日志”标签。
+- 日志页展示最近 500 条主进程与渲染进程日志，支持实时追加、自动滚动和清空。
+- 新增文件：
+  - `electron-app/src/main/ipc/logs.ts`
+  - `electron-app/src/renderer/lib/console-logger.ts`
+  - `electron-app/src/renderer/features/settings/ConsoleLogPanel.tsx`
+
+### 14.3 pinman 日志与全局同步修复
+
+- pinman stderr 新增日志协议：`@PINMAN_LOG <level> <message>`。
+- 覆盖启动、消息窗口、热键注册、托盘图标、IPC 配置、置顶/取消、Win32 错误、退出清理。
+- Electron 端 stderr 使用分片缓冲，避免 stream chunk 切断行协议。
+- 原生快捷键状态监听和 1s STATUS 轮询已从 `PinnerPage` 提升到 `AppListeners` 全局生命周期。
+- 修复离开窗口置顶标签页后，快捷键执行但前端状态延迟到重新进入页面才刷新的问题。
+- `startPinman()` 会重置 `shutdownInitiated=false`，确保禁用后重新启用可以恢复生命周期管理。
+
+### 14.4 今日按键统计验证结果
+
+- 物理键盘与鼠标按键测试通过。
+- `keystats.exe` Native AOT 二进制约 `1.76 MB`。
+- 运行态私有内存实测约 `3.18 MB`。
+- IPC 冒烟测试通过：`PING → SNAPSHOT → SHUTDOWN`。
+- 页面已完成视觉 QA：固定 676×444 窗口下，顶部指标和趋势首屏可见，虚拟键鼠进入页面下方滚动区域。
+- 当前 UI 包含：
+  - 指标卡片、趋势区、排行区、键鼠区 hover 上浮/阴影/蓝色边框
+  - TOP 20 排行
+  - 虚拟键盘和鼠标三键可视化
+  - 悬浮按键显示今日按下次数
+
+### 14.5 打包状态
+
+- `electron-app/package.json` 已配置外置资源：
+  - `resources/pinman.exe → process.resourcesPath/pinman.exe`
+  - `resources/keystats.exe → process.resourcesPath/keystats.exe`
+- 最新目录版产物：
+  - `electron-app/dist/win-unpacked/轻量化工具集.exe`
+  - `electron-app/dist/win-unpacked/resources/pinman.exe`
+  - `electron-app/dist/win-unpacked/resources/keystats.exe`
+- 最近一次验证：`electron-vite build`、两个 Native AOT 构建、`npm run package`、`git diff --check` 均通过。
+
+### 14.6 当前未提交状态
+
+主仓库 `E:\codex_agent_project\LightweightWindowsToolset`：
+
+- 第二十三轮功能改动尚未提交。
+- 新增 `keystats/` 原生项目、`electron-app/resources/keystats.exe`、按键统计页面/store、日志模块。
+- 修改 pinman 源码与 `electron-app/resources/pinman.exe`。
+- 仍存在历史/QA 未跟踪文件：`electron-app/package_out.txt`、`electron-app/tests/debug_chat_hotkey.js`、`log.txt`、`screenshot_settings.png`、`screenshot_keystats_ui.png`。提交前逐项确认，不要默认纳入 commit。
+
+相邻后端仓库 `E:\codex_agent_project\AndroidGameInfoTools`：
+
+- `backend/main.py` 有 latest/UTC 修复，尚未提交。
+- `backend/__pycache__/main.cpython-314.pyc` 被 Python 导入测试改动；这是缓存副产物，不应提交。
+
+### 14.7 下一步建议
+
+1. 先手工回归三个工具的启用/禁用与重启持久化。
+2. 检查并清理 QA 副产物与 Python `__pycache__`。
+3. 按模块拆分原子提交：后端 latest/UTC、日志与 pinman、keystats 工具、文档。
+4. 再继续处理资源捕获剩余已知问题。

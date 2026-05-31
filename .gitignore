@@ -7,3 +7,13 @@ dist/
 .env.local
 .DS_Store
 Thumbs.db
+
+# .NET build output
+bin/
+obj/
+
+# Local QA and packaging artifacts
+package_out.txt
+log.txt
+screenshot_*.png
+electron-app/tests/debug_*.js
