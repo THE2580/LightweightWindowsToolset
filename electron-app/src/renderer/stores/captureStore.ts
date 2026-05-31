@@ -115,6 +115,7 @@ interface CaptureStore {
   captureState: CaptureState
   latestRecords: ResourceRecord[]
   captureHistory: CaptureHistoryEntry[]
+  captureHistoryLoaded: boolean
   gameConfigs: GameConfig[]
   backendOnline: boolean
 
@@ -127,6 +128,7 @@ interface CaptureStore {
   setLatestRecords: (records: ResourceRecord[]) => void
   addCaptureHistory: (entry: CaptureHistoryEntry) => void
   clearCaptureHistory: () => void
+  loadCaptureHistory: () => Promise<void>
   getGameConfig: (id: string) => GameConfig | undefined
   getCurrentResourceConfig: () => ResourceTypeConfig | undefined
   refreshRecords: () => Promise<void>
@@ -183,6 +185,28 @@ function addHistory(entry: Omit<CaptureHistoryEntry, 'timestamp'>): void {
   })
 }
 
+const CAPTURE_HISTORY_KEY = 'captureHistory'
+const CAPTURE_HISTORY_LIMIT = 50
+
+function isCaptureHistoryEntry(value: unknown): value is CaptureHistoryEntry {
+  if (!value || typeof value !== 'object') return false
+  const entry = value as Record<string, unknown>
+  return typeof entry.id === 'string'
+    && typeof entry.timestamp === 'string'
+    && typeof entry.gameId === 'string'
+    && typeof entry.gameName === 'string'
+    && typeof entry.resourceName === 'string'
+    && (entry.currentValue === null || typeof entry.currentValue === 'number')
+    && (entry.maxValue === null || typeof entry.maxValue === 'number')
+    && (entry.status === 'success' || entry.status === 'fail')
+}
+
+function persistCaptureHistory(entries: CaptureHistoryEntry[]): void {
+  window.api.settings.set(CAPTURE_HISTORY_KEY, entries).catch((error) => {
+    console.error('[Capture] Failed to persist history:', error)
+  })
+}
+
 export const useCaptureStore = create<CaptureStore>((set, get) => ({
   selectedGame: 'genshin',
   selectedResourceType: 'GenshinImpact_ORIGINAL_RESIN',
@@ -192,6 +216,7 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
   captureState: 'idle',
   latestRecords: [],
   captureHistory: [],
+  captureHistoryLoaded: false,
   gameConfigs: GAME_CONFIGS,
   backendOnline: true,
 
@@ -212,9 +237,38 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
   setOcrText: (text) => set({ ocrText: text }),
   setCaptureState: (state) => set({ captureState: state }),
   setLatestRecords: (records) => set({ latestRecords: records }),
-  addCaptureHistory: (entry) =>
-    set((s) => ({ captureHistory: [entry, ...s.captureHistory].slice(0, 50) })),
-  clearCaptureHistory: () => set({ captureHistory: [] }),
+  addCaptureHistory: (entry) => {
+    set((s) => {
+      const captureHistory = [entry, ...s.captureHistory.filter((item) => item.id !== entry.id)].slice(0, CAPTURE_HISTORY_LIMIT)
+      persistCaptureHistory(captureHistory)
+      return { captureHistory }
+    })
+  },
+  clearCaptureHistory: () => {
+    set({ captureHistory: [] })
+    persistCaptureHistory([])
+  },
+  loadCaptureHistory: async () => {
+    if (get().captureHistoryLoaded) return
+    try {
+      const stored = await window.api.settings.get(CAPTURE_HISTORY_KEY)
+      const persisted = Array.isArray(stored)
+        ? stored.filter(isCaptureHistoryEntry).slice(0, CAPTURE_HISTORY_LIMIT)
+        : []
+      const merged = [...get().captureHistory, ...persisted]
+      const ids = new Set<string>()
+      const captureHistory = merged.filter((entry) => {
+        if (ids.has(entry.id)) return false
+        ids.add(entry.id)
+        return true
+      }).slice(0, CAPTURE_HISTORY_LIMIT)
+      set({ captureHistory, captureHistoryLoaded: true })
+      persistCaptureHistory(captureHistory)
+    } catch (error) {
+      console.error('[Capture] Failed to load history:', error)
+      set({ captureHistoryLoaded: true })
+    }
+  },
   getGameConfig: (id) => GAME_CONFIGS.find((g) => g.id === id),
   getCurrentResourceConfig: () => {
     const { selectedGame, selectedResourceType } = get()

@@ -17,6 +17,7 @@ function AppListeners(): null {
   const toggleToolEnabled = usePluginStore((s) => s.toggleToolEnabled)
   const toggleChat = usePluginStore((s) => s.toggleChat)
   const triggerBackgroundCapture = useCaptureStore((s) => s.triggerBackgroundCapture)
+  const loadCaptureHistory = useCaptureStore((s) => s.loadCaptureHistory)
   const togglePin = usePinnerStore((s) => s.togglePin)
   const loadApiKey = useDeepseekStore((s) => s.loadApiKey)
   const loadSettings = useSettingsStore((s) => s.load)
@@ -30,7 +31,8 @@ function AppListeners(): null {
   // Preload API key on app startup so chat works without visiting settings first
   useEffect(() => {
     loadApiKey()
-  }, [loadApiKey])
+    loadCaptureHistory()
+  }, [loadApiKey, loadCaptureHistory])
 
   useEffect(() => {
     loadSettings()
