@@ -85,7 +85,7 @@ export function registerBackendIpc(): void {
     return backendFetch('/api/resource/record', { method: 'POST', body: payload })
   })
 
-  ipcMain.handle('backend:get-today', async () => {
-    return backendFetch('/api/resource/today')
+  ipcMain.handle('backend:get-latest', async () => {
+    return backendFetch('/api/resource/latest')
   })
 }

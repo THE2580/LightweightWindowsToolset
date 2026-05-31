@@ -45,6 +45,11 @@ export const usePinnerStore = create<PinnerStore>((set, get) => ({
 
   refreshStatus: async () => {
     try {
+      const ping = await window.api.pinman.ping()
+      if (ping !== 'PONG') {
+        set({ isPinmanRunning: false })
+        return
+      }
       const status = await window.api.pinman.status()
       set({
         pinnedWindows: status.windows.map(w => ({
@@ -118,7 +123,10 @@ export const usePinnerStore = create<PinnerStore>((set, get) => ({
         const { type, hwnd, title } = event
         if (type === 'pinned') {
           set((state) => ({
-            pinnedWindows: [...state.pinnedWindows, { hwnd, title: title || '' }],
+            pinnedWindows: [
+              ...state.pinnedWindows.filter((w) => w.hwnd !== hwnd),
+              { hwnd, title: title || '' },
+            ],
           }))
         } else if (type === 'unpinned') {
           set((state) => ({

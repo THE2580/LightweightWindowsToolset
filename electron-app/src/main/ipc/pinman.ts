@@ -32,6 +32,7 @@ let currentMaxPins = 10
 let currentHotkey = 'Alt+P'
 let currentTopmostSelf = false
 let mainWindow: BrowserWindow | null = null
+let stderrBuffer = ''
 
 // ---- Helpers ----
 
@@ -190,6 +191,7 @@ export function sendCommandFire(cmd: string): void {
 
 export function startPinman(win?: BrowserWindow, hotkey?: string): void {
   if (proc) return
+  shutdownInitiated = false
   if (win) mainWindow = win
   if (hotkey) currentHotkey = hotkey
 
@@ -219,14 +221,26 @@ export function startPinman(win?: BrowserWindow, hotkey?: string): void {
     }
   })
 
-  // Parse stderr for @PINMAN_EVENT lines → push to renderer
+  // Parse stderr line protocol. Keep partial chunks buffered because native writes
+  // and Node stream chunks do not have a one-to-one relationship.
   proc.stderr?.on('data', (data: Buffer) => {
-    const text = data.toString()
-    const lines = text.split('\n')
+    stderrBuffer += data.toString('utf8')
+    const lines = stderrBuffer.split('\n')
+    stderrBuffer = lines.pop() || ''
     for (const rawLine of lines) {
       const line = rawLine.trim()
       if (!line) continue
-      if (line.startsWith('@PINMAN_EVENT')) {
+      if (line.startsWith('@PINMAN_LOG ')) {
+        const afterPrefix = line.substring('@PINMAN_LOG '.length)
+        const spaceIdx = afterPrefix.indexOf(' ')
+        const level = spaceIdx >= 0 ? afterPrefix.substring(0, spaceIdx) : 'info'
+        const message = spaceIdx >= 0 ? afterPrefix.substring(spaceIdx + 1) : afterPrefix
+        const output = `[pinman/native] ${message}`
+        if (level === 'error') console.error(output)
+        else if (level === 'warn') console.warn(output)
+        else if (level === 'info') console.info(output)
+        else console.log(output)
+      } else if (line.startsWith('@PINMAN_EVENT')) {
         const afterPrefix = line.substring('@PINMAN_EVENT '.length)
         const spaceIdx = afterPrefix.indexOf(' ')
         if (spaceIdx < 0) continue
@@ -243,8 +257,8 @@ export function startPinman(win?: BrowserWindow, hotkey?: string): void {
             const t = (data as { title?: string }).title || ''
             showPinNotification('已取消置顶', t)
           }
-        } catch { /* malformed event, ignore */ }
-      }
+        } catch { console.warn('[pinman] Malformed native event:', line) }
+      } else console.warn('[pinman/native] Unrecognized stderr:', line)
     }
   })
 
@@ -261,6 +275,8 @@ export function startPinman(win?: BrowserWindow, hotkey?: string): void {
     console.log(`[pinman] Exited: code=${code} signal=${signal}`)
     proc = null; rl = null
     pendingResolve = null; discardNextResponse = false
+    if (stderrBuffer.trim()) console.warn('[pinman/native] Trailing stderr:', stderrBuffer.trim())
+    stderrBuffer = ''
     if (!shutdownInitiated) {
       setTimeout(() => { if (!shutdownInitiated) startPinman() }, 2000)
     }

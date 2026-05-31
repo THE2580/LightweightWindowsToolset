@@ -6,6 +6,7 @@ import { lazy, ComponentType } from 'react'
 
 const CapturePage = lazy(() => import('@/features/resource-capture/CapturePage'))
 const PinnerPage = lazy(() => import('@/features/window-pinner/PinnerPage'))
+const KeyCounterPage = lazy(() => import('@/features/key-counter/KeyCounterPage'))
 
 export interface BuiltinPlugin {
   id: string
@@ -41,8 +42,9 @@ export const BUILTIN_PLUGINS: BuiltinPlugin[] = [
     name: '今日按键统计',
     description: '统计每日键盘鼠标按键次数，隔天自动重置，支持历史记录与按键排行',
     icon: 'keyboard',
-    status: 'upcoming',
-    entry: './KeyCounter.tsx'
+    status: 'stable',
+    entry: './KeyCounterPage.tsx',
+    component: KeyCounterPage
   }
 ]
 

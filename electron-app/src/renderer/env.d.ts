@@ -48,7 +48,18 @@ interface Window {
     }
     backend: {
       postRecord: (payload: { game_name: string; resource_type: string; current_resource: number; max_resource: number; capture_time: string; platform: string }) => Promise<{ id: number; game_name: string; resource_type: string; current_resource: number; max_resource: number; capture_time: string; platform: string }>
-      getToday: () => Promise<{ id: number; game_name: string; resource_type: string; current_resource: number; max_resource: number; capture_time: string; platform: string }[]>
+      getLatest: () => Promise<{ id: number; game_name: string; resource_type: string; current_resource: number; max_resource: number; capture_time: string; platform: string }[]>
+    }
+    logs: {
+      get: () => Promise<{ id: number; timestamp: string; level: 'log' | 'info' | 'warn' | 'error'; source: 'main' | 'renderer'; message: string }[]>
+      clear: () => Promise<void>
+      append: (level: 'log' | 'info' | 'warn' | 'error', args: unknown[]) => void
+      onEntry: (callback: (entry: { id: number; timestamp: string; level: 'log' | 'info' | 'warn' | 'error'; source: 'main' | 'renderer'; message: string }) => void) => (() => void)
+      onCleared: (callback: () => void) => (() => void)
+    }
+    keystats: {
+      snapshot: () => Promise<{ today: string; days: Record<string, Record<string, number>> }>
+      ping: () => Promise<string>
     }
     tray: {
       onTrayCapture: (callback: () => void) => (() => void)

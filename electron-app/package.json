@@ -53,6 +53,14 @@
           "*.ico",
           "*.png"
         ]
+      },
+      {
+        "from": "resources/pinman.exe",
+        "to": "pinman.exe"
+      },
+      {
+        "from": "resources/keystats.exe",
+        "to": "keystats.exe"
       }
     ]
   },

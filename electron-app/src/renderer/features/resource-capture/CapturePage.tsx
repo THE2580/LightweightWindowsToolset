@@ -10,8 +10,8 @@ import { useSettingsStore } from '@/stores/settingsStore'
 import { WifiOff, ArrowUp } from 'lucide-react'
 
 function CapturePage(): React.JSX.Element {
-  const { loadTodayFromBackend } = useCaptureStore(
-    useShallow((s) => ({ loadTodayFromBackend: s.loadTodayFromBackend }))
+  const { loadLatestFromBackend } = useCaptureStore(
+    useShallow((s) => ({ loadLatestFromBackend: s.loadLatestFromBackend }))
   )
   const backendOnline = useCaptureStore((s) => s.backendOnline)
   const interval = useSettingsStore((s) => s.captureRefreshInterval)
@@ -29,7 +29,7 @@ function CapturePage(): React.JSX.Element {
     }
   }, [])
 
-  useEffect(() => { loadTodayFromBackend() }, [loadTodayFromBackend])
+  useEffect(() => { loadLatestFromBackend() }, [loadLatestFromBackend])
 
   useEffect(() => {
     restartTimer(interval)

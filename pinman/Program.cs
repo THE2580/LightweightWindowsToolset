@@ -20,36 +20,50 @@ internal static unsafe class Program
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         Console.InputEncoding = System.Text.Encoding.UTF8;
+        Log("info", $"Starting pid={Environment.ProcessId}");
         using var mutex = new Mutex(true, @"Global\PinMan_SingleInstance", out bool createdNew);
         if (!createdNew)
         {
+            Log("warn", "Another instance is already running; forwarding toggle event");
             StdioIpc.SendToggle();
             return 0;
         }
 
         IntPtr hInstance = Native.GetModuleHandle(null);
+        Log("info", $"Module handle={Hwnd(hInstance)}");
 
         _msgWnd = CreateMessageWindow(hInstance);
         if (_msgWnd == IntPtr.Zero)
+        {
+            Log("error", $"Failed to create message window win32={Marshal.GetLastWin32Error()}");
             return 1;
+        }
+        Log("info", $"Message window created hwnd={Hwnd(_msgWnd)}");
 
         SetHotkey(Native.MOD_ALT, 0x78); // Alt+F9
         CreateTrayIcon(hInstance);
 
         StdioIpc.Start(ProcessCommand);
         Native.SetTimer(_msgWnd, new IntPtr(999), 200, IntPtr.Zero);
+        Log("info", "IPC poll timer started intervalMs=200");
 
         MSG msg;
         int ret;
         while ((ret = GetMessage(&msg, IntPtr.Zero, 0, 0)) != 0)
         {
-            if (ret == -1) break;
+            if (ret == -1)
+            {
+                Log("error", $"GetMessage failed win32={Marshal.GetLastWin32Error()}");
+                break;
+            }
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
 
+        Log("info", $"Message loop stopped ret={ret}; cleaning up pinned={_pins.Count}");
         CleanupAll();
         RemoveTrayIcon();
+        Log("info", "Shutdown complete");
         return 0;
     }
 
@@ -57,7 +71,8 @@ internal static unsafe class Program
     {
         if (_hotkeyActive)
         {
-            Native.UnregisterHotKey(_msgWnd, Native.HOTKEY_ID);
+            bool removed = Native.UnregisterHotKey(_msgWnd, Native.HOTKEY_ID);
+            Log(removed ? "info" : "warn", $"Previous hotkey unregister result={removed} mods=0x{_hotkeyMods:X} vk=0x{_hotkeyVk:X}");
             _hotkeyActive = false;
         }
         _hotkeyMods = mods;
@@ -66,6 +81,8 @@ internal static unsafe class Program
         {
             _hotkeyActive = Native.RegisterHotKey(_msgWnd, Native.HOTKEY_ID,
                 mods | Native.MOD_NOREPEAT, vk);
+            Log(_hotkeyActive ? "info" : "error",
+                $"Hotkey register result={_hotkeyActive} mods=0x{mods:X} vk=0x{vk:X} win32={Marshal.GetLastWin32Error()}");
         }
     }
 
@@ -95,6 +112,7 @@ internal static unsafe class Program
         {
             case Native.WM_HOTKEY:
                 if (wParam == Native.HOTKEY_ID) {
+                    Log("info", "Hotkey triggered");
                     ToggleForeground();
                 }
                 return IntPtr.Zero;
@@ -122,21 +140,31 @@ internal static unsafe class Program
     private static void ToggleForeground()
     {
         IntPtr fg = Native.GetForegroundWindow();
-        if (fg == IntPtr.Zero || fg == _msgWnd) return;
+        if (fg == IntPtr.Zero || fg == _msgWnd)
+        {
+            Log("warn", $"Toggle ignored foreground={Hwnd(fg)}");
+            return;
+        }
+        Log("info", $"Toggle foreground hwnd={Hwnd(fg)} title=\"{LogEsc(Native.GetWindowTitle(fg))}\"");
 
         if (_pins.TryRemove(fg, out var existing))
         {
             UnpinInternal(existing);
+            Log("info", $"Window unpinned hwnd={Hwnd(fg)} remaining={_pins.Count}");
             EmitEventUnpinned(fg);
         }
         else if (_pins.Count >= _maxPins)
         {
+            Log("warn", $"Pin rejected: limit reached maxPins={_maxPins} hwnd={Hwnd(fg)}");
             Console.Error.WriteLine($"@PINMAN_EVENT maxpins {{\"max\":{_maxPins}}}");
         }
         else
         {
-            PinWindow(fg);
-            EmitEventPinned(fg);
+            if (PinWindow(fg))
+            {
+                Log("info", $"Window pinned hwnd={Hwnd(fg)} total={_pins.Count}");
+                EmitEventPinned(fg);
+            }
         }
         ReassertSelfTopmost();
     }
@@ -144,9 +172,18 @@ internal static unsafe class Program
     /// <summary>Pin a specific window by hwnd (used for programmatic pin from Electron).</summary>
     private static string PinByHwnd(IntPtr hwnd)
     {
-        if (_pins.ContainsKey(hwnd)) return "OK already pinned";
-        if (_pins.Count >= _maxPins) return $"ERR max={_maxPins}";
-        PinWindow(hwnd);
+        if (_pins.ContainsKey(hwnd))
+        {
+            Log("info", $"Programmatic pin skipped: already pinned hwnd={Hwnd(hwnd)}");
+            return "OK already pinned";
+        }
+        if (_pins.Count >= _maxPins)
+        {
+            Log("warn", $"Programmatic pin rejected: limit reached maxPins={_maxPins} hwnd={Hwnd(hwnd)}");
+            return $"ERR max={_maxPins}";
+        }
+        if (!PinWindow(hwnd)) return "ERR invalid hwnd";
+        Log("info", $"Programmatic pin succeeded hwnd={Hwnd(hwnd)} total={_pins.Count}");
         EmitEventPinned(hwnd);
         ReassertSelfTopmost();
         return "OK";
@@ -163,13 +200,23 @@ internal static unsafe class Program
         Console.Error.WriteLine($"@PINMAN_EVENT unpinned {{\"hwnd\":{hwnd.ToInt64()},\"title\":\"{title}\"}}");
     }
 
-    private static void PinWindow(IntPtr hwnd)
+    private static bool PinWindow(IntPtr hwnd)
     {
-        if (!Native.IsWindow(hwnd)) return;
-        Native.SetWindowPos(hwnd, Native.HWND_TOPMOST, 0, 0, 0, 0,
+        if (!Native.IsWindow(hwnd))
+        {
+            Log("warn", $"Pin rejected: invalid hwnd={Hwnd(hwnd)}");
+            return false;
+        }
+        bool positioned = Native.SetWindowPos(hwnd, Native.HWND_TOPMOST, 0, 0, 0, 0,
             Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
+        if (!positioned)
+        {
+            Log("error", $"SetWindowPos(HWND_TOPMOST) failed hwnd={Hwnd(hwnd)} win32={Marshal.GetLastWin32Error()}");
+            return false;
+        }
         var entry = new PinEntry(hwnd, IntPtr.Zero);
         _pins[hwnd] = entry;
+        return true;
     }
 
     private static void UnpinInternal(PinEntry entry)
@@ -177,8 +224,16 @@ internal static unsafe class Program
         if (entry.Destroyed) return;
         entry.Destroyed = true;
         if (Native.IsWindow(entry.TargetHwnd))
-            Native.SetWindowPos(entry.TargetHwnd, Native.HWND_NOTOPMOST, 0, 0, 0, 0,
+        {
+            bool positioned = Native.SetWindowPos(entry.TargetHwnd, Native.HWND_NOTOPMOST, 0, 0, 0, 0,
                 Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
+            if (!positioned)
+                Log("error", $"SetWindowPos(HWND_NOTOPMOST) failed hwnd={Hwnd(entry.TargetHwnd)} win32={Marshal.GetLastWin32Error()}");
+        }
+        else
+        {
+            Log("warn", $"Unpin skipped: window no longer exists hwnd={Hwnd(entry.TargetHwnd)}");
+        }
     }
 
     private static void UnpinByHwnd(IntPtr hwnd)
@@ -186,18 +241,22 @@ internal static unsafe class Program
         if (_pins.TryRemove(hwnd, out var entry))
         {
             UnpinInternal(entry);
+            Log("info", $"Programmatic unpin hwnd={Hwnd(hwnd)} remaining={_pins.Count}");
             ReassertSelfTopmost();
         }
+        else Log("warn", $"Programmatic unpin skipped: not pinned hwnd={Hwnd(hwnd)}");
     }
 
     private static void UnpinAll()
     {
+        Log("info", $"Unpin all requested count={_pins.Count}");
         foreach (var kv in _pins) { _pins.TryRemove(kv.Key, out _); UnpinInternal(kv.Value); }
         ReassertSelfTopmost();
     }
 
     private static void CleanupAll()
     {
+        Log("info", $"Cleanup all count={_pins.Count}");
         foreach (var kv in _pins) UnpinInternal(kv.Value);
         _pins.Clear();
     }
@@ -226,14 +285,16 @@ internal static unsafe class Program
             uCallbackMessage = Native.TRAY_CALLBACK,
             hIcon = _trayIcon, szTip = "PinMan"
         };
-        Native.Shell_NotifyIcon(Native.NIM_ADD, ref nid);
+        bool added = Native.Shell_NotifyIcon(Native.NIM_ADD, ref nid);
+        Log(added ? "info" : "warn", $"Tray icon add result={added} win32={Marshal.GetLastWin32Error()}");
     }
 
     private static void RemoveTrayIcon()
     {
         var nid = new Native.NOTIFYICONDATA
         { cbSize = Marshal.SizeOf<Native.NOTIFYICONDATA>(), hWnd = _msgWnd, uID = 1 };
-        Native.Shell_NotifyIcon(Native.NIM_DELETE, ref nid);
+        bool removed = Native.Shell_NotifyIcon(Native.NIM_DELETE, ref nid);
+        Log(removed ? "info" : "warn", $"Tray icon remove result={removed} win32={Marshal.GetLastWin32Error()}");
         if (_trayIcon != IntPtr.Zero) DestroyIcon(_trayIcon);
     }
 
@@ -251,6 +312,8 @@ internal static unsafe class Program
         if (parts.Length == 0) return "ERR empty";
         string name = parts[0].ToUpper();
         string? arg = parts.Length > 1 ? parts[1] : null;
+        if (name is not "PING" and not "STATUS")
+            Log("info", $"IPC command name={name} arg=\"{LogEsc(arg ?? "")}\"");
         try
         {
             switch (name)
@@ -269,12 +332,17 @@ internal static unsafe class Program
                 case "STATUS": return BuildStatus();
                 case "CONFIG": return HandleConfig(arg ?? "");
                 case "SHUTDOWN":
+                    Log("info", "Shutdown requested by IPC");
                     Native.PostMessage(_msgWnd, Native.WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
                     return "OK";
                 default: return $"ERR {name}";
             }
         }
-        catch (Exception ex) { return $"ERR {ex.Message}"; }
+        catch (Exception ex)
+        {
+            Log("error", $"IPC command failed name={name} error=\"{LogEsc(ex.Message)}\"");
+            return $"ERR {ex.Message}";
+        }
     }
 
     private static string HandleConfig(string arg)
@@ -286,15 +354,16 @@ internal static unsafe class Program
         switch (key)
         {
             case "MAXPINS":
-                if (int.TryParse(val, out int mp) && mp >= 1 && mp <= 100) { _maxPins = mp; return "OK"; }
+                if (int.TryParse(val, out int mp) && mp >= 1 && mp <= 100) { _maxPins = mp; Log("info", $"Config maxPins={mp}"); return "OK"; }
                 return "ERR maxPins 1-100";
             case "HOTKEY": return SetHotkeyFromConfig(val);
             case "TOPMOSTSELF":
                 _topmostSelf = val == "1";
                 if (_topmostSelf) ReassertSelfTopmost();
+                Log("info", $"Config topmostSelf={_topmostSelf}");
                 return "OK";
             case "SELFHWND":
-                if (long.TryParse(val, out long sh) && sh != 0) { _selfHwnd = new IntPtr(sh); return "OK"; }
+                if (long.TryParse(val, out long sh) && sh != 0) { _selfHwnd = new IntPtr(sh); Log("info", $"Config selfHwnd={Hwnd(_selfHwnd)}"); return "OK"; }
                 return "ERR invalid hwnd";
             default: return $"ERR {key}";
         }
@@ -361,6 +430,9 @@ internal static unsafe class Program
         }
         return sb.ToString();
     }
+    private static void Log(string level, string message) => Console.Error.WriteLine($"@PINMAN_LOG {level} {message}");
+    private static string Hwnd(IntPtr hwnd) => $"0x{hwnd.ToInt64():X}";
+    private static string LogEsc(string s) => Trunc(s.Replace("\r", "\\r").Replace("\n", "\\n"), 160);
     private static string Trunc(string s, int max) => s.Length <= max ? s : s[..(max - 3)] + "...";
 
     private static IntPtr CreateSimpleIcon(IntPtr hInstance)

@@ -10,6 +10,7 @@ import { usePluginStore } from './stores/pluginStore'
 import { useCaptureStore } from './stores/captureStore'
 import { useDeepseekStore } from './stores/deepseekStore'
 import { usePinnerStore } from './stores/pinnerStore'
+import { useSettingsStore } from './stores/settingsStore'
 
 function AppListeners(): null {
   const navigate = useNavigate()
@@ -18,11 +19,29 @@ function AppListeners(): null {
   const triggerBackgroundCapture = useCaptureStore((s) => s.triggerBackgroundCapture)
   const togglePin = usePinnerStore((s) => s.togglePin)
   const loadApiKey = useDeepseekStore((s) => s.loadApiKey)
+  const loadSettings = useSettingsStore((s) => s.load)
+  const loadPinnerSettings = usePinnerStore((s) => s.loadSettings)
+  const refreshPinnerStatus = usePinnerStore((s) => s.refreshStatus)
+  const listenPinnerEvents = usePinnerStore((s) => s.listenEvents)
 
   // Preload API key on app startup so chat works without visiting settings first
   useEffect(() => {
     loadApiKey()
   }, [loadApiKey])
+
+  // Keep pinman state synchronized for the entire application lifetime.
+  // Native hotkeys work outside the pinner page, so event listeners must too.
+  useEffect(() => {
+    loadSettings()
+    loadPinnerSettings()
+    refreshPinnerStatus()
+    const unsubPinner = listenPinnerEvents()
+    const interval = setInterval(refreshPinnerStatus, 1000)
+    return () => {
+      clearInterval(interval)
+      unsubPinner()
+    }
+  }, [loadSettings, loadPinnerSettings, refreshPinnerStatus, listenPinnerEvents])
 
   // Load persisted disabled-tools state on startup
   const loadDisabledTools = usePluginStore((s) => s.loadDisabledTools)

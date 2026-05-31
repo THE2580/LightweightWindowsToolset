@@ -9,8 +9,12 @@ import { registerQueueIpc, loadQueue, saveQueue } from './ipc/queue'
 import { registerBackendIpc } from './ipc/backend'
 import { registerPinmanIpc, startPinman, stopPinman, sendCommand, sendCommandFire } from './ipc/pinman'
 import { startBackend, stopBackend } from './ipc/backend-process'
+import { installMainLogger, registerLogIpc } from './ipc/logs'
+import { registerKeyStatsIpc, startKeyStats, stopKeyStats } from './ipc/keystats'
 
 let isQuitting = false
+
+installMainLogger()
 
 const gotTheLock = app.requestSingleInstanceLock()
 if (!gotTheLock) {
@@ -144,6 +148,7 @@ app.whenReady().then(() => {
       const { ipcMain: ipc } = require('electron')
       stopPinman()
       stopBackend()
+      stopKeyStats()
     } catch { /* ok */ }
     destroyTray()
     globalShortcut.unregisterAll()
@@ -209,6 +214,7 @@ app.whenReady().then(() => {
           sendCommandFire('CONFIG hotkey=' + info.accelerator)
         }
       }
+      if (toolId === 'key-counter') startKeyStats()
     } else {
       disabledTools.add(toolId)
       // Unregister tool's hotkey
@@ -228,6 +234,7 @@ app.whenReady().then(() => {
         // Fully stop pinman — kill process, free ~3-5MB
         stopPinman()
       }
+      if (toolId === 'key-counter') stopKeyStats()
     }
   })
 
@@ -321,6 +328,8 @@ app.whenReady().then(() => {
   registerQueueIpc()
   registerBackendIpc()
   registerPinmanIpc()
+  registerLogIpc()
+  registerKeyStatsIpc()
 
   // Load persisted disabled-tools state and check window-pinner before starting pinman
   const disabledRaw = getStore().get('disabledTools') as string | undefined
@@ -343,6 +352,12 @@ app.whenReady().then(() => {
     startBackend()
   } else {
     console.log('[backend] Skipped start: resource-capture tool is disabled')
+  }
+
+  if (!disabledTools.has('key-counter')) {
+    startKeyStats()
+  } else {
+    console.log('[keystats] Skipped start: key-counter tool is disabled')
   }
 
   // Auto-pin this app on startup if enabled

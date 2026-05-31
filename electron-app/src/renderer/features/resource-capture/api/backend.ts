@@ -31,8 +31,8 @@ export async function postResourceRecord(payload: ResourceRecordPayload): Promis
   }
 }
 
-export async function getAllTodayRecords(): Promise<ResourceRecord[]> {
-  return window.api.backend.getToday()
+export async function getAllLatestRecords(): Promise<ResourceRecord[]> {
+  return window.api.backend.getLatest()
 }
 
 /** @deprecated Legacy alias */

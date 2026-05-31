@@ -7,6 +7,7 @@ internal static class StdioIpc
     public static void Start(Func<string, string> handler)
     {
         _handler = handler;
+        Console.Error.WriteLine("@PINMAN_LOG info IPC handler initialized");
     }
 
     /// <summary>Poll stdin. Non-blocking.</summary>
@@ -27,7 +28,10 @@ internal static class StdioIpc
             if (line.StartsWith("SHUTDOWN", StringComparison.OrdinalIgnoreCase))
                 return true;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"@PINMAN_LOG error IPC poll failed error=\"{ex.Message.Replace("\r", "\\r").Replace("\n", "\\n")}\"");
+        }
         return false;
     }
 
@@ -39,6 +43,9 @@ internal static class StdioIpc
                 System.Threading.EventResetMode.AutoReset, @"Global\PinMan_Toggle");
             evt.Set();
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"@PINMAN_LOG error Toggle forwarding failed error=\"{ex.Message.Replace("\r", "\\r").Replace("\n", "\\n")}\"");
+        }
     }
 }

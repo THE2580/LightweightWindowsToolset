@@ -53,8 +53,30 @@ const api = {
   backend: {
     postRecord: (payload: { game_name: string; resource_type: string; current_resource: number; max_resource: number; capture_time: string; platform: string }): Promise<{ id: number; game_name: string; resource_type: string; current_resource: number; max_resource: number; capture_time: string; platform: string }> =>
       ipcRenderer.invoke('backend:post-record', payload),
-    getToday: (): Promise<{ id: number; game_name: string; resource_type: string; current_resource: number; max_resource: number; capture_time: string; platform: string }[]> =>
-      ipcRenderer.invoke('backend:get-today')
+    getLatest: (): Promise<{ id: number; game_name: string; resource_type: string; current_resource: number; max_resource: number; capture_time: string; platform: string }[]> =>
+      ipcRenderer.invoke('backend:get-latest')
+  },
+  logs: {
+    get: (): Promise<{ id: number; timestamp: string; level: 'log' | 'info' | 'warn' | 'error'; source: 'main' | 'renderer'; message: string }[]> =>
+      ipcRenderer.invoke('logs:get'),
+    clear: (): Promise<void> => ipcRenderer.invoke('logs:clear'),
+    append: (level: 'log' | 'info' | 'warn' | 'error', args: unknown[]): void =>
+      ipcRenderer.send('logs:append-renderer', level, args),
+    onEntry: (callback: (entry: { id: number; timestamp: string; level: 'log' | 'info' | 'warn' | 'error'; source: 'main' | 'renderer'; message: string }) => void): (() => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, entry: { id: number; timestamp: string; level: 'log' | 'info' | 'warn' | 'error'; source: 'main' | 'renderer'; message: string }) => callback(entry)
+      ipcRenderer.on('logs:entry', handler)
+      return () => { ipcRenderer.removeListener('logs:entry', handler) }
+    },
+    onCleared: (callback: () => void): (() => void) => {
+      const handler = () => callback()
+      ipcRenderer.on('logs:cleared', handler)
+      return () => { ipcRenderer.removeListener('logs:cleared', handler) }
+    }
+  },
+  keystats: {
+    snapshot: (): Promise<{ today: string; days: Record<string, Record<string, number>> }> =>
+      ipcRenderer.invoke('keystats:snapshot'),
+    ping: (): Promise<string> => ipcRenderer.invoke('keystats:ping')
   },
   tray: {
     onTrayCapture: (callback: () => void): (() => void) => {

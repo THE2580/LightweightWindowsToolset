@@ -20,6 +20,7 @@ const store = new Store({
     chatExpandZoneHeight: 100,
     captureHotkeyEnabled: true,
     chatHotkeyEnabled: true,
+    developerMode: false,
   }
 })
 

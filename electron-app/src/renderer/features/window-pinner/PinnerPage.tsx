@@ -11,25 +11,21 @@ function PinnerPage(): React.JSX.Element {
   const navigate = useNavigate()
   const {
     pinnedWindows, maxPins,
-    isLoaded, isPinmanRunning,
+    isPinmanRunning,
     selfHwnd,
-    loadSettings, refreshStatus, togglePin,
+    togglePin,
     unpin, unpinAll, setMaxPins,
-    checkPinman, listenEvents,
+    checkPinman,
   } = usePinnerStore(useShallow((s) => ({
     pinnedWindows: s.pinnedWindows,
     maxPins: s.maxPins,
-    isLoaded: s.isLoaded,
     selfHwnd: s.selfHwnd,
     isPinmanRunning: s.isPinmanRunning,
-    loadSettings: s.loadSettings,
-    refreshStatus: s.refreshStatus,
     togglePin: s.togglePin,
     unpin: s.unpin,
     unpinAll: s.unpinAll,
     setMaxPins: s.setMaxPins,
     checkPinman: s.checkPinman,
-    listenEvents: s.listenEvents,
   })))
 
   const {
@@ -44,18 +40,6 @@ function PinnerPage(): React.JSX.Element {
       setPinnerTopmostSelf: s.setPinnerTopmostSelf,
     }))
   )
-
-  useEffect(() => { loadSettings() }, [loadSettings])
-
-  useEffect(() => {
-    if (isLoaded) {
-      refreshStatus()
-      const interval = setInterval(refreshStatus, 1000)
-      return () => clearInterval(interval)
-    }
-  }, [isLoaded, refreshStatus])
-
-  useEffect(() => { return listenEvents() }, [listenEvents])
 
   const [maxPinsInput, setMaxPinsInput] = useState(String(maxPins))
   useEffect(() => { setMaxPinsInput(String(maxPins)) }, [maxPins])

@@ -26,6 +26,7 @@ interface SettingsState {
   pinnerTopmostSelf: boolean
   captureRefreshInterval: number
   storagePath: string
+  developerMode: boolean
   isLoaded: boolean
 
   load: () => Promise<void>
@@ -50,6 +51,7 @@ interface SettingsState {
   setPinnerAutoPinApp: (v: boolean) => Promise<void>
   setPinnerTopmostSelf: (v: boolean) => Promise<void>
   setCaptureRefreshInterval: (v: number) => Promise<void>
+  setDeveloperMode: (v: boolean) => Promise<void>
   loadStoragePath: () => Promise<void>
   setStoragePath: (path: string) => Promise<{ success: boolean; error?: string }>
 }
@@ -77,6 +79,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   pinnerTopmostSelf: false,
   captureRefreshInterval: 2,
   storagePath: '',
+  developerMode: false,
   isLoaded: false,
 
   load: async () => {
@@ -104,6 +107,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         pinnerAutoPinApp: (all.pinnerAutoPinApp as boolean) ?? false,
         pinnerTopmostSelf: (all.pinnerTopmostSelf as boolean) ?? false,
         captureRefreshInterval: (all.captureRefreshInterval as number) || 2,
+        developerMode: (all.developerMode as boolean) ?? false,
         isLoaded: true
       })
     } catch {
@@ -132,6 +136,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setPinnerAutoPinApp: async (v) => { await window.api.settings.set('pinnerAutoPinApp', v); set({ pinnerAutoPinApp: v }) },
   setPinnerTopmostSelf: async (v) => { await window.api.settings.set('pinnerTopmostSelf', v); await window.api.pinman.config('topmostSelf', v ? '1' : '0'); set({ pinnerTopmostSelf: v }) },
   setCaptureRefreshInterval: async (v) => { await window.api.settings.set('captureRefreshInterval', v); set({ captureRefreshInterval: v }) },
+  setDeveloperMode: async (v) => { await window.api.settings.set('developerMode', v); set({ developerMode: v }) },
 
   loadStoragePath: async () => {
     try {

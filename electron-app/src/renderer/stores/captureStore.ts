@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { parseResourcesViaAI, ParseResult } from '@/features/resource-capture/api/deepseek'
-import { postResourceRecord, getAllTodayRecords } from '@/features/resource-capture/api/backend'
+import { postResourceRecord, getAllLatestRecords } from '@/features/resource-capture/api/backend'
 
 type CaptureState = 'idle' | 'capturing' | 'ocr' | 'parsing' | 'posting' | 'done' | 'error'
 
@@ -113,7 +113,7 @@ interface CaptureStore {
   subResources: CapturedResource[]
   ocrText: string
   captureState: CaptureState
-  todayRecords: ResourceRecord[]
+  latestRecords: ResourceRecord[]
   captureHistory: CaptureHistoryEntry[]
   gameConfigs: GameConfig[]
   backendOnline: boolean
@@ -124,13 +124,13 @@ interface CaptureStore {
   setSubResources: (sr: CapturedResource[]) => void
   setOcrText: (text: string) => void
   setCaptureState: (state: CaptureState) => void
-  setTodayRecords: (records: ResourceRecord[]) => void
+  setLatestRecords: (records: ResourceRecord[]) => void
   addCaptureHistory: (entry: CaptureHistoryEntry) => void
   clearCaptureHistory: () => void
   getGameConfig: (id: string) => GameConfig | undefined
   getCurrentResourceConfig: () => ResourceTypeConfig | undefined
   refreshRecords: () => Promise<void>
-  loadTodayFromBackend: () => Promise<void>
+  loadLatestFromBackend: () => Promise<void>
   triggerBackgroundCapture: () => Promise<void>
 }
 
@@ -190,7 +190,7 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
   subResources: [],
   ocrText: '',
   captureState: 'idle',
-  todayRecords: [],
+  latestRecords: [],
   captureHistory: [],
   gameConfigs: GAME_CONFIGS,
   backendOnline: true,
@@ -211,7 +211,7 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
   setSubResources: (sr) => set({ subResources: sr }),
   setOcrText: (text) => set({ ocrText: text }),
   setCaptureState: (state) => set({ captureState: state }),
-  setTodayRecords: (records) => set({ todayRecords: records }),
+  setLatestRecords: (records) => set({ latestRecords: records }),
   addCaptureHistory: (entry) =>
     set((s) => ({ captureHistory: [entry, ...s.captureHistory].slice(0, 50) })),
   clearCaptureHistory: () => set({ captureHistory: [] }),
@@ -224,9 +224,9 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
 
   refreshRecords: async () => {
     try {
-      const records = await getAllTodayRecords()
+      const records = await getAllLatestRecords()
       if (records.length > 0) {
-        set({ todayRecords: records })
+        set({ latestRecords: records })
         if (!get().backendOnline) set({ backendOnline: true })
         const now = Date.now()
         // Sort by capture_time ASC so the last record for each resource_type is the newest
@@ -256,11 +256,11 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
     } catch { set({ backendOnline: false }) }
   },
 
-  loadTodayFromBackend: async () => {
+  loadLatestFromBackend: async () => {
     try {
-      const records = await getAllTodayRecords()
+      const records = await getAllLatestRecords()
       if (records.length > 0) {
-        set({ todayRecords: records })
+        set({ latestRecords: records })
         if (!get().backendOnline) set({ backendOnline: true })
         const now = Date.now()
         const latest = new Map<string, ResourceSnapshot>()
@@ -600,7 +600,7 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
     }))
 
     if (records.length > 0) {
-      set({ todayRecords: records })
+      set({ latestRecords: records })
     }
 
     // ── Phase 8: Show success on overlay ──

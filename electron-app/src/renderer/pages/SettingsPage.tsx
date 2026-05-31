@@ -10,10 +10,11 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import {
   Eye, EyeOff, Monitor, Sun, Moon, Wrench, Keyboard, RotateCcw,
-  Plus, Minus, FolderOpen, Info
+  Plus, Minus, FolderOpen, Info, Terminal
 } from 'lucide-react'
+import ConsoleLogPanel from '@/features/settings/ConsoleLogPanel'
 
-type TabId = 'general' | 'api' | 'hotkey' | 'about'
+type TabId = 'general' | 'api' | 'hotkey' | 'logs' | 'about'
 
 const TABS: { id: TabId; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
   { id: 'general', label: '通用', icon: Monitor },
@@ -127,6 +128,7 @@ function SettingsPage(): React.JSX.Element {
     setBackendUrl, setDeepseekModel, setWindowTitle, setCloseBehavior,
     setCaptureHotkey, setChatHotkey, setPinnerHotkey, setCaptureHotkeyEnabled, setChatHotkeyEnabled, setPinnerHotkeyEnabled,
     storagePath, loadStoragePath, setStoragePath,
+    developerMode, setDeveloperMode,
     load
   } = useSettingsStore()
 
@@ -178,6 +180,7 @@ function SettingsPage(): React.JSX.Element {
   useEffect(() => { setTitleDraft(windowTitle) }, [windowTitle])
   useEffect(() => { setZoneWDraft(chatExpandZoneWidth); setZoneHDraft(chatExpandZoneHeight) }, [chatExpandZoneWidth, chatExpandZoneHeight])
   useEffect(() => { if (!storagePathEditing) setStoragePathDraft(storagePath) }, [storagePath, storagePathEditing])
+  useEffect(() => { if (!developerMode && activeTab === 'logs') setActiveTab('general') }, [developerMode, activeTab])
 
   useEffect(() => { if (!editingCapture) setCaptureKeys(parseAccelerator(captureHotkey)) }, [captureHotkey, editingCapture])
   useEffect(() => { if (!editingChat) setChatKeys(parseAccelerator(chatHotkey)) }, [chatHotkey, editingChat])
@@ -583,7 +586,7 @@ function SettingsPage(): React.JSX.Element {
 
       <h1 className="text-xl font-bold mb-4">设置</h1>
       <div className="flex border-b border-border mb-5 sticky -top-5 z-10 bg-background -mx-5 px-5 pt-1 pb-1">
-        {TABS.map((tab) => (
+        {[...TABS.slice(0, 3), ...(developerMode ? [{ id: 'logs' as const, label: '控制台日志', icon: Terminal }] : []), ...TABS.slice(3)].map((tab) => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={cn('flex items-center gap-1.5 px-4 py-2 text-xs font-medium transition-colors border-b-2 -mb-px', activeTab === tab.id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30')}>
             <tab.icon size={14} />{tab.label}
           </button>
@@ -618,6 +621,10 @@ function SettingsPage(): React.JSX.Element {
             <div className="flex items-center justify-between py-3 border-b border-border/60">
               <div><Label className="text-sm">关闭应用时</Label><p className="text-[11px] text-muted-foreground mt-0.5">点击关闭按钮的行为</p></div>
               <select value={closeBehavior} onChange={(e) => setCloseBehavior(e.target.value as 'quit' | 'tray')} className="h-8 w-28 rounded-md border border-border bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="quit">直接退出</option><option value="tray">缩小到托盘</option></select>
+            </div>
+            <div className="flex items-center justify-between py-3 border-b border-border/60">
+              <div><Label className="text-sm">开发者模式</Label><p className="text-[11px] text-muted-foreground mt-0.5">显示控制台日志标签页，便于排查运行状态</p></div>
+              <button onClick={() => setDeveloperMode(!developerMode)} className={cn('w-10 h-5 rounded-full transition-colors duration-200 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', developerMode ? 'bg-primary' : 'bg-muted-foreground/25')}><div className={cn('w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200', developerMode ? 'translate-x-5.5' : 'translate-x-0.5')} /></button>
             </div>
             <div className="py-3 border-b border-border/60">
               <Label className="text-sm">存储路径</Label>
@@ -738,6 +745,11 @@ function SettingsPage(): React.JSX.Element {
               'pinner'
             )}
             <p className="text-[10px] text-muted-foreground pt-1">快捷键格式：一个或多个修饰键（Ctrl/Shift/Alt/Win）在前，恰好一个普通键在后。不支持多字符组合（Ctrl+B+C 中间键会被 Electron 丢弃）。</p>
+          </motion.div>
+        )}
+        {activeTab === 'logs' && developerMode && (
+          <motion.div key="logs" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15, ease: 'easeOut' }}>
+            <ConsoleLogPanel />
           </motion.div>
         )}
         {activeTab === 'about' && (
