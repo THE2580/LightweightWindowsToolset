@@ -30,8 +30,7 @@
           "x64"
         ]
       },
-      "icon": "resources/icon.ico",
-      "signAndEditExecutable": false
+      "icon": "resources/icon.ico"
     },
     "nsis": {
       "oneClick": false,

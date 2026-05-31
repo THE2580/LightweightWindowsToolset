@@ -63,7 +63,7 @@ function createWindow(): BrowserWindow {
     resizable: false,
     frame: false,
     show: false,
-    icon: join(__dirname, '../../resources/tray-icon.png'),
+    icon: join(__dirname, '../../resources/icon.png'),
     title: storedTitle,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
