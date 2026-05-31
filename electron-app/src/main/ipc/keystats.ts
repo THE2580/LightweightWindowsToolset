@@ -2,6 +2,7 @@ import { app, ipcMain } from 'electron'
 import { spawn, ChildProcess } from 'child_process'
 import { join } from 'path'
 import { createInterface } from 'readline'
+import { existsSync } from 'fs'
 
 export interface KeyStatsSnapshot {
   today: string
@@ -20,7 +21,12 @@ const queue: { command: string; resolve: (value: string) => void; reject: (error
 
 function getExecutablePath(): string {
   if (app.isPackaged) return join(process.resourcesPath, 'keystats.exe')
-  return join(app.getAppPath(), '..', 'keystats', 'bin', 'Release', 'net9.0-windows', 'win-x64', 'publish', 'keystats.exe')
+  const publishedPath = join(app.getAppPath(), '..', 'keystats', 'bin', 'Release', 'net9.0-windows', 'win-x64', 'publish', 'keystats.exe')
+  if (existsSync(publishedPath)) return publishedPath
+
+  const resourcePath = join(app.getAppPath(), 'resources', 'keystats.exe')
+  console.warn('[keystats] Local publish output missing, falling back to resource copy:', resourcePath)
+  return resourcePath
 }
 
 function getPersistencePath(): string {

@@ -6,6 +6,7 @@ import { ipcMain, app, BrowserWindow } from 'electron'
 import { spawn, ChildProcess } from 'child_process'
 import { join } from 'path'
 import { createInterface } from 'readline'
+import { existsSync } from 'fs'
 
 // ---- Types ----
 
@@ -40,7 +41,12 @@ function getPinmanPath(): string {
   if (app.isPackaged) {
     return join(process.resourcesPath, 'pinman.exe')
   }
-  return join(app.getAppPath(), '..', 'pinman', 'bin', 'Release', 'net9.0-windows', 'win-x64', 'publish', 'pinman.exe')
+  const publishedPath = join(app.getAppPath(), '..', 'pinman', 'bin', 'Release', 'net9.0-windows', 'win-x64', 'publish', 'pinman.exe')
+  if (existsSync(publishedPath)) return publishedPath
+
+  const resourcePath = join(app.getAppPath(), 'resources', 'pinman.exe')
+  console.warn('[pinman] Local publish output missing, falling back to resource copy:', resourcePath)
+  return resourcePath
 }
 
 interface QueueItem {
