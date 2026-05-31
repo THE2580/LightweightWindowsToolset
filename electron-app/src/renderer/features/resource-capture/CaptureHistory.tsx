@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useCaptureStore, GameConfig } from '@/stores/captureStore'
+import { parseResourceLocalTime, useCaptureStore, GameConfig } from '@/stores/captureStore'
 import { useShallow } from 'zustand/shallow'
 
 function getGameColor(gameId: string, configs: GameConfig[]): string {
@@ -9,7 +9,7 @@ function getGameColor(gameId: string, configs: GameConfig[]): string {
 }
 
 function formatTime(iso: string): string {
-  const d = new Date(iso)
+  const d = new Date(parseResourceLocalTime(iso))
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }

@@ -133,7 +133,7 @@ Windows 系统托盘插件式桌面工具集（Electron 33 + React 19 + TypeScri
 - OCR 预处理：NearestNeighbor 自适应放大（<1200px→3x, else→2x, 上限3840px），保留彩色
 - OCR 文本过滤：只保留含 `\d+/\d+` 或中文标签的行
 - AI 解析：多资源并行 prompt + 正则回退 + 30s AbortController 超时
-- 后端通信：主进程 Node.js http（绕过 socks5），重试队列持久化，capture_time UTC
+- 后端通信：主进程 Node.js http（绕过 socks5），重试队列持久化，capture_time 使用系统本地时间
 - 恢复速率：每秒 tick 倒计时 + 预计 HH:MM 恢复满时钟
 
 **支持游戏**: 原神、绝区零、终末地、异环（含恢复速率配置）
@@ -443,13 +443,13 @@ stdin/stdout 行协议，一行命令对应一行响应：
 
 ## 十四、第二十三轮完整交接快照
 
-### 14.1 资源捕获 latest / UTC 修复
+### 14.1 资源捕获 latest / 本地时间修复
 
 - 桌面端拉取资源数据由 `GET /api/resource/today` 改为 `GET /api/resource/latest`。
 - 新接口按 `(game_name, resource_type)` 返回全历史最新记录；当天无记录时会回退到昨天或更早的最新值。
-- FastAPI 写入时将带时区时间统一转为 UTC 后存入 MySQL `DATETIME`。
-- API 返回 `capture_time` 明确带 `Z`，避免前端将无时区字符串误按本地时间解析。
-- 旧 `/api/resource/today` 保留兼容 Android 端，并改为 UTC 零点边界。
+- FastAPI 写入时直接使用系统本地时间，MySQL `DATETIME` 不保存时区信息。
+- API 返回 `capture_time` 和 `created_at` 时使用无时区 ISO 字符串，与 Android 端原有本地时间逻辑一致。
+- 旧 `/api/resource/today` 保留兼容 Android 端，并按后端系统本地零点切分。
 - 后端源码位于相邻仓库：`E:\codex_agent_project\AndroidGameInfoTools\backend\main.py`。
 
 ### 14.2 开发者模式与日志页

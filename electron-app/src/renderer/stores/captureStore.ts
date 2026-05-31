@@ -163,9 +163,25 @@ function filterOcrText(rawText: string): string {
   return result
 }
 
-/** Returns current UTC ISO string — all capture_time fields MUST use this */
-function utcNow(): string {
-  return new Date().toISOString()
+/** Returns current system-local ISO string without a timezone suffix. */
+function localNow(): string {
+  const now = new Date()
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+}
+
+/** Parses resource timestamps as system-local wall clock values, including legacy UTC responses. */
+export function parseResourceLocalTime(value: string): number {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/)
+  if (!match) return Number.NaN
+  return new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    Number(match[4]),
+    Number(match[5]),
+    Number(match[6])
+  ).getTime()
 }
 
 /** Build step states array for overlay */
@@ -181,7 +197,7 @@ function buildSteps(screenshot: string, ocr: string, ai: string): { s: string; l
 function addHistory(entry: Omit<CaptureHistoryEntry, 'timestamp'>): void {
   useCaptureStore.getState().addCaptureHistory({
     ...entry,
-    timestamp: utcNow()
+    timestamp: localNow()
   })
 }
 
@@ -282,10 +298,9 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
       if (records.length > 0) {
         set({ latestRecords: records })
         if (!get().backendOnline) set({ backendOnline: true })
-        const now = Date.now()
         // Sort by capture_time ASC so the last record for each resource_type is the newest
         const sortedRecords = [...records].sort(
-          (a, b) => new Date(a.capture_time).getTime() - new Date(b.capture_time).getTime()
+          (a, b) => parseResourceLocalTime(a.capture_time) - parseResourceLocalTime(b.capture_time)
         )
         const latest = new Map<string, ResourceSnapshot>()
         for (const r of sortedRecords) {
@@ -293,11 +308,8 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
           if (!cfg) continue
           const rt = cfg.resourceTypes.find((t) => t.id === r.resource_type)
           if (!rt) continue
-          const elapsedMin = (now - new Date(r.capture_time).getTime()) / 60000
-          const recovered = rt.recoveryMinutes > 0 ? Math.floor(elapsedMin / rt.recoveryMinutes) : 0
-          const current = Math.min(r.current_resource + recovered, r.max_resource)
           latest.set(r.resource_type, {
-            remaining: current,
+            remaining: r.current_resource,
             max: r.max_resource,
             recoveryMinutes: rt.recoveryMinutes,
             lastCaptureTime: r.capture_time
@@ -316,22 +328,18 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
       if (records.length > 0) {
         set({ latestRecords: records })
         if (!get().backendOnline) set({ backendOnline: true })
-        const now = Date.now()
         const latest = new Map<string, ResourceSnapshot>()
         // Sort by capture_time ASC so the last record for each resource_type is the newest
         const sortedRecords = [...records].sort(
-          (a, b) => new Date(a.capture_time).getTime() - new Date(b.capture_time).getTime()
+          (a, b) => parseResourceLocalTime(a.capture_time) - parseResourceLocalTime(b.capture_time)
         )
         for (const r of sortedRecords) {
           const cfg = GAME_CONFIGS.find((g) => r.game_name.startsWith(g.name) || r.resource_type.startsWith(g.apiGameName + "_"))
           if (!cfg) continue
           const rt = cfg.resourceTypes.find((t) => t.id === r.resource_type)
           if (!rt) continue
-          const elapsedMin = (now - new Date(r.capture_time).getTime()) / 60000
-          const recovered = rt.recoveryMinutes > 0 ? Math.floor(elapsedMin / rt.recoveryMinutes) : 0
-          const current = Math.min(r.current_resource + recovered, r.max_resource)
           latest.set(r.resource_type, {
-            remaining: current,
+            remaining: r.current_resource,
             max: r.max_resource,
             recoveryMinutes: rt.recoveryMinutes,
             lastCaptureTime: r.capture_time
@@ -578,7 +586,7 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
 
     const primaryRT = resolvedGameConfig.resourceTypes.find(rt => rt.isPrimary)
     const records: ResourceRecord[] = []
-    const now = utcNow()
+    const now = localNow()
 
     // Build local resource map updates
     const newResourceMap: Record<string, ResourceSnapshot> = {}

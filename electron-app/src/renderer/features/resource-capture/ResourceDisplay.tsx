@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { memo } from 'react'
-import { useCaptureStore } from '@/stores/captureStore'
+import { parseResourceLocalTime, useCaptureStore } from '@/stores/captureStore'
 import { useShallow } from 'zustand/shallow'
 
 function formatCountdown(seconds: number): string {
@@ -32,14 +32,17 @@ function ResourceDisplay(): React.JSX.Element {
   let nextRecoverySec = 0
 
   if (snapshot && snapshot.recoveryMinutes > 0) {
-    const elapsedMin = (tick - new Date(snapshot.lastCaptureTime).getTime()) / 60000
+    const captureTime = parseResourceLocalTime(snapshot.lastCaptureTime)
+    const elapsedMin = Number.isFinite(captureTime)
+      ? Math.max(0, (tick - captureTime) / 60000)
+      : 0
     const recovered = Math.floor(elapsedMin / snapshot.recoveryMinutes)
-    displayRemaining = Math.min(snapshot.remaining + recovered, snapshot.max)
+    displayRemaining = Math.max(0, Math.min(snapshot.remaining + recovered, snapshot.max))
     displayMax = snapshot.max
     const fractionalMin = (elapsedMin % snapshot.recoveryMinutes)
     nextRecoverySec = Math.ceil((snapshot.recoveryMinutes - fractionalMin) * 60)
   } else if (snapshot) {
-    displayRemaining = snapshot.remaining
+    displayRemaining = Math.max(0, Math.min(snapshot.remaining, snapshot.max))
     displayMax = snapshot.max
   }
 
@@ -60,7 +63,7 @@ function ResourceDisplay(): React.JSX.Element {
     )
   }
 
-  const pct = Math.min((displayRemaining / displayMax) * 100, 100)
+  const pct = Math.max(0, Math.min((displayRemaining / displayMax) * 100, 100))
 
   return (
     <div className="rounded-lg border border-border bg-card shadow-sm p-4 hover:shadow-md hover:ring-1 hover:ring-blue-300/40 transition-shadow duration-150">
