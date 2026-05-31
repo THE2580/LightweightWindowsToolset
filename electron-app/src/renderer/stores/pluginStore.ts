@@ -24,6 +24,7 @@ interface PluginState {
   activePluginId: string | null
   sidebarCollapsed: boolean
   disabledTools: Set<string>
+  disabledToolsLoaded: boolean
   chatOpen: boolean
 
   setPlugins: (plugins: PluginInfo[]) => void
@@ -44,6 +45,7 @@ export const usePluginStore = create<PluginState>((set, get) => ({
   activePluginId: null,
   sidebarCollapsed: false,
   disabledTools: new Set<string>([]),
+  disabledToolsLoaded: false,
   chatOpen: false,
 
   setPlugins: (plugins) => set({ plugins }),
@@ -87,9 +89,13 @@ export const usePluginStore = create<PluginState>((set, get) => ({
       const raw = await window.api.settings.get('disabledTools') as string | undefined
       if (raw) {
         const arr: string[] = JSON.parse(raw)
-        set({ disabledTools: new Set(arr) })
+        set({ disabledTools: new Set(arr), disabledToolsLoaded: true })
+      } else {
+        set({ disabledToolsLoaded: true })
       }
-    } catch { /* ignore */ }
+    } catch {
+      set({ disabledToolsLoaded: true })
+    }
   }
 }))
 

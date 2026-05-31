@@ -26,6 +26,7 @@ interface PinnerStore {
   setHotkey: (hotkey: string) => Promise<void>
   checkPinman: () => Promise<void>
   listenEvents: () => () => void
+  resetRuntimeState: () => void
 }
 
 export const usePinnerStore = create<PinnerStore>((set, get) => ({
@@ -135,5 +136,14 @@ export const usePinnerStore = create<PinnerStore>((set, get) => ({
         }
       })
     } catch { return () => {} }
+  },
+
+  resetRuntimeState: () => {
+    set({
+      pinnedWindows: [],
+      hotkeyActive: false,
+      selfHwnd: 0,
+      isPinmanRunning: false,
+    })
   },
 }))

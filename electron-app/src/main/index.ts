@@ -191,6 +191,38 @@ app.whenReady().then(() => {
   const pinnerEnabled = (getStore().get('pinnerHotkeyEnabled') as boolean) ?? true
   hotkeyActions.set('window-pinner', { accelerator: pinnerHk, enabled: pinnerEnabled })
 
+  const getMainWindowHwnd = (): number | null => {
+    const hbuf = mainWindow.getNativeWindowHandle()
+    if (!hbuf || hbuf.length < 4) return null
+    return hbuf.readInt32LE(0) >>> 0
+  }
+
+  const initializePinmanForWindow = (): void => {
+    setTimeout(async () => {
+      if (disabledTools.has('window-pinner')) return
+      try {
+        const hwnd = getMainWindowHwnd()
+        if (hwnd === null) return
+        await sendCommand(`CONFIG selfHwnd=${hwnd}`)
+        const topmostSelf = (getStore().get('pinnerTopmostSelf') as boolean) ?? false
+        await sendCommand(`CONFIG topmostSelf=${topmostSelf ? '1' : '0'}`)
+        console.log('[pinman] Self hwnd config sent:', hwnd, 'topmostSelf:', topmostSelf)
+      } catch (e) { console.error('[pinman] Self hwnd config failed:', e) }
+    }, 1500)
+
+    const autoPin = (getStore().get('pinnerAutoPinApp') as boolean) ?? false
+    if (!autoPin) return
+    setTimeout(async () => {
+      if (disabledTools.has('window-pinner')) return
+      try {
+        const hwnd = getMainWindowHwnd()
+        if (hwnd === null) return
+        console.log('[pinman] Auto-pin app window, hwnd:', hwnd)
+        await sendCommand(`PIN ${hwnd}`)
+      } catch (e) { console.error('[pinman] Auto-pin failed:', e) }
+    }, 2000)
+  }
+
   // Tool disable/enable — directly controls hotkey registration
   ipcMain.handle('tool:set-enabled', (_event, toolId: string, enabled: boolean) => {
     if (enabled) {
@@ -210,6 +242,7 @@ app.whenReady().then(() => {
         // Start pinman if not running
         const pinnerHkTemp = (storedToAccelerator((getStore().get('pinnerHotkey') as string) || '')) || 'Alt+P'
         startPinman(mainWindow, pinnerHkTemp)
+        initializePinmanForWindow()
         if (enabledFlag && info?.accelerator) {
           sendCommandFire('CONFIG hotkey=' + info.accelerator)
         }
@@ -343,6 +376,7 @@ app.whenReady().then(() => {
   const initHotkey = (storedToAccelerator((getStore().get('pinnerHotkey') as string) || '')) || 'Alt+P'
   if (!disabledTools.has('window-pinner')) {
     startPinman(mainWindow, initHotkey)
+    initializePinmanForWindow()
   } else {
     console.log('[pinman] Skipped start: window-pinner tool is disabled')
   }
@@ -358,35 +392,6 @@ app.whenReady().then(() => {
     startKeyStats()
   } else {
     console.log('[keystats] Skipped start: key-counter tool is disabled')
-  }
-
-  // Auto-pin this app on startup if enabled
-  const autoPin = (getStore().get('pinnerAutoPinApp') as boolean) ?? false
-  // Always send selfHwnd and topmostSelf config to pinman
-  setTimeout(async () => {
-    try {
-      const hbuf = mainWindow.getNativeWindowHandle()
-      if (hbuf && hbuf.length >= 4) {
-        const hwnd = hbuf.readInt32LE(0) >>> 0  // unsigned 32-bit
-        await sendCommand(`CONFIG selfHwnd=${hwnd}`)
-        const topmostSelf = (getStore().get('pinnerTopmostSelf') as boolean) ?? false
-        if (topmostSelf) await sendCommand('CONFIG topmostSelf=1')
-        console.log('[pinman] Self hwnd config sent:', hwnd, 'topmostSelf:', topmostSelf)
-      }
-    } catch (e) { console.error('[pinman] Self hwnd config failed:', e) }
-  }, 1500)
-
-  if (autoPin) {
-    setTimeout(async () => {
-      try {
-        const hbuf = mainWindow.getNativeWindowHandle()
-        if (hbuf && hbuf.length >= 4) {
-          const hwnd = hbuf.readInt32LE(0) >>> 0  // unsigned 32-bit
-          console.log('[pinman] Auto-pin app window, hwnd:', hwnd)
-          await sendCommand(`PIN ${hwnd}`)
-        }
-      } catch (e) { console.error('[pinman] Auto-pin failed:', e) }
-    }, 2000)
   }
 
   // queue:flush handler — invoked by renderer after a successful capture

@@ -23,17 +23,28 @@ function AppListeners(): null {
   const loadPinnerSettings = usePinnerStore((s) => s.loadSettings)
   const refreshPinnerStatus = usePinnerStore((s) => s.refreshStatus)
   const listenPinnerEvents = usePinnerStore((s) => s.listenEvents)
+  const resetPinnerState = usePinnerStore((s) => s.resetRuntimeState)
+  const disabledToolsLoaded = usePluginStore((s) => s.disabledToolsLoaded)
+  const windowPinnerEnabled = usePluginStore((s) => !s.disabledTools.has('window-pinner'))
 
   // Preload API key on app startup so chat works without visiting settings first
   useEffect(() => {
     loadApiKey()
   }, [loadApiKey])
 
-  // Keep pinman state synchronized for the entire application lifetime.
-  // Native hotkeys work outside the pinner page, so event listeners must too.
   useEffect(() => {
     loadSettings()
     loadPinnerSettings()
+  }, [loadSettings, loadPinnerSettings])
+
+  // Native hotkeys work outside the pinner page, so keep listeners global while
+  // the tool is enabled. Disabled tools must leave no polling or listeners behind.
+  useEffect(() => {
+    if (!disabledToolsLoaded) return
+    if (!windowPinnerEnabled) {
+      resetPinnerState()
+      return
+    }
     refreshPinnerStatus()
     const unsubPinner = listenPinnerEvents()
     const interval = setInterval(refreshPinnerStatus, 1000)
@@ -41,7 +52,7 @@ function AppListeners(): null {
       clearInterval(interval)
       unsubPinner()
     }
-  }, [loadSettings, loadPinnerSettings, refreshPinnerStatus, listenPinnerEvents])
+  }, [disabledToolsLoaded, windowPinnerEnabled, refreshPinnerStatus, listenPinnerEvents, resetPinnerState])
 
   // Load persisted disabled-tools state on startup
   const loadDisabledTools = usePluginStore((s) => s.loadDisabledTools)
