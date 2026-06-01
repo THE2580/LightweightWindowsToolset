@@ -1,6 +1,6 @@
 {
   "name": "lightweight-windows-toolset",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "轻量化 Windows 桌面工具集",
   "author": "THE2580",
   "main": "./out/main/index.js",

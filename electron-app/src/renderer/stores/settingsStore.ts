@@ -11,6 +11,7 @@ interface SettingsState {
   chatExpandZoneVisible: boolean
   chatExpandZoneWidth: number
   chatExpandZoneHeight: number
+  chatAutoExpandDelay: number
   chatExpandZonePreview: { w: number; h: number } | null
   backendUrl: string
   deepseekModel: string
@@ -37,6 +38,7 @@ interface SettingsState {
   setChatExpandZoneVisible: (v: boolean) => Promise<void>
   setChatExpandZoneWidth: (w: number) => Promise<void>
   setChatExpandZoneHeight: (h: number) => Promise<void>
+  setChatAutoExpandDelay: (delay: number) => Promise<void>
   setChatExpandZonePreview: (p: { w: number; h: number } | null) => void
   setBackendUrl: (url: string) => Promise<void>
   setDeepseekModel: (m: string) => Promise<void>
@@ -64,6 +66,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   chatExpandZoneVisible: false,
   chatExpandZoneWidth: 20,
   chatExpandZoneHeight: 100,
+  chatAutoExpandDelay: 300,
   chatExpandZonePreview: null,
   backendUrl: 'http://100.70.198.102:8000',
   deepseekModel: 'deepseek-v4-flash',
@@ -94,6 +97,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         chatExpandZoneVisible: (all.chatExpandZoneVisible as boolean) || false,
         chatExpandZoneWidth: (all.chatExpandZoneWidth as number) || 20,
         chatExpandZoneHeight: (all.chatExpandZoneHeight as number) || 100,
+        chatAutoExpandDelay: (all.chatAutoExpandDelay as number) ?? 300,
         backendUrl: (all.backendUrl as string) || 'http://100.70.198.102:8000',
         deepseekModel: (all.deepseekModel as string) || 'deepseek-v4-flash',
         windowTitle: (all.windowTitle as string) || '轻量化工具集',
@@ -122,6 +126,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setChatExpandZoneVisible: async (v) => { await window.api.settings.set('chatExpandZoneVisible', v); set({ chatExpandZoneVisible: v }) },
   setChatExpandZoneWidth: async (w) => { await window.api.settings.set('chatExpandZoneWidth', w); set({ chatExpandZoneWidth: w }) },
   setChatExpandZoneHeight: async (h) => { await window.api.settings.set('chatExpandZoneHeight', h); set({ chatExpandZoneHeight: h }) },
+  setChatAutoExpandDelay: async (delay) => { await window.api.settings.set('chatAutoExpandDelay', delay); set({ chatAutoExpandDelay: delay }) },
   setChatExpandZonePreview: (p) => set({ chatExpandZonePreview: p }),
   setBackendUrl: async (url) => { await window.api.settings.set('backendUrl', url); set({ backendUrl: url }) },
   setDeepseekModel: async (m) => { await window.api.settings.set('deepseekModel', m); set({ deepseekModel: m }) },

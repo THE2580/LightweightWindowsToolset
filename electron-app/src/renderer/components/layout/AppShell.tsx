@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { useEffect, useRef, type MouseEvent, type ReactNode } from 'react'
 import { usePluginStore } from '@/stores/pluginStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import TitleBar from './TitleBar'
@@ -10,6 +10,9 @@ interface AppShellProps {
   children: ReactNode
 }
 
+const INTERACTIVE_SELECTOR = 'button, input, select, textarea, a, [role="button"], [contenteditable="true"]'
+const AUTO_EXPAND_BLOCK_SELECTOR = '[data-chat-auto-expand-block="true"]'
+
 function AppShell({ children }: AppShellProps): React.JSX.Element {
   const chatOpen = usePluginStore((s) => s.chatOpen)
   const setChatOpen = usePluginStore((s) => s.setChatOpen)
@@ -19,14 +22,59 @@ function AppShell({ children }: AppShellProps): React.JSX.Element {
   const chatExpandZoneVisible = useSettingsStore((s) => s.chatExpandZoneVisible)
   const zoneW = useSettingsStore((s) => s.chatExpandZoneWidth)
   const zoneH = useSettingsStore((s) => s.chatExpandZoneHeight)
+  const chatAutoExpandDelay = useSettingsStore((s) => s.chatAutoExpandDelay)
   const zonePreview = useSettingsStore((s) => s.chatExpandZonePreview)
+  const autoExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const clearAutoExpandTimer = (): void => {
+    if (!autoExpandTimerRef.current) return
+    clearTimeout(autoExpandTimerRef.current)
+    autoExpandTimerRef.current = null
+  }
+
+  useEffect(() => clearAutoExpandTimer, [])
 
   const handleBackdropClick = (): void => {
     if (chatClickOutsideToClose) setChatOpen(false)
   }
 
-  const handleZoneEnter = (): void => {
-    if (chatAutoExpand && !chatOpen) setChatOpen(true)
+  const handleShellMouseMove = (event: MouseEvent<HTMLDivElement>): void => {
+    if (!chatAutoExpand || chatOpen) {
+      clearAutoExpandTimer()
+      return
+    }
+
+    const target = event.target as HTMLElement
+    const activeElement = document.activeElement
+    if (target.closest(INTERACTIVE_SELECTOR)) {
+      clearAutoExpandTimer()
+      return
+    }
+    if (activeElement instanceof HTMLElement && activeElement.closest(AUTO_EXPAND_BLOCK_SELECTOR)) {
+      clearAutoExpandTimer()
+      return
+    }
+
+    const shell = event.currentTarget
+    const bounds = shell.getBoundingClientRect()
+    const zoneTop = bounds.top + bounds.height * (100 - previewH) / 200
+    const zoneBottom = zoneTop + bounds.height * previewH / 100
+    const inExpandZone = event.clientX >= bounds.right - previewW
+      && event.clientY >= zoneTop
+      && event.clientY <= zoneBottom
+
+    if (!inExpandZone) {
+      clearAutoExpandTimer()
+      return
+    }
+    if (autoExpandTimerRef.current) return
+
+    autoExpandTimerRef.current = setTimeout(() => {
+      autoExpandTimerRef.current = null
+      const focusedElement = document.activeElement
+      if (focusedElement instanceof HTMLElement && focusedElement.closest(AUTO_EXPAND_BLOCK_SELECTOR)) return
+      setChatOpen(true)
+    }, chatAutoExpandDelay)
   }
 
   const zoneAlwaysShow = chatExpandZoneVisible && chatAutoExpand && !chatOpen
@@ -37,20 +85,20 @@ function AppShell({ children }: AppShellProps): React.JSX.Element {
   return (
     <div className="flex flex-col h-screen overflow-hidden">
       <TitleBar />
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className="flex flex-1 overflow-hidden relative" onMouseMove={handleShellMouseMove} onMouseLeave={clearAutoExpandTimer}>
         <Sidebar onToggleChat={toggleChat} />
         <main className="flex-1 overflow-auto bg-background p-5">
           {children}
         </main>
 
         {zoneAlwaysShow && (
-          <div onMouseEnter={handleZoneEnter} className="absolute right-0 z-10 pointer-events-auto"
+          <div className="absolute right-0 z-10 pointer-events-none"
             style={{ width: `${previewW}px`, height: `${previewH}%`, top: `${(100 - previewH) / 2}%`,
               backgroundColor: 'rgba(59, 130, 246, 0.15)', border: '1px dashed rgba(59, 130, 246, 0.35)' }} />
         )}
 
         {chatAutoExpand && !chatOpen && !chatExpandZoneVisible && !showPreview && (
-          <div onMouseEnter={handleZoneEnter} className="absolute right-0 z-10"
+          <div className="absolute right-0 z-10 pointer-events-none"
             style={{ width: `${previewW}px`, height: `${previewH}%`, top: `${(100 - previewH) / 2}%` }} />
         )}
 

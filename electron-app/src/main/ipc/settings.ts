@@ -18,6 +18,7 @@ const store = new Store({
     chatExpandZoneVisible: false,
     chatExpandZoneWidth: 20,
     chatExpandZoneHeight: 100,
+    chatAutoExpandDelay: 300,
     captureHotkeyEnabled: true,
     chatHotkeyEnabled: true,
     developerMode: false,

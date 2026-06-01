@@ -118,12 +118,12 @@ function validateHotkeyKeys(keys: string[]): string | null {
 function SettingsPage(): React.JSX.Element {
   const {
     theme, autoStart, chatClickOutsideToClose, chatAutoExpand,
-    chatExpandZoneVisible, chatExpandZoneWidth, chatExpandZoneHeight,
+    chatExpandZoneVisible, chatExpandZoneWidth, chatExpandZoneHeight, chatAutoExpandDelay,
     backendUrl, deepseekModel, windowTitle, closeBehavior,
     captureHotkey, chatHotkey, captureHotkeyEnabled, chatHotkeyEnabled,
     pinnerHotkey, pinnerHotkeyEnabled,
     setTheme, setAutoStart, setChatClickOutsideToClose, setChatAutoExpand,
-    setChatExpandZoneVisible, setChatExpandZoneWidth, setChatExpandZoneHeight,
+    setChatExpandZoneVisible, setChatExpandZoneWidth, setChatExpandZoneHeight, setChatAutoExpandDelay,
     setChatExpandZonePreview,
     setBackendUrl, setDeepseekModel, setWindowTitle, setCloseBehavior,
     setCaptureHotkey, setChatHotkey, setPinnerHotkey, setCaptureHotkeyEnabled, setChatHotkeyEnabled, setPinnerHotkeyEnabled,
@@ -143,6 +143,7 @@ function SettingsPage(): React.JSX.Element {
   const [titleDraft, setTitleDraft] = useState(windowTitle)
   const [zoneWDraft, setZoneWDraft] = useState(chatExpandZoneWidth)
   const [zoneHDraft, setZoneHDraft] = useState(chatExpandZoneHeight)
+  const [autoExpandDelayDraft, setAutoExpandDelayDraft] = useState(chatAutoExpandDelay)
   const [storagePathDraft, setStoragePathDraft] = useState('')
   const [storagePathEditing, setStoragePathEditing] = useState(false)
   const [storagePathError, setStoragePathError] = useState<string | null>(null)
@@ -179,6 +180,7 @@ function SettingsPage(): React.JSX.Element {
   useEffect(() => { setBackendDraft(backendUrl) }, [backendUrl])
   useEffect(() => { setTitleDraft(windowTitle) }, [windowTitle])
   useEffect(() => { setZoneWDraft(chatExpandZoneWidth); setZoneHDraft(chatExpandZoneHeight) }, [chatExpandZoneWidth, chatExpandZoneHeight])
+  useEffect(() => { setAutoExpandDelayDraft(chatAutoExpandDelay) }, [chatAutoExpandDelay])
   useEffect(() => { if (!storagePathEditing) setStoragePathDraft(storagePath) }, [storagePath, storagePathEditing])
   useEffect(() => { if (!developerMode && activeTab === 'logs') setActiveTab('general') }, [developerMode, activeTab])
 
@@ -204,6 +206,7 @@ function SettingsPage(): React.JSX.Element {
   const handleZoneHChange = (h: number) => { setZoneHDraft(h); if (!chatExpandZoneVisible) setChatExpandZonePreview({ w: zoneWDraft, h }) }
   const handleZoneWCommit = async () => { await setChatExpandZoneWidth(zoneWDraft); setChatExpandZonePreview(null) }
   const handleZoneHCommit = async () => { await setChatExpandZoneHeight(zoneHDraft); setChatExpandZonePreview(null) }
+  const handleAutoExpandDelayCommit = async () => { await setChatAutoExpandDelay(autoExpandDelayDraft) }
 
   // --- Hotkey helpers ---
 
@@ -678,6 +681,10 @@ function SettingsPage(): React.JSX.Element {
                   <div>
                     <div className="flex items-center justify-between mb-1"><span className="text-[11px] text-muted-foreground">竖直检测高度</span><span className="text-[11px] font-mono text-muted-foreground">{zoneHDraft}%</span></div>
                     <input type="range" min={10} max={100} step={5} value={zoneHDraft} onChange={(e) => handleZoneHChange(Number(e.target.value))} onMouseUp={handleZoneHCommit} onTouchEnd={handleZoneHCommit} className="w-full h-1.5 accent-primary" />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1"><span className="text-[11px] text-muted-foreground">检测延迟</span><span className="text-[11px] font-mono text-muted-foreground">{autoExpandDelayDraft}ms</span></div>
+                    <input type="range" min={0} max={1500} step={50} value={autoExpandDelayDraft} onChange={(e) => setAutoExpandDelayDraft(Number(e.target.value))} onMouseUp={handleAutoExpandDelayCommit} onTouchEnd={handleAutoExpandDelayCommit} className="w-full h-1.5 accent-primary" />
                   </div>
                   <p className="text-[10px] text-muted-foreground">{chatExpandZoneVisible ? '检测区域全局显示已开启，调整时无需预览。' : '检测区域全局显示关闭，拖动滑块时显示蓝色预览。'}</p>
                 </div>
