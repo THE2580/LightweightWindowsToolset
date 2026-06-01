@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
-  Home, Zap, Pin, Keyboard, MessageSquare, Settings, PanelLeftClose, PanelLeft
+  Home, Zap, Pin, Keyboard, BarChart3, MessageSquare, Settings, PanelLeftClose, PanelLeft
 } from 'lucide-react'
 import { usePluginStore } from '@/stores/pluginStore'
 import { BUILTIN_PLUGINS } from '@/lib/plugin-registry'
@@ -13,6 +13,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   'pin': Pin,
   'message-square': MessageSquare,
   'keyboard': Keyboard,
+  'chart': BarChart3,
   'clock': Home,
   'settings': Settings
 }

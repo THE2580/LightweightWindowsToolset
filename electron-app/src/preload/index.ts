@@ -78,6 +78,13 @@ const api = {
       ipcRenderer.invoke('keystats:snapshot'),
     ping: (): Promise<string> => ipcRenderer.invoke('keystats:ping')
   },
+  appstats: {
+    snapshot: (): Promise<{ today: string; activeProcess: string | null; isAfk: boolean; afkThresholdSec: number; days: Record<string, Record<string, number>> }> =>
+      ipcRenderer.invoke('appstats:snapshot'),
+    ping: (): Promise<string> => ipcRenderer.invoke('appstats:ping'),
+    clear: (): Promise<string> => ipcRenderer.invoke('appstats:clear'),
+    configAfk: (thresholdSec: number): Promise<string> => ipcRenderer.invoke('appstats:config-afk', thresholdSec)
+  },
   tray: {
     onTrayCapture: (callback: () => void): (() => void) => {
       ipcRenderer.on('tray:capture', () => callback())

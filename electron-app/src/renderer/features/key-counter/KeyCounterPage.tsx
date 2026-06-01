@@ -90,7 +90,7 @@ function createBuckets(days: Record<string, Counts>, mode: ViewMode): Bucket[] {
 function TrendChart({ buckets, keys }: { buckets: Bucket[]; keys: string[] }): React.JSX.Element {
   const width = 470
   const height = 142
-  const pad = { left: 28, right: 8, top: 10, bottom: 20 }
+  const pad = { left: 32, right: 8, top: 10, bottom: 23 }
   const max = Math.max(1, ...buckets.flatMap((bucket) => keys.map((key) => bucket.counts[key] || 0)))
   const x = (index: number): number => pad.left + index * ((width - pad.left - pad.right) / Math.max(1, buckets.length - 1))
   const y = (value: number): number => pad.top + (height - pad.top - pad.bottom) * (1 - value / max)
@@ -101,11 +101,11 @@ function TrendChart({ buckets, keys }: { buckets: Bucket[]; keys: string[] }): R
       {[0, 0.5, 1].map((ratio) => (
         <g key={ratio}>
           <line x1={pad.left} x2={width - pad.right} y1={y(max * ratio)} y2={y(max * ratio)} stroke="currentColor" className="text-border" strokeWidth="1" />
-          <text x={pad.left - 4} y={y(max * ratio) + 3} textAnchor="end" className="fill-muted-foreground text-[8px]">{Math.round(max * ratio)}</text>
+          <text x={pad.left - 5} y={y(max * ratio) + 3} textAnchor="end" className="fill-muted-foreground text-[10px]">{Math.round(max * ratio)}</text>
         </g>
       ))}
       {buckets.map((bucket, index) => labelIndexes.has(index) && (
-        <text key={bucket.id} x={x(index)} y={height - 4} textAnchor={index === 0 ? 'start' : index === buckets.length - 1 ? 'end' : 'middle'} className="fill-muted-foreground text-[8px]">
+        <text key={bucket.id} x={x(index)} y={height - 4} textAnchor={index === 0 ? 'start' : index === buckets.length - 1 ? 'end' : 'middle'} className="fill-muted-foreground text-[10px]">
           {bucket.label}
         </text>
       ))}

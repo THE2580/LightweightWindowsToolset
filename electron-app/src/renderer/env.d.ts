@@ -61,6 +61,12 @@ interface Window {
       snapshot: () => Promise<{ today: string; days: Record<string, Record<string, number>> }>
       ping: () => Promise<string>
     }
+    appstats: {
+      snapshot: () => Promise<{ today: string; activeProcess: string | null; isAfk: boolean; afkThresholdSec: number; days: Record<string, Record<string, number>> }>
+      ping: () => Promise<string>
+      clear: () => Promise<string>
+      configAfk: (thresholdSec: number) => Promise<string>
+    }
     tray: {
       onTrayCapture: (callback: () => void) => (() => void)
       onNavigate: (callback: (path: string) => void) => (() => void)

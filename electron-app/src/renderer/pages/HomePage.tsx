@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Zap, Pin, Clock, Keyboard } from 'lucide-react'
+import { Zap, Pin, Clock, Keyboard, BarChart3 } from 'lucide-react'
 import { usePluginStore } from '@/stores/pluginStore'
 import { BUILTIN_PLUGINS } from '@/lib/plugin-registry'
 import type { LucideIcon } from 'lucide-react'
@@ -8,6 +8,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   'zap': Zap,
   'pin': Pin,
   'keyboard': Keyboard,
+  'chart': BarChart3,
   'clock': Clock
 }
 

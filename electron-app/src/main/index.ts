@@ -11,6 +11,7 @@ import { registerPinmanIpc, startPinman, stopPinman, sendCommand, sendCommandFir
 import { startBackend, stopBackend } from './ipc/backend-process'
 import { installMainLogger, registerLogIpc } from './ipc/logs'
 import { registerKeyStatsIpc, startKeyStats, stopKeyStats } from './ipc/keystats'
+import { registerAppStatsIpc, startAppStats, stopAppStats } from './ipc/appstats'
 
 let isQuitting = false
 
@@ -149,6 +150,7 @@ app.whenReady().then(() => {
       stopPinman()
       stopBackend()
       stopKeyStats()
+      stopAppStats()
     } catch { /* ok */ }
     destroyTray()
     globalShortcut.unregisterAll()
@@ -248,6 +250,7 @@ app.whenReady().then(() => {
         }
       }
       if (toolId === 'key-counter') startKeyStats()
+      if (toolId === 'app-stats') startAppStats()
     } else {
       disabledTools.add(toolId)
       // Unregister tool's hotkey
@@ -268,6 +271,7 @@ app.whenReady().then(() => {
         stopPinman()
       }
       if (toolId === 'key-counter') stopKeyStats()
+      if (toolId === 'app-stats') stopAppStats()
     }
   })
 
@@ -363,6 +367,7 @@ app.whenReady().then(() => {
   registerPinmanIpc()
   registerLogIpc()
   registerKeyStatsIpc()
+  registerAppStatsIpc()
 
   // Load persisted disabled-tools state and check window-pinner before starting pinman
   const disabledRaw = getStore().get('disabledTools') as string | undefined
@@ -392,6 +397,12 @@ app.whenReady().then(() => {
     startKeyStats()
   } else {
     console.log('[keystats] Skipped start: key-counter tool is disabled')
+  }
+
+  if (!disabledTools.has('app-stats')) {
+    startAppStats()
+  } else {
+    console.log('[appstats] Skipped start: app-stats tool is disabled')
   }
 
   // queue:flush handler — invoked by renderer after a successful capture
