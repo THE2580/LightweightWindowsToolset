@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -10,6 +11,7 @@ internal static unsafe class Program
     private static readonly IntPtr SampleTimer = new(2);
     private static readonly IntPtr SaveTimer = new(3);
     private static readonly Stopwatch Clock = Stopwatch.StartNew();
+    private static readonly ConcurrentQueue<string> IpcCommands = new();
     private static readonly HashSet<string> IgnoredProcesses = new(StringComparer.OrdinalIgnoreCase)
     {
         "appstats.exe",
@@ -48,6 +50,7 @@ internal static unsafe class Program
         }
 
         _lastSampleAt = Clock.Elapsed;
+        StartIpcReader();
         Native.SetTimer(_window, IpcTimer, 200, IntPtr.Zero);
         Native.SetTimer(_window, SampleTimer, 1_000, IntPtr.Zero);
         Native.SetTimer(_window, SaveTimer, 10_000, IntPtr.Zero);
@@ -132,9 +135,7 @@ internal static unsafe class Program
     {
         try
         {
-            if (Console.In.Peek() == -1) return;
-            string? line = Console.In.ReadLine();
-            if (string.IsNullOrWhiteSpace(line)) return;
+            if (!IpcCommands.TryDequeue(out string? line)) return;
             string command = line.Trim();
             if (command.Equals("PING", StringComparison.OrdinalIgnoreCase))
             {
@@ -173,6 +174,31 @@ internal static unsafe class Program
         {
             Log("error", $"IPC failed: {Escape(ex.Message)}");
         }
+    }
+
+    private static void StartIpcReader()
+    {
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                while (true)
+                {
+                    string? line = Console.In.ReadLine();
+                    if (line is null) return;
+                    if (!string.IsNullOrWhiteSpace(line)) IpcCommands.Enqueue(line);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log("error", $"IPC reader failed: {Escape(ex.Message)}");
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "AppStatsIpcReader",
+        };
+        thread.Start();
     }
 
     private static void Configure(string value)
