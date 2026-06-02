@@ -51,6 +51,15 @@ function mergeCounts(target: Counts, source: Counts): void {
   for (const [key, value] of Object.entries(source)) target[key] = (target[key] || 0) + value
 }
 
+function countsForCurrentRange(days: Record<string, Counts>, today: string, mode: ViewMode): Counts {
+  if (!today) return {}
+  if (mode === 'day') return days[today] || {}
+  const prefix = mode === 'month' ? today.slice(0, 7) : today.slice(0, 4)
+  const counts: Counts = {}
+  for (const [day, values] of Object.entries(days)) if (day.startsWith(prefix)) mergeCounts(counts, values)
+  return counts
+}
+
 function localDay(offset: number): string {
   const date = new Date()
   date.setDate(date.getDate() + offset)
@@ -149,7 +158,7 @@ function InputHeatmap({ counts, topKeys }: { counts: Counts; topKeys: Set<string
   )
 
   return (
-    <section className={cn('rounded-md border border-border bg-card px-2 py-2', HOVER_CARD)}>
+    <section className={cn('cursor-default select-none rounded-md border border-border bg-card px-2 py-2', HOVER_CARD)}>
       <div className="mb-1.5 flex items-center justify-between">
         <span className="text-xs font-medium">键鼠可视化</span>
         <span className="text-[9px] text-muted-foreground">悬浮按键查看次数</span>
@@ -199,25 +208,25 @@ function KeyCounterPage(): React.JSX.Element {
   }, [refresh])
 
   const todayCounts = snapshot.days[snapshot.today] || {}
-  const todayTotal = sumCounts(todayCounts)
-  const todayMouse = Object.entries(todayCounts).reduce((sum, [key, value]) => sum + (MOUSE_KEYS.has(key) ? value : 0), 0)
-  const todayKeyboard = todayTotal - todayMouse
+  const rangeCounts = useMemo(() => countsForCurrentRange(snapshot.days, snapshot.today, mode), [mode, snapshot.days, snapshot.today])
+  const rangeTotal = sumCounts(rangeCounts)
+  const rangeMouse = Object.entries(rangeCounts).reduce((sum, [key, value]) => sum + (MOUSE_KEYS.has(key) ? value : 0), 0)
+  const rangeKeyboard = rangeTotal - rangeMouse
 
   const buckets = useMemo(() => createBuckets(snapshot.days, mode), [snapshot.days, mode])
   const rankings = useMemo(() => {
-    const counts: Counts = {}
-    for (const bucket of buckets) mergeCounts(counts, bucket.counts)
-    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 20)
-  }, [buckets])
+    return Object.entries(rangeCounts).sort((a, b) => b[1] - a[1]).slice(0, 20)
+  }, [rangeCounts])
   const chartKeys = rankings.slice(0, 4).map(([key]) => key)
   const topKeys = useMemo(() => new Set(rankings.map(([key]) => key)), [rankings])
+  const rangeLabel = mode === 'day' ? '今日' : mode === 'month' ? '本月' : '今年'
 
   return (
     <AnimatedRoute>
       <div className="h-full overflow-y-auto pr-1 space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-bold">今日按键统计</h1>
+            <h1 className="text-lg font-bold">按键统计</h1>
             <p className={cn('text-[10px] mt-0.5', isRunning ? 'text-green-600' : 'text-red-500')}>
               {isRunning ? '正在后台统计键盘与鼠标按键' : '统计进程未运行'}
             </p>
@@ -233,9 +242,9 @@ function KeyCounterPage(): React.JSX.Element {
 
         <div className="grid grid-cols-3 gap-2">
           {[
-            { label: '今日总计', value: todayTotal, icon: Activity },
-            { label: '键盘', value: todayKeyboard, icon: Keyboard },
-            { label: '鼠标', value: todayMouse, icon: MousePointer2 },
+            { label: `${rangeLabel}总计`, value: rangeTotal, icon: Activity },
+            { label: `${rangeLabel}键盘按键数`, value: rangeKeyboard, icon: Keyboard },
+            { label: `${rangeLabel}鼠标按键数`, value: rangeMouse, icon: MousePointer2 },
           ].map(({ label, value, icon: Icon }) => (
             <div key={label} className={cn('rounded-md border border-border bg-card px-3 py-2', HOVER_CARD)}>
               <div className="flex items-center gap-1 text-[10px] text-muted-foreground"><Icon size={11} />{label}</div>
@@ -260,7 +269,7 @@ function KeyCounterPage(): React.JSX.Element {
           </section>
 
           <section className={cn('rounded-md border border-border bg-card px-2 py-2 overflow-hidden', HOVER_CARD)}>
-            <p className="text-xs font-medium mb-1.5">按键排行 TOP 20</p>
+            <p className="text-xs font-medium mb-1.5">{rangeLabel}按键排行 TOP 20</p>
             <div className="space-y-1 overflow-y-auto max-h-[155px] pr-1">
               {rankings.length > 0 ? rankings.map(([key, value], index) => (
                 <div key={key} className="flex items-center justify-between gap-1 text-[10px]">

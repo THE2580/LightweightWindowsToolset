@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, ChevronDown, ChevronUp, Clock3, Monitor, Save, Trash2 } from 'lucide-react'
+import { Activity, ChevronDown, ChevronUp, Clock3, Monitor, PauseCircle, Save, Trash2 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import AnimatedRoute from '@/components/shared/AnimatedRoute'
 import { useAppStatsStore } from '@/stores/appStatsStore'
 import { cn } from '@/lib/utils'
 
 type ViewMode = 'day' | 'month' | 'year'
+type MappingSort = 'name' | 'duration' | 'unrenamed' | 'renamed'
 type AppSeconds = Record<string, number>
 
 interface Bucket {
@@ -72,10 +73,19 @@ function createBuckets(days: Record<string, AppSeconds>, mode: ViewMode): Bucket
   })
 }
 
+function appsForCurrentRange(days: Record<string, AppSeconds>, today: string, mode: ViewMode): AppSeconds {
+  if (!today) return {}
+  if (mode === 'day') return days[today] || {}
+  const prefix = mode === 'month' ? today.slice(0, 7) : today.slice(0, 4)
+  const apps: AppSeconds = {}
+  for (const [day, values] of Object.entries(days)) if (day.startsWith(prefix)) mergeApps(apps, values)
+  return apps
+}
+
 function TrendChart({ buckets }: { buckets: Bucket[] }): React.JSX.Element {
   const width = 470
   const height = 132
-  const pad = { left: 47, right: 8, top: 10, bottom: 23 }
+  const pad = { left: 70, right: 8, top: 10, bottom: 23 }
   const max = Math.max(1, ...buckets.map((bucket) => bucket.seconds))
   const x = (index: number): number => pad.left + index * ((width - pad.left - pad.right) / Math.max(1, buckets.length - 1))
   const y = (value: number): number => pad.top + (height - pad.top - pad.bottom) * (1 - value / max)
@@ -83,7 +93,7 @@ function TrendChart({ buckets }: { buckets: Bucket[] }): React.JSX.Element {
   const labelIndexes = new Set([0, Math.floor((buckets.length - 1) / 2), buckets.length - 1])
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="h-[132px] w-full" role="img" aria-label="软件使用时长趋势图">
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-[132px] w-full overflow-visible" role="img" aria-label="软件总使用时长趋势图">
       {[0, 0.5, 1].map((ratio) => (
         <g key={ratio}>
           <line x1={pad.left} x2={width - pad.right} y1={y(max * ratio)} y2={y(max * ratio)} stroke="currentColor" className="text-border" strokeWidth="1" />
@@ -103,9 +113,20 @@ function TrendChart({ buckets }: { buckets: Bucket[] }): React.JSX.Element {
 function HistorySoftwareMappings({ apps, aliases, onSave }: { apps: [string, number][]; aliases: Record<string, string>; onSave: (processName: string, alias: string) => Promise<void> }): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [sort, setSort] = useState<MappingSort>('duration')
 
   const draftFor = (processName: string): string => drafts[processName] ?? aliases[processName] ?? ''
   const isSaved = (processName: string): boolean => draftFor(processName).trim() === (aliases[processName] ?? '')
+  const sortedApps = useMemo(() => [...apps].sort((a, b) => {
+    const [aName, aSeconds] = a
+    const [bName, bSeconds] = b
+    const aRenamed = Boolean(aliases[aName])
+    const bRenamed = Boolean(aliases[bName])
+    if (sort === 'name') return (aliases[aName] || aName).localeCompare(aliases[bName] || bName, 'zh-CN')
+    if (sort === 'unrenamed' && aRenamed !== bRenamed) return aRenamed ? 1 : -1
+    if (sort === 'renamed' && aRenamed !== bRenamed) return aRenamed ? -1 : 1
+    return bSeconds - aSeconds || aName.localeCompare(bName, 'zh-CN')
+  }), [aliases, apps, sort])
 
   return (
     <section
@@ -130,8 +151,22 @@ function HistorySoftwareMappings({ apps, aliases, onSave }: { apps: [string, num
             transition={{ duration: 0.18, ease: 'easeOut' }}
             className="overflow-hidden border-t border-border"
           >
+          <div className="flex items-center justify-between gap-2 px-3 pt-2">
+            <span className="text-[10px] text-muted-foreground">排序规则</span>
+            <select
+              value={sort}
+              onChange={(event) => setSort(event.target.value as MappingSort)}
+              className="h-6 rounded border border-border bg-background px-1.5 text-[10px] outline-none focus:border-blue-500"
+              aria-label="历史软件名称映射排序规则"
+            >
+              <option value="name">名称</option>
+              <option value="duration">总使用时长</option>
+              <option value="unrenamed">未重命名优先</option>
+              <option value="renamed">已重命名优先</option>
+            </select>
+          </div>
           <div className="max-h-[230px] space-y-1.5 overflow-y-auto px-3 py-2">
-          {apps.length > 0 ? apps.map(([processName, seconds]) => (
+          {sortedApps.length > 0 ? sortedApps.map(([processName, seconds]) => (
             <div key={processName} className="grid grid-cols-[145px_1fr_auto] items-center gap-2">
               <div className="min-w-0">
                 <p className="truncate text-[10px] font-medium" title={processName}>{processName}</p>
@@ -193,14 +228,12 @@ function AppStatsPage(): React.JSX.Element {
     return () => clearInterval(interval)
   }, [loadAliases, refresh])
 
-  const todayApps = snapshot.days[snapshot.today] || {}
-  const todayTotal = sumApps(todayApps)
   const buckets = useMemo(() => createBuckets(snapshot.days, mode), [snapshot.days, mode])
+  const rangeApps = useMemo(() => appsForCurrentRange(snapshot.days, snapshot.today, mode), [mode, snapshot.days, snapshot.today])
+  const rangeTotal = sumApps(rangeApps)
   const rankings = useMemo(() => {
-    const apps: AppSeconds = {}
-    for (const bucket of buckets) mergeApps(apps, bucket.apps)
-    return Object.entries(apps).sort((a, b) => b[1] - a[1]).slice(0, 20)
-  }, [buckets])
+    return Object.entries(rangeApps).sort((a, b) => b[1] - a[1]).slice(0, 20)
+  }, [rangeApps])
   const maxRankSeconds = Math.max(1, ...rankings.map(([, seconds]) => seconds))
   const historyApps = useMemo(() => {
     const apps: AppSeconds = {}
@@ -208,6 +241,7 @@ function AppStatsPage(): React.JSX.Element {
     return Object.entries(apps).sort((a, b) => b[1] - a[1])
   }, [snapshot.days])
   const displayName = (processName: string): string => aliases[processName] || processName
+  const rangeLabel = mode === 'day' ? '今日' : mode === 'month' ? '本月' : '今年'
 
   return (
     <AnimatedRoute>
@@ -233,8 +267,8 @@ function AppStatsPage(): React.JSX.Element {
 
         <div className="grid grid-cols-3 gap-2">
           {[
-            { label: '今日总时长', value: formatDuration(todayTotal), icon: Clock3 },
-            { label: '今日软件数', value: `${Object.keys(todayApps).length}`, icon: Monitor },
+            { label: `${rangeLabel}总时长`, value: formatDuration(rangeTotal), icon: Clock3 },
+            { label: `${rangeLabel}软件数`, value: `${Object.keys(rangeApps).length}`, icon: Monitor },
             { label: '统计状态', value: snapshot.isAfk ? '已暂停' : isRunning ? '进行中' : '未运行', icon: snapshot.isAfk ? PauseCircle : Activity },
           ].map(({ label, value, icon: Icon }) => (
             <div key={label} className={cn('rounded-md border border-border bg-card px-3 py-2', HOVER_CARD)}>
@@ -247,14 +281,14 @@ function AppStatsPage(): React.JSX.Element {
         <div className="grid grid-cols-[1fr_190px] gap-3">
           <section className={cn('rounded-md border border-border bg-card px-2 py-2', HOVER_CARD)}>
             <div className="mb-1 flex items-center justify-between">
-              <span className="text-xs font-medium">使用时长趋势</span>
+              <span className="text-xs font-medium">总使用时长趋势</span>
               <span className="text-[9px] text-muted-foreground">仅本地统计</span>
             </div>
             <TrendChart buckets={buckets} />
           </section>
 
           <section className={cn('overflow-hidden rounded-md border border-border bg-card px-2 py-2', HOVER_CARD)}>
-            <p className="mb-1.5 text-xs font-medium">软件排行 TOP 20</p>
+            <p className="mb-1.5 text-xs font-medium">{rangeLabel}软件排行 TOP 20</p>
             <div className="max-h-[145px] space-y-1.5 overflow-y-auto pr-1">
               {rankings.length > 0 ? rankings.map(([app, seconds], index) => (
                 <div key={app} className="text-[10px]">

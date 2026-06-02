@@ -3,7 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { createTray, destroyTray } from './tray'
 import { registerIpcHandlers } from './ipc/window'
-import { registerSettingsIpc, getStore } from './ipc/settings'
+import { registerSettingsIpc, getStore, syncAutoStartWithOs } from './ipc/settings'
 import { registerCaptureIpc } from './ipc/capture'
 import { registerQueueIpc, loadQueue, saveQueue } from './ipc/queue'
 import { registerBackendIpc } from './ipc/backend'
@@ -137,6 +137,7 @@ async function flushPendingQueue(): Promise<{ flushed: number; remaining: number
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.lightweight.toolset')
+  syncAutoStartWithOs()
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
