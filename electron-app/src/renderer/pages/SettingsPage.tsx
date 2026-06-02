@@ -794,7 +794,7 @@ function SettingsPage(): React.JSX.Element {
               <div className="flex items-center justify-between">
                 <div>
                   <Label className="text-sm">自动检查更新</Label>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">启动后延迟 5 秒检查一次正式 Release，不自动下载</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">软件启动时自动检查更新</p>
                 </div>
                 <button onClick={() => setAutoCheckUpdates(!autoCheckUpdates)} className={cn('h-5 w-10 flex-shrink-0 rounded-full transition-colors duration-200', autoCheckUpdates ? 'bg-primary' : 'bg-muted-foreground/25')}>
                   <div className={cn('h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200', autoCheckUpdates ? 'translate-x-5.5' : 'translate-x-0.5')} />
