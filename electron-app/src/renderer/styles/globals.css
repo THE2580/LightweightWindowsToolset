@@ -51,6 +51,21 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
+  body {
+    cursor: default;
+    user-select: none;
+  }
+
+  input:not([type='range']), textarea, [contenteditable='true'] {
+    cursor: text;
+    user-select: text;
+  }
+
+  input[type='range'] {
+    cursor: pointer;
+    user-select: none;
+  }
 }
 
 ::-webkit-scrollbar {
@@ -76,4 +91,20 @@
 
 .titlebar-no-drag {
   -webkit-app-region: no-drag;
+}
+
+@keyframes home-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.home-page-enter {
+  animation: home-page-enter 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }

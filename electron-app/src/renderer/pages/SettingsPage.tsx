@@ -13,6 +13,7 @@ import {
   Plus, Minus, FolderOpen, Info, Terminal
 } from 'lucide-react'
 import ConsoleLogPanel from '@/features/settings/ConsoleLogPanel'
+import Dropdown from '@/components/shared/Dropdown'
 
 type TabId = 'general' | 'api' | 'hotkey' | 'logs' | 'about'
 
@@ -623,7 +624,7 @@ function SettingsPage(): React.JSX.Element {
             </div>
             <div className="flex items-center justify-between py-3 border-b border-border/60">
               <div><Label className="text-sm">关闭应用时</Label><p className="text-[11px] text-muted-foreground mt-0.5">点击关闭按钮的行为</p></div>
-              <select value={closeBehavior} onChange={(e) => setCloseBehavior(e.target.value as 'quit' | 'tray')} className="h-8 w-28 rounded-md border border-border bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="quit">直接退出</option><option value="tray">缩小到托盘</option></select>
+              <Dropdown ariaLabel="关闭应用时" value={closeBehavior} onChange={(value) => setCloseBehavior(value as 'quit' | 'tray')} options={[{ id: 'quit', label: '直接退出' }, { id: 'tray', label: '缩小到托盘' }]} className="h-8 w-28 px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring" menuClassName="text-xs" />
             </div>
             <div className="flex items-center justify-between py-3 border-b border-border/60">
               <div><Label className="text-sm">开发者模式</Label><p className="text-[11px] text-muted-foreground mt-0.5">显示控制台日志标签页，便于排查运行状态</p></div>

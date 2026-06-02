@@ -53,19 +53,22 @@ function PinnerPage(): React.JSX.Element {
 
   return (
     <AnimatedRoute>
-      <div className="flex flex-col h-full p-4 gap-3">
-        {/* Status bar */}
-        <div className="shrink-0 flex items-center justify-between text-xs">
-          <span className={isPinmanRunning ? 'text-green-600' : 'text-red-500'}>
-            {isPinmanRunning ? 'PinMan 运行中' : 'PinMan 未运行'}
-          </span>
-          <button onClick={checkPinman} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="检查 pinman 状态">
+      <div className="flex h-full flex-col gap-2.5 p-4">
+        <div className="flex shrink-0 items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-bold">窗口置顶</h1>
+            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${isPinmanRunning ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-400' : 'border-red-200 bg-red-50 text-red-600 dark:border-red-900 dark:bg-red-950/40 dark:text-red-400'}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${isPinmanRunning ? 'bg-green-500' : 'bg-red-500'}`} />
+              {isPinmanRunning ? 'PinMan 运行中' : 'PinMan 未运行'}
+            </span>
+          </div>
+          <button onClick={checkPinman} className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="检查 pinman 状态">
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* Pinned count + Toggle button */}
-        <div className="shrink-0 flex items-center justify-between">
+        {/* Pinned count + actions */}
+        <div className="flex shrink-0 items-center justify-between rounded-md border border-border bg-card px-3 py-2">
           <span className="text-sm font-medium">
             已置顶: {pinnedWindows.length} / {maxPins}
           </span>

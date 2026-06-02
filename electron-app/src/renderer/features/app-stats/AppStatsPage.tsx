@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Activity, ChevronDown, ChevronUp, Clock3, Monitor, PauseCircle, Save, Trash2 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import AnimatedRoute from '@/components/shared/AnimatedRoute'
+import Dropdown from '@/components/shared/Dropdown'
 import { useAppStatsStore } from '@/stores/appStatsStore'
 import { cn } from '@/lib/utils'
 
@@ -132,7 +133,9 @@ function HistorySoftwareMappings({ apps, aliases, onSave }: { apps: [string, num
     <section
       className={cn('rounded-md border border-border bg-card', HOVER_CARD)}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setExpanded(false)
+        const nextTarget = event.relatedTarget
+        if (nextTarget instanceof Element && nextTarget.closest('[data-dropdown-portal="true"]')) return
+        if (!event.currentTarget.contains(nextTarget as Node | null)) setExpanded(false)
       }}
     >
       <button onClick={() => setExpanded((value) => !value)} className="flex w-full items-center justify-between px-3 py-2 text-left">
@@ -153,17 +156,19 @@ function HistorySoftwareMappings({ apps, aliases, onSave }: { apps: [string, num
           >
           <div className="flex items-center justify-between gap-2 px-3 pt-2">
             <span className="text-[10px] text-muted-foreground">排序规则</span>
-            <select
+            <Dropdown
+              ariaLabel="历史软件名称映射排序规则"
               value={sort}
-              onChange={(event) => setSort(event.target.value as MappingSort)}
-              className="h-6 rounded border border-border bg-background px-1.5 text-[10px] outline-none focus:border-blue-500"
-              aria-label="历史软件名称映射排序规则"
-            >
-              <option value="name">名称</option>
-              <option value="duration">总使用时长</option>
-              <option value="unrenamed">未重命名优先</option>
-              <option value="renamed">已重命名优先</option>
-            </select>
+              onChange={(value) => setSort(value as MappingSort)}
+              options={[
+                { id: 'name', label: '名称' },
+                { id: 'duration', label: '总使用时长' },
+                { id: 'unrenamed', label: '未重命名优先' },
+                { id: 'renamed', label: '已重命名优先' },
+              ]}
+              className="h-6 px-1.5 text-[10px]"
+              menuClassName="text-[10px]"
+            />
           </div>
           <div className="max-h-[230px] space-y-1.5 overflow-y-auto px-3 py-2">
           {sortedApps.length > 0 ? sortedApps.map(([processName, seconds]) => (
