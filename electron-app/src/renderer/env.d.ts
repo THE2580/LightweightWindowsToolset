@@ -76,6 +76,14 @@ interface Window {
     tool: {
       setEnabled: (toolId: string, enabled: boolean) => Promise<void>
     }
+    updater: {
+      getState: () => Promise<UpdateState>
+      check: () => Promise<UpdateState>
+      download: () => Promise<UpdateState>
+      apply: () => Promise<void>
+      openRelease: () => Promise<void>
+      onState: (callback: (state: UpdateState) => void) => (() => void)
+    }
     pinner: {
       toggle: (borderColor: string) => Promise<{ success: boolean; action?: string; hwnd?: number; processName?: string; windowTitle?: string; reason?: string; message?: string }>
       unpin: () => Promise<{ success: boolean }>
@@ -103,4 +111,26 @@ interface Window {
       getAllAccelerators: () => Promise<Record<string, string>>
     }
   }
+}
+
+interface UpdateState {
+  phase: 'idle' | 'checking' | 'available' | 'up-to-date' | 'downloading' | 'downloaded' | 'error'
+  currentVersion: string
+  distribution: 'installer' | 'portable' | 'development'
+  info: {
+    currentVersion: string
+    latestVersion: string
+    releaseName: string
+    releaseNotes: string
+    releaseUrl: string
+    distribution: 'installer' | 'portable' | 'development'
+    assetName: string
+    assetSize: number
+  } | null
+  downloadedBytes: number
+  totalBytes: number
+  percent: number
+  downloadedPath: string | null
+  message: string
+  checksum: 'pending' | 'verified' | 'unavailable'
 }

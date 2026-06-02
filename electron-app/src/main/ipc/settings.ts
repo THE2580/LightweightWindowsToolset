@@ -3,11 +3,12 @@ import { execFile } from 'child_process'
 import Store from 'electron-store'
 import { getStorageDir, getStoragePathDisplay, setStoragePath } from '../utils/storage-path'
 
-const store = new Store({
+const store = new Store<Record<string, unknown>>({
   cwd: getStorageDir(),
   defaults: {
     theme: 'system',
     autoStart: false,
+    autoCheckUpdates: true,
     backendUrl: 'http://100.70.198.102:8000',
     deepseekModel: 'deepseek-v4-flash',
     windowTitle: '轻量化工具集',

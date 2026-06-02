@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import {
   Eye, EyeOff, Monitor, Sun, Moon, Wrench, Keyboard, RotateCcw,
-  Plus, Minus, FolderOpen, Info, Terminal
+  Plus, Minus, FolderOpen, Info, Terminal, Download, RefreshCw, ExternalLink
 } from 'lucide-react'
 import ConsoleLogPanel from '@/features/settings/ConsoleLogPanel'
 import Dropdown from '@/components/shared/Dropdown'
@@ -118,12 +118,12 @@ function validateHotkeyKeys(keys: string[]): string | null {
 
 function SettingsPage(): React.JSX.Element {
   const {
-    theme, autoStart, chatClickOutsideToClose, chatAutoExpand,
+    theme, autoStart, autoCheckUpdates, chatClickOutsideToClose, chatAutoExpand,
     chatExpandZoneVisible, chatExpandZoneWidth, chatExpandZoneHeight, chatAutoExpandDelay,
     backendUrl, deepseekModel, windowTitle, closeBehavior,
     captureHotkey, chatHotkey, captureHotkeyEnabled, chatHotkeyEnabled,
     pinnerHotkey, pinnerHotkeyEnabled,
-    setTheme, setAutoStart, setChatClickOutsideToClose, setChatAutoExpand,
+    setTheme, setAutoStart, setAutoCheckUpdates, setChatClickOutsideToClose, setChatAutoExpand,
     setChatExpandZoneVisible, setChatExpandZoneWidth, setChatExpandZoneHeight, setChatAutoExpandDelay,
     setChatExpandZonePreview,
     setBackendUrl, setDeepseekModel, setWindowTitle, setCloseBehavior,
@@ -151,6 +151,7 @@ function SettingsPage(): React.JSX.Element {
   const [storagePathSuccess, setStoragePathSuccess] = useState(false)
   const [modelDraft, setModelDraft] = useState(deepseekModel)
   const [backendDraft, setBackendDraft] = useState(backendUrl)
+  const [updateState, setUpdateState] = useState<UpdateState | null>(null)
 
   // Hotkey editing state
   const [editingCapture, setEditingCapture] = useState(false)
@@ -184,6 +185,10 @@ function SettingsPage(): React.JSX.Element {
   useEffect(() => { setAutoExpandDelayDraft(chatAutoExpandDelay) }, [chatAutoExpandDelay])
   useEffect(() => { if (!storagePathEditing) setStoragePathDraft(storagePath) }, [storagePath, storagePathEditing])
   useEffect(() => { if (!developerMode && activeTab === 'logs') setActiveTab('general') }, [developerMode, activeTab])
+  useEffect(() => {
+    window.api.updater.getState().then(setUpdateState)
+    return window.api.updater.onState(setUpdateState)
+  }, [])
 
   useEffect(() => { if (!editingCapture) setCaptureKeys(parseAccelerator(captureHotkey)) }, [captureHotkey, editingCapture])
   useEffect(() => { if (!editingChat) setChatKeys(parseAccelerator(chatHotkey)) }, [chatHotkey, editingChat])
@@ -783,7 +788,79 @@ function SettingsPage(): React.JSX.Element {
             </div>
             <div className="py-3">
               <Label className="text-xs text-muted-foreground">版本</Label>
-              <p className="text-sm mt-0.5 font-mono">1.0.0</p>
+              <p className="text-sm mt-0.5 font-mono">{updateState?.currentVersion || '加载中...'}</p>
+            </div>
+            <div className="border-t border-border pt-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm">自动检查更新</Label>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">启动后延迟 5 秒检查一次正式 Release，不自动下载</p>
+                </div>
+                <button onClick={() => setAutoCheckUpdates(!autoCheckUpdates)} className={cn('h-5 w-10 flex-shrink-0 rounded-full transition-colors duration-200', autoCheckUpdates ? 'bg-primary' : 'bg-muted-foreground/25')}>
+                  <div className={cn('h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200', autoCheckUpdates ? 'translate-x-5.5' : 'translate-x-0.5')} />
+                </button>
+              </div>
+
+              <div className="mt-3 rounded-md border border-border bg-card p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium">软件更新</p>
+                    <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                      {updateState?.message || '尚未检查更新'}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 flex-shrink-0 px-2 text-xs"
+                    disabled={updateState?.phase === 'checking' || updateState?.phase === 'downloading'}
+                    onClick={() => window.api.updater.check().then(setUpdateState)}
+                  >
+                    <RefreshCw size={12} className={cn('mr-1', updateState?.phase === 'checking' && 'animate-spin')} />检查更新
+                  </Button>
+                </div>
+
+                {updateState?.info && (
+                  <div className="mt-3 space-y-2 border-t border-border/60 pt-2">
+                    <div className="flex items-center justify-between gap-2 text-[11px]">
+                      <span>最新版本：<span className="font-mono">v{updateState.info.latestVersion}</span></span>
+                      <button onClick={() => window.api.updater.openRelease()} className="inline-flex items-center gap-1 text-primary hover:underline">
+                        Release <ExternalLink size={11} />
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      {updateState.distribution === 'portable' ? '便携版：下载 ZIP 后打开所在目录，请退出程序并手动替换文件。' : updateState.distribution === 'installer' ? '安装版：下载完成后可启动安装程序并退出当前版本。' : '开发版：仅支持检查更新，不执行真实下载。'}
+                    </p>
+
+                    {updateState.phase === 'downloading' && (
+                      <div>
+                        <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
+                          <span>正在下载</span>
+                          <span>{updateState.percent}%</span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                          <div className="h-full rounded-full bg-primary transition-[width] duration-150" style={{ width: `${updateState.percent}%` }} />
+                        </div>
+                      </div>
+                    )}
+
+                    {updateState.phase === 'downloaded' ? (
+                      <Button size="sm" className="h-7 px-2 text-xs" onClick={() => window.api.updater.apply()}>
+                        {updateState.distribution === 'portable' ? '打开下载目录' : '安装并退出'}
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        disabled={updateState.phase === 'downloading' || updateState.distribution === 'development'}
+                        onClick={() => window.api.updater.download().then(setUpdateState)}
+                      >
+                        <Download size={12} className="mr-1" />下载更新
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </motion.div>
         )}

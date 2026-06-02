@@ -107,6 +107,18 @@ const api = {
     setEnabled: (toolId: string, enabled: boolean): Promise<void> =>
       ipcRenderer.invoke('tool:set-enabled', toolId, enabled)
   },
+  updater: {
+    getState: (): Promise<unknown> => ipcRenderer.invoke('updater:get-state'),
+    check: (): Promise<unknown> => ipcRenderer.invoke('updater:check'),
+    download: (): Promise<unknown> => ipcRenderer.invoke('updater:download'),
+    apply: (): Promise<void> => ipcRenderer.invoke('updater:apply'),
+    openRelease: (): Promise<void> => ipcRenderer.invoke('updater:open-release'),
+    onState: (callback: (state: unknown) => void): (() => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state)
+      ipcRenderer.on('updater:state', handler)
+      return () => { ipcRenderer.removeListener('updater:state', handler) }
+    }
+  },
   pinman: {
     toggle: (): Promise<string> => ipcRenderer.invoke('pinman:toggle'),
     pinHwnd: (hwnd: number): Promise<string> => ipcRenderer.invoke('pinman:pin-hwnd', hwnd),

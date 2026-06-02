@@ -6,6 +6,7 @@ type CloseBehavior = 'quit' | 'tray'
 interface SettingsState {
   theme: ThemeMode
   autoStart: boolean
+  autoCheckUpdates: boolean
   chatClickOutsideToClose: boolean
   chatAutoExpand: boolean
   chatExpandZoneVisible: boolean
@@ -33,6 +34,7 @@ interface SettingsState {
   load: () => Promise<void>
   setTheme: (theme: ThemeMode) => Promise<void>
   setAutoStart: (v: boolean) => Promise<void>
+  setAutoCheckUpdates: (v: boolean) => Promise<void>
   setChatClickOutsideToClose: (v: boolean) => Promise<void>
   setChatAutoExpand: (v: boolean) => Promise<void>
   setChatExpandZoneVisible: (v: boolean) => Promise<void>
@@ -61,6 +63,7 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   theme: 'system',
   autoStart: false,
+  autoCheckUpdates: true,
   chatClickOutsideToClose: false,
   chatAutoExpand: false,
   chatExpandZoneVisible: false,
@@ -92,6 +95,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       set({
         theme: (all.theme as ThemeMode) || 'system',
         autoStart: (all.autoStart as boolean) || false,
+        autoCheckUpdates: (all.autoCheckUpdates as boolean) ?? true,
         chatClickOutsideToClose: (all.chatClickOutsideToClose as boolean) || false,
         chatAutoExpand: (all.chatAutoExpand as boolean) || false,
         chatExpandZoneVisible: (all.chatExpandZoneVisible as boolean) || false,
@@ -121,6 +125,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   setTheme: async (theme) => { await window.api.settings.set('theme', theme); set({ theme }) },
   setAutoStart: async (v) => { await window.api.settings.set('autoStart', v); set({ autoStart: v }) },
+  setAutoCheckUpdates: async (v) => { await window.api.settings.set('autoCheckUpdates', v); set({ autoCheckUpdates: v }) },
   setChatClickOutsideToClose: async (v) => { await window.api.settings.set('chatClickOutsideToClose', v); set({ chatClickOutsideToClose: v }) },
   setChatAutoExpand: async (v) => { await window.api.settings.set('chatAutoExpand', v); set({ chatAutoExpand: v }) },
   setChatExpandZoneVisible: async (v) => { await window.api.settings.set('chatExpandZoneVisible', v); set({ chatExpandZoneVisible: v }) },

@@ -12,6 +12,7 @@ import { startBackend, stopBackend } from './ipc/backend-process'
 import { installMainLogger, registerLogIpc } from './ipc/logs'
 import { registerKeyStatsIpc, startKeyStats, stopKeyStats } from './ipc/keystats'
 import { registerAppStatsIpc, startAppStats, stopAppStats } from './ipc/appstats'
+import { registerUpdaterIpc, scheduleAutoUpdateCheck } from './ipc/updater'
 
 let isQuitting = false
 
@@ -369,6 +370,8 @@ app.whenReady().then(() => {
   registerLogIpc()
   registerKeyStatsIpc()
   registerAppStatsIpc()
+  registerUpdaterIpc(mainWindow)
+  scheduleAutoUpdateCheck()
 
   // Load persisted disabled-tools state and check window-pinner before starting pinman
   const disabledRaw = getStore().get('disabledTools') as string | undefined
