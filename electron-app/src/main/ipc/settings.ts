@@ -9,6 +9,7 @@ const store = new Store<Record<string, unknown>>({
     theme: 'system',
     autoStart: false,
     autoCheckUpdates: true,
+    showUpdateNotification: true,
     backendUrl: 'http://100.70.198.102:8000',
     deepseekModel: 'deepseek-v4-flash',
     windowTitle: '轻量化工具集',

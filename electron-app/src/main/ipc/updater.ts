@@ -7,6 +7,7 @@ import { getStore } from './settings'
 
 type Distribution = 'installer' | 'portable' | 'development'
 type UpdatePhase = 'idle' | 'checking' | 'available' | 'up-to-date' | 'downloading' | 'downloaded' | 'error'
+type UpdateCheckSource = 'manual' | 'auto'
 
 interface ReleaseAsset {
   name: string
@@ -47,6 +48,7 @@ interface UpdateState {
   downloadedPath: string | null
   message: string
   checksum: 'pending' | 'verified' | 'unavailable'
+  checkSource: UpdateCheckSource | null
 }
 
 const RELEASE_API = 'https://api.github.com/repos/THE2580/LightweightWindowsToolset/releases/latest'
@@ -82,7 +84,8 @@ function createInitialState(): UpdateState {
     percent: 0,
     downloadedPath: null,
     message: '',
-    checksum: 'pending'
+    checksum: 'pending',
+    checkSource: null
   }
 }
 
@@ -157,9 +160,9 @@ async function fetchLatestRelease(): Promise<GitHubRelease> {
   }
 }
 
-async function checkForUpdates(): Promise<UpdateState> {
+async function checkForUpdates(checkSource: UpdateCheckSource): Promise<UpdateState> {
   if (state.phase === 'downloading') return state
-  setState({ phase: 'checking', message: '正在检查更新...', downloadedPath: null, percent: 0, downloadedBytes: 0, totalBytes: 0, checksum: 'pending' })
+  setState({ phase: 'checking', checkSource, message: '正在检查更新...', downloadedPath: null, percent: 0, downloadedBytes: 0, totalBytes: 0, checksum: 'pending' })
   try {
     const release = await fetchLatestRelease()
     if (release.draft || release.prerelease) throw new Error('最新 Release 不是正式版本')
@@ -273,7 +276,7 @@ export function registerUpdaterIpc(window: BrowserWindow): void {
   mainWindow = window
   state = createInitialState()
   ipcMain.handle('updater:get-state', () => state)
-  ipcMain.handle('updater:check', () => checkForUpdates())
+  ipcMain.handle('updater:check', () => checkForUpdates('manual'))
   ipcMain.handle('updater:download', () => downloadUpdate())
   ipcMain.handle('updater:apply', () => applyDownloadedUpdate())
   ipcMain.handle('updater:open-release', () => state.info ? shell.openExternal(state.info.releaseUrl) : undefined)
@@ -282,6 +285,6 @@ export function registerUpdaterIpc(window: BrowserWindow): void {
 export function scheduleAutoUpdateCheck(): void {
   if (!(getStore().get('autoCheckUpdates', true) as boolean)) return
   setTimeout(() => {
-    checkForUpdates().catch((error) => console.error('[updater] Auto-check failed:', error))
+    checkForUpdates('auto').catch((error) => console.error('[updater] Auto-check failed:', error))
   }, 5000)
 }

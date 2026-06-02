@@ -10,6 +10,7 @@ import { useCaptureStore } from './stores/captureStore'
 import { useDeepseekStore } from './stores/deepseekStore'
 import { usePinnerStore } from './stores/pinnerStore'
 import { useSettingsStore } from './stores/settingsStore'
+import UpdateNoticeDialog from './components/shared/UpdateNoticeDialog'
 
 function AppListeners(): null {
   const navigate = useNavigate()
@@ -93,6 +94,7 @@ function AppContent(): React.JSX.Element {
   return (
     <>
       <AppListeners />
+      <UpdateNoticeDialog />
       <AppShell>
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<HomePage />} />

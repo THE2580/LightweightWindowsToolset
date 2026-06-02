@@ -133,4 +133,5 @@ interface UpdateState {
   downloadedPath: string | null
   message: string
   checksum: 'pending' | 'verified' | 'unavailable'
+  checkSource: 'manual' | 'auto' | null
 }

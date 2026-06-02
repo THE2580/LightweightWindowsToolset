@@ -118,12 +118,12 @@ function validateHotkeyKeys(keys: string[]): string | null {
 
 function SettingsPage(): React.JSX.Element {
   const {
-    theme, autoStart, autoCheckUpdates, chatClickOutsideToClose, chatAutoExpand,
+    theme, autoStart, autoCheckUpdates, showUpdateNotification, chatClickOutsideToClose, chatAutoExpand,
     chatExpandZoneVisible, chatExpandZoneWidth, chatExpandZoneHeight, chatAutoExpandDelay,
     backendUrl, deepseekModel, windowTitle, closeBehavior,
     captureHotkey, chatHotkey, captureHotkeyEnabled, chatHotkeyEnabled,
     pinnerHotkey, pinnerHotkeyEnabled,
-    setTheme, setAutoStart, setAutoCheckUpdates, setChatClickOutsideToClose, setChatAutoExpand,
+    setTheme, setAutoStart, setAutoCheckUpdates, setShowUpdateNotification, setChatClickOutsideToClose, setChatAutoExpand,
     setChatExpandZoneVisible, setChatExpandZoneWidth, setChatExpandZoneHeight, setChatAutoExpandDelay,
     setChatExpandZonePreview,
     setBackendUrl, setDeepseekModel, setWindowTitle, setCloseBehavior,
@@ -185,6 +185,10 @@ function SettingsPage(): React.JSX.Element {
   useEffect(() => { setAutoExpandDelayDraft(chatAutoExpandDelay) }, [chatAutoExpandDelay])
   useEffect(() => { if (!storagePathEditing) setStoragePathDraft(storagePath) }, [storagePath, storagePathEditing])
   useEffect(() => { if (!developerMode && activeTab === 'logs') setActiveTab('general') }, [developerMode, activeTab])
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab === 'general' || tab === 'api' || tab === 'hotkey' || tab === 'about') setActiveTab(tab)
+  }, [searchParams])
   useEffect(() => {
     window.api.updater.getState().then(setUpdateState)
     return window.api.updater.onState(setUpdateState)
@@ -800,6 +804,27 @@ function SettingsPage(): React.JSX.Element {
                   <div className={cn('h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200', autoCheckUpdates ? 'translate-x-5.5' : 'translate-x-0.5')} />
                 </button>
               </div>
+              <AnimatePresence initial={false}>
+                {autoCheckUpdates && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-3 flex items-center justify-between rounded-md border border-border/70 bg-muted/25 px-3 py-2.5">
+                      <div>
+                        <Label className="text-xs">新版本提示弹窗</Label>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">自动检查发现新版本时弹出提示</p>
+                      </div>
+                      <button onClick={() => setShowUpdateNotification(!showUpdateNotification)} className={cn('h-5 w-10 flex-shrink-0 rounded-full transition-colors duration-200', showUpdateNotification ? 'bg-primary' : 'bg-muted-foreground/25')}>
+                        <div className={cn('h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200', showUpdateNotification ? 'translate-x-5.5' : 'translate-x-0.5')} />
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               <div className="mt-3 rounded-md border border-border bg-card p-3">
                 <div className="flex items-center justify-between gap-2">
