@@ -5,6 +5,7 @@ import AppShell from './components/layout/AppShell'
 import HomePage from './pages/HomePage'
 import SettingsPage from './pages/SettingsPage'
 import PluginRoute from './lib/plugin-loader.tsx'
+import TimerFloatingPage from './features/timer/TimerFloatingPage'
 import { usePluginStore } from './stores/pluginStore'
 import { useCaptureStore } from './stores/captureStore'
 import { useDeepseekStore } from './stores/deepseekStore'
@@ -91,6 +92,14 @@ function AppListeners(): null {
 
 function AppContent(): React.JSX.Element {
   const location = useLocation()
+  if (location.pathname.startsWith('/timer-floating/')) {
+    return (
+      <Routes location={location} key={location.pathname}>
+        <Route path="/timer-floating/:timerId" element={<TimerFloatingPage />} />
+      </Routes>
+    )
+  }
+
   return (
     <>
       <AppListeners />

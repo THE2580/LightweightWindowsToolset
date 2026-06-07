@@ -8,6 +8,7 @@ const CapturePage = lazy(() => import('@/features/resource-capture/CapturePage')
 const PinnerPage = lazy(() => import('@/features/window-pinner/PinnerPage'))
 const KeyCounterPage = lazy(() => import('@/features/key-counter/KeyCounterPage'))
 const AppStatsPage = lazy(() => import('@/features/app-stats/AppStatsPage'))
+const TimerPage = lazy(() => import('@/features/timer/TimerPage'))
 
 export interface BuiltinPlugin {
   id: string
@@ -55,6 +56,15 @@ export const BUILTIN_PLUGINS: BuiltinPlugin[] = [
     status: 'stable',
     entry: './AppStatsPage.tsx',
     component: AppStatsPage
+  },
+  {
+    id: 'timer',
+    name: '计时器',
+    description: '管理多个正计时和倒计时，可将任意计时器弹出为独立置顶悬浮窗',
+    icon: 'clock',
+    status: 'stable',
+    entry: './TimerPage.tsx',
+    component: TimerPage
   }
 ]
 

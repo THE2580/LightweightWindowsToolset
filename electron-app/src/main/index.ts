@@ -13,6 +13,7 @@ import { installMainLogger, registerLogIpc } from './ipc/logs'
 import { registerKeyStatsIpc, startKeyStats, stopKeyStats } from './ipc/keystats'
 import { registerAppStatsIpc, startAppStats, stopAppStats } from './ipc/appstats'
 import { registerUpdaterIpc, scheduleAutoUpdateCheck } from './ipc/updater'
+import { registerTimerIpc, stopTimersForDisable, stopTimersForQuit } from './ipc/timer'
 
 let isQuitting = false
 
@@ -153,6 +154,7 @@ app.whenReady().then(() => {
       stopBackend()
       stopKeyStats()
       stopAppStats()
+      stopTimersForQuit()
     } catch { /* ok */ }
     destroyTray()
     globalShortcut.unregisterAll()
@@ -274,6 +276,7 @@ app.whenReady().then(() => {
       }
       if (toolId === 'key-counter') stopKeyStats()
       if (toolId === 'app-stats') stopAppStats()
+      if (toolId === 'timer') stopTimersForDisable()
     }
   })
 
@@ -371,6 +374,7 @@ app.whenReady().then(() => {
   registerKeyStatsIpc()
   registerAppStatsIpc()
   registerUpdaterIpc(mainWindow)
+  registerTimerIpc(mainWindow)
   scheduleAutoUpdateCheck()
 
   // Load persisted disabled-tools state and check window-pinner before starting pinman

@@ -67,6 +67,22 @@ interface Window {
       clear: () => Promise<string>
       configAfk: (thresholdSec: number) => Promise<string>
     }
+    timer: {
+      getSnapshot: () => Promise<TimerSnapshot>
+      create: (input: CreateTimerInput) => Promise<TimerSnapshot>
+      update: (id: string, patch: UpdateTimerInput) => Promise<TimerSnapshot>
+      delete: (id: string) => Promise<TimerSnapshot>
+      start: (id: string) => Promise<TimerSnapshot>
+      pause: (id: string) => Promise<TimerSnapshot>
+      reset: (id: string) => Promise<TimerSnapshot>
+      resetPaused: () => Promise<TimerSnapshot>
+      reorder: (ids: string[]) => Promise<TimerSnapshot>
+      pauseAll: () => Promise<TimerSnapshot>
+      openFloating: (id: string) => Promise<TimerSnapshot>
+      closeFloating: (id: string) => Promise<TimerSnapshot>
+      closeAllFloating: () => Promise<TimerSnapshot>
+      onSnapshot: (callback: (snapshot: TimerSnapshot) => void) => (() => void)
+    }
     tray: {
       onTrayCapture: (callback: () => void) => (() => void)
       onNavigate: (callback: (path: string) => void) => (() => void)
@@ -111,6 +127,45 @@ interface Window {
       getAllAccelerators: () => Promise<Record<string, string>>
     }
   }
+}
+
+type TimerType = 'stopwatch' | 'countdown'
+type TimerStatus = 'idle' | 'running' | 'paused' | 'finished'
+
+interface TimerItem {
+  id: string
+  name: string
+  note: string
+  type: TimerType
+  status: TimerStatus
+  createdAt: number
+  order: number
+  totalMs: number
+  elapsedMs: number
+  remainingMs: number
+  lastStartedAt: number | null
+  notifyOnFinish: boolean
+  floatingBounds?: { x: number; y: number }
+}
+
+interface TimerSnapshot {
+  timers: TimerItem[]
+  floatingIds: string[]
+}
+
+interface CreateTimerInput {
+  name?: string
+  note?: string
+  type: TimerType
+  totalMs?: number
+  notifyOnFinish?: boolean
+}
+
+interface UpdateTimerInput {
+  name?: string
+  note?: string
+  totalMs?: number
+  notifyOnFinish?: boolean
 }
 
 interface UpdateState {

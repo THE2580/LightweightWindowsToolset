@@ -85,6 +85,26 @@ const api = {
     clear: (): Promise<string> => ipcRenderer.invoke('appstats:clear'),
     configAfk: (thresholdSec: number): Promise<string> => ipcRenderer.invoke('appstats:config-afk', thresholdSec)
   },
+  timer: {
+    getSnapshot: (): Promise<unknown> => ipcRenderer.invoke('timer:get-snapshot'),
+    create: (input: unknown): Promise<unknown> => ipcRenderer.invoke('timer:create', input),
+    update: (id: string, patch: unknown): Promise<unknown> => ipcRenderer.invoke('timer:update', id, patch),
+    delete: (id: string): Promise<unknown> => ipcRenderer.invoke('timer:delete', id),
+    start: (id: string): Promise<unknown> => ipcRenderer.invoke('timer:start', id),
+    pause: (id: string): Promise<unknown> => ipcRenderer.invoke('timer:pause', id),
+    reset: (id: string): Promise<unknown> => ipcRenderer.invoke('timer:reset', id),
+    resetPaused: (): Promise<unknown> => ipcRenderer.invoke('timer:reset-paused'),
+    reorder: (ids: string[]): Promise<unknown> => ipcRenderer.invoke('timer:reorder', ids),
+    pauseAll: (): Promise<unknown> => ipcRenderer.invoke('timer:pause-all'),
+    openFloating: (id: string): Promise<unknown> => ipcRenderer.invoke('timer:open-floating', id),
+    closeFloating: (id: string): Promise<unknown> => ipcRenderer.invoke('timer:close-floating', id),
+    closeAllFloating: (): Promise<unknown> => ipcRenderer.invoke('timer:close-all-floating'),
+    onSnapshot: (callback: (snapshot: unknown) => void): (() => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, snapshot: unknown) => callback(snapshot)
+      ipcRenderer.on('timer:snapshot', handler)
+      return () => { ipcRenderer.removeListener('timer:snapshot', handler) }
+    }
+  },
   tray: {
     onTrayCapture: (callback: () => void): (() => void) => {
       ipcRenderer.on('tray:capture', () => callback())
