@@ -19,7 +19,7 @@ function TitleBar(): React.JSX.Element {
   }
 
   return (
-    <div className="titlebar-drag flex items-center justify-between h-8 bg-secondary border-b border-border select-none flex-shrink-0">
+    <div className="titlebar-drag flex items-center justify-between h-8 bg-secondary border-b border-border select-none flex-shrink-0" onDoubleClick={(event) => event.preventDefault()}>
       <div className="flex items-center pl-3">
         <span className="text-xs font-medium text-muted-foreground">
           {windowTitle}

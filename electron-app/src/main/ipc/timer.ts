@@ -50,8 +50,8 @@ const STORE_KEY = 'timers'
 const MAX_TIMERS = 20
 const MAX_NAME_LENGTH = 24
 const MAX_COUNTDOWN_MS = ((99 * 60 * 60) + (59 * 60) + 59) * 1000
-const FLOATING_WIDTH = 168
-const FLOATING_HEIGHT = 92
+const FLOATING_WIDTH = 150
+const FLOATING_HEIGHT = 76
 
 let mainWindow: BrowserWindow | null = null
 let timers: TimerItem[] = []
@@ -239,10 +239,14 @@ function openFloatingInternal(id: string): TimerSnapshot {
     maxWidth: FLOATING_WIDTH,
     maxHeight: FLOATING_HEIGHT,
     resizable: false,
+    maximizable: false,
+    fullscreenable: false,
     frame: false,
     show: false,
     alwaysOnTop: true,
-    backgroundColor: '#ffffff',
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
     skipTaskbar: true,
     title: timer.name,
     webPreferences: {
@@ -254,9 +258,16 @@ function openFloatingInternal(id: string): TimerSnapshot {
   })
 
   floatingWindows.set(id, win)
+  win.setMenuBarVisibility(false)
   win.on('ready-to-show', () => {
     win.show()
     win.setAlwaysOnTop(true, 'floating')
+  })
+  win.on('maximize', () => {
+    win.unmaximize()
+  })
+  win.on('enter-full-screen', () => {
+    win.setFullScreen(false)
   })
   win.on('moved', () => {
     const current = findTimer(id)

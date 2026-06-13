@@ -10,15 +10,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   })
 
   ipcMain.handle('window:isMaximized', () => {
-    return mainWindow.isMaximized()
+    return false
   })
 
   ipcMain.handle('window:toggleMaximize', () => {
-    if (mainWindow.isMaximized()) {
-      mainWindow.unmaximize()
-    } else {
-      mainWindow.maximize()
-    }
+    return false
   })
 
   ipcMain.handle('window:setTitle', (_event, title: string) => {

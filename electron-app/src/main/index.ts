@@ -64,6 +64,8 @@ function createWindow(): BrowserWindow {
     maxWidth: 676,
     maxHeight: 444,
     resizable: false,
+    maximizable: false,
+    fullscreenable: false,
     frame: false,
     show: false,
     icon: join(__dirname, '../../resources/icon.png'),
@@ -78,6 +80,14 @@ function createWindow(): BrowserWindow {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
+  })
+
+  mainWindow.on('maximize', () => {
+    mainWindow.unmaximize()
+  })
+
+  mainWindow.on('enter-full-screen', () => {
+    mainWindow.setFullScreen(false)
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {

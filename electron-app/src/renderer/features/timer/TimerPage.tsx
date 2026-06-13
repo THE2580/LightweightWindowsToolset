@@ -39,8 +39,8 @@ interface TimerFormState {
   notifyOnFinish: boolean
 }
 
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000))
+function formatDuration(ms: number, type: TimerType = 'stopwatch'): string {
+  const totalSeconds = Math.max(0, type === 'countdown' ? Math.ceil(ms / 1000) : Math.floor(ms / 1000))
   const hours = Math.floor(totalSeconds / 3600)
   const minutes = Math.floor((totalSeconds % 3600) / 60)
   const seconds = totalSeconds % 60
@@ -75,8 +75,26 @@ function splitDuration(ms: number): Pick<TimerFormState, 'hours' | 'minutes' | '
   }
 }
 
-function displayMs(timer: TimerItem): number {
-  return timer.type === 'countdown' ? timer.remainingMs : timer.elapsedMs
+function useNowTicker(enabled: boolean): number {
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (!enabled) return
+    const handle = window.setInterval(() => setNow(Date.now()), 250)
+    return () => window.clearInterval(handle)
+  }, [enabled])
+
+  return now
+}
+
+function displayMs(timer: TimerItem, now: number): number {
+  if (timer.status !== 'running' || timer.lastStartedAt === null) {
+    return timer.type === 'countdown' ? timer.remainingMs : timer.elapsedMs
+  }
+  const delta = Math.max(0, now - timer.lastStartedAt)
+  return timer.type === 'countdown'
+    ? Math.max(0, timer.remainingMs - delta)
+    : timer.elapsedMs + delta
 }
 
 function cardStateClass(status: TimerStatus): string {
@@ -385,6 +403,7 @@ function ConfirmDeleteDialog({
 
 function TimerCard({
   timer,
+  now,
   isDragging,
   dragConstraints,
   onDragStart,
@@ -392,6 +411,7 @@ function TimerCard({
   shouldSuppressClick
 }: {
   timer: TimerItem
+  now: number
   isDragging: boolean
   dragConstraints: RefObject<HTMLElement | null>
   onDragStart: (id: string) => void
@@ -486,8 +506,8 @@ function TimerCard({
 
       <div className="mt-4 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <span className="inline-block w-[9.5ch] font-mono text-3xl font-semibold tracking-tight tabular-nums">{formatDuration(displayMs(timer))}</span>
-          {timer.type === 'countdown' && <span className="ml-2 align-middle text-xs text-muted-foreground">原始 {formatDuration(timer.totalMs)}</span>}
+          <span className="inline-block w-[9.5ch] font-mono text-3xl font-semibold tracking-tight tabular-nums">{formatDuration(displayMs(timer, now), timer.type)}</span>
+          {timer.type === 'countdown' && <span className="ml-2 align-middle text-xs text-muted-foreground">原始 {formatDuration(timer.totalMs, timer.type)}</span>}
         </div>
         <div className="flex shrink-0 items-center gap-2" onPointerDown={(event) => event.stopPropagation()} onClick={stopClick}>
         {timer.status === 'running' ? (
@@ -548,6 +568,7 @@ function TimerPage(): React.JSX.Element {
   const [dragging, setDragging] = useState(false)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const orderedIdsRef = useRef<string[]>([])
+  const visibleIdsRef = useRef<string[]>([])
   const suppressClickRef = useRef(false)
   const listRef = useRef<HTMLElement | null>(null)
 
@@ -562,9 +583,14 @@ function TimerPage(): React.JSX.Element {
   const floatingCount = useTimerStore((s) => s.floatingIds.size)
   const timerById = useMemo(() => new Map(timers.map((timer) => [timer.id, timer])), [timers])
   const visibleIds = sortedTimers.map((timer) => timer.id)
+  const now = useNowTicker(timers.some((timer) => timer.status === 'running'))
   const orderedTimers = orderedIds
     .map((id) => timerById.get(id))
     .filter((timer): timer is TimerItem => Boolean(timer))
+
+  useEffect(() => {
+    visibleIdsRef.current = visibleIds
+  }, [visibleIds.join('|')])
 
   useEffect(() => {
     if (dragging) return
@@ -596,6 +622,36 @@ function TimerPage(): React.JSX.Element {
       suppressClickRef.current = false
     }, 80)
   }
+
+  useEffect(() => {
+    if (!dragging) return
+
+    const cancelDrag = (): void => {
+      const ids = visibleIdsRef.current
+      orderedIdsRef.current = ids
+      setOrderedIds(ids)
+      setDragging(false)
+      setDraggingId(null)
+      window.setTimeout(() => {
+        suppressClickRef.current = false
+      }, 80)
+    }
+
+    const handleVisibilityChange = (): void => {
+      if (document.hidden) cancelDrag()
+    }
+
+    window.addEventListener('blur', cancelDrag)
+    window.addEventListener('pagehide', cancelDrag)
+    window.addEventListener('pointercancel', cancelDrag)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.removeEventListener('blur', cancelDrag)
+      window.removeEventListener('pagehide', cancelDrag)
+      window.removeEventListener('pointercancel', cancelDrag)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [dragging])
 
   return (
     <AnimatedRoute>
@@ -693,6 +749,7 @@ function TimerPage(): React.JSX.Element {
               <TimerCard
                 key={timer.id}
                 timer={timer}
+                now={now}
                 isDragging={draggingId === timer.id}
                 dragConstraints={listRef}
                 onDragStart={handleDragStart}
