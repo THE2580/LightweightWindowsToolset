@@ -2,6 +2,9 @@
 
 ## 当前注意
 
+- 计时器现在有两类独立窗口：小悬浮窗 `floatingWindows/floatingIds` 与自由窗口 `freeWindows/freeIds`。两者必须保持互斥，同一计时器打开一种窗口时要自动关闭另一种。
+- 禁用计时器工具、退出软件、删除计时器时必须同时关闭小悬浮窗和自由窗口，避免后台窗口残留。
+
 - `electron-app/src/renderer/pages/HomePage.tsx` 可能在 `git status` 中显示 `M`，如果 `git diff` 为空则属于 CRLF/LF 噪声，不要作为真实改动提交。
 - 重新打包或 Native AOT publish 前，先清理运行中的本项目进程，避免 `pinman.exe`、`keystats.exe`、`appstats.exe` 被锁。
 - Windows 下源码和记忆文件写入继续使用 `apply_patch`。

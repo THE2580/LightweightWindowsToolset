@@ -81,6 +81,9 @@ interface Window {
       openFloating: (id: string) => Promise<TimerSnapshot>
       closeFloating: (id: string) => Promise<TimerSnapshot>
       closeAllFloating: () => Promise<TimerSnapshot>
+      openFree: (id: string) => Promise<TimerSnapshot>
+      closeFree: (id: string) => Promise<TimerSnapshot>
+      closeAllFree: () => Promise<TimerSnapshot>
       onSnapshot: (callback: (snapshot: TimerSnapshot) => void) => (() => void)
     }
     tray: {
@@ -146,11 +149,13 @@ interface TimerItem {
   lastStartedAt: number | null
   notifyOnFinish: boolean
   floatingBounds?: { x: number; y: number }
+  freeWindowBounds?: { x: number; y: number; width: number; height: number }
 }
 
 interface TimerSnapshot {
   timers: TimerItem[]
   floatingIds: string[]
+  freeIds: string[]
 }
 
 interface CreateTimerInput {

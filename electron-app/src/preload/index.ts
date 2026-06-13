@@ -99,6 +99,9 @@ const api = {
     openFloating: (id: string): Promise<unknown> => ipcRenderer.invoke('timer:open-floating', id),
     closeFloating: (id: string): Promise<unknown> => ipcRenderer.invoke('timer:close-floating', id),
     closeAllFloating: (): Promise<unknown> => ipcRenderer.invoke('timer:close-all-floating'),
+    openFree: (id: string): Promise<unknown> => ipcRenderer.invoke('timer:open-free', id),
+    closeFree: (id: string): Promise<unknown> => ipcRenderer.invoke('timer:close-free', id),
+    closeAllFree: (): Promise<unknown> => ipcRenderer.invoke('timer:close-all-free'),
     onSnapshot: (callback: (snapshot: unknown) => void): (() => void) => {
       const handler = (_event: Electron.IpcRendererEvent, snapshot: unknown) => callback(snapshot)
       ipcRenderer.on('timer:snapshot', handler)

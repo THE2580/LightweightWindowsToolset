@@ -6,6 +6,7 @@ import HomePage from './pages/HomePage'
 import SettingsPage from './pages/SettingsPage'
 import PluginRoute from './lib/plugin-loader.tsx'
 import TimerFloatingPage from './features/timer/TimerFloatingPage'
+import TimerFreePage from './features/timer/TimerFreePage'
 import { usePluginStore } from './stores/pluginStore'
 import { useCaptureStore } from './stores/captureStore'
 import { useDeepseekStore } from './stores/deepseekStore'
@@ -96,6 +97,14 @@ function AppContent(): React.JSX.Element {
     return (
       <Routes location={location} key={location.pathname}>
         <Route path="/timer-floating/:timerId" element={<TimerFloatingPage />} />
+      </Routes>
+    )
+  }
+
+  if (location.pathname.startsWith('/timer-free/')) {
+    return (
+      <Routes location={location} key={location.pathname}>
+        <Route path="/timer-free/:timerId" element={<TimerFreePage />} />
       </Routes>
     )
   }

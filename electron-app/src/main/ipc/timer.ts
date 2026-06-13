@@ -10,6 +10,11 @@ export interface TimerBounds {
   y: number
 }
 
+export interface TimerFreeWindowBounds extends TimerBounds {
+  width: number
+  height: number
+}
+
 export interface TimerItem {
   id: string
   name: string
@@ -24,6 +29,7 @@ export interface TimerItem {
   lastStartedAt: number | null
   notifyOnFinish: boolean
   floatingBounds?: TimerBounds
+  freeWindowBounds?: TimerFreeWindowBounds
 }
 
 interface CreateTimerInput {
@@ -44,6 +50,7 @@ interface UpdateTimerInput {
 export interface TimerSnapshot {
   timers: TimerItem[]
   floatingIds: string[]
+  freeIds: string[]
 }
 
 const STORE_KEY = 'timers'
@@ -52,16 +59,22 @@ const MAX_NAME_LENGTH = 24
 const MAX_COUNTDOWN_MS = ((99 * 60 * 60) + (59 * 60) + 59) * 1000
 const FLOATING_WIDTH = 150
 const FLOATING_HEIGHT = 76
+const FREE_WIDTH = 320
+const FREE_HEIGHT = 200
+const FREE_MIN_WIDTH = 260
+const FREE_MIN_HEIGHT = 150
 
 let mainWindow: BrowserWindow | null = null
 let timers: TimerItem[] = []
 let tickHandle: NodeJS.Timeout | null = null
 const floatingWindows = new Map<string, BrowserWindow>()
+const freeWindows = new Map<string, BrowserWindow>()
 
 function cloneTimer(timer: TimerItem): TimerItem {
   return {
     ...timer,
-    floatingBounds: timer.floatingBounds ? { ...timer.floatingBounds } : undefined
+    floatingBounds: timer.floatingBounds ? { ...timer.floatingBounds } : undefined,
+    freeWindowBounds: timer.freeWindowBounds ? { ...timer.freeWindowBounds } : undefined
   }
 }
 
@@ -105,7 +118,8 @@ function normalizeTimer(raw: Partial<TimerItem>): TimerItem | null {
     remainingMs,
     lastStartedAt: null,
     notifyOnFinish: raw.type === 'countdown' ? raw.notifyOnFinish !== false : false,
-    floatingBounds: raw.floatingBounds
+    floatingBounds: raw.floatingBounds,
+    freeWindowBounds: raw.freeWindowBounds
   }
 }
 
@@ -129,7 +143,8 @@ function saveTimers(): void {
 function snapshot(): TimerSnapshot {
   return {
     timers: timers.map(cloneTimer),
-    floatingIds: [...floatingWindows.keys()]
+    floatingIds: [...floatingWindows.keys()],
+    freeIds: [...freeWindows.keys()]
   }
 }
 
@@ -213,6 +228,18 @@ function closeAllFloatingInternal(): void {
   broadcast()
 }
 
+function closeFreeInternal(id: string): void {
+  const win = freeWindows.get(id)
+  if (!win) return
+  freeWindows.delete(id)
+  if (!win.isDestroyed()) win.close()
+}
+
+function closeAllFreeInternal(): void {
+  for (const id of [...freeWindows.keys()]) closeFreeInternal(id)
+  broadcast()
+}
+
 function defaultFloatingBounds(): TimerBounds {
   const display = BrowserWindow.getFocusedWindow()?.getBounds()
   if (display) return { x: display.x + display.width - FLOATING_WIDTH - 24, y: display.y + 72 }
@@ -227,6 +254,8 @@ function openFloatingInternal(id: string): TimerSnapshot {
     closeFloatingInternal(id)
     return snapshot()
   }
+
+  closeFreeInternal(id)
 
   const bounds = timer.floatingBounds || defaultFloatingBounds()
   const win = new BrowserWindow({
@@ -290,6 +319,103 @@ function openFloatingInternal(id: string): TimerSnapshot {
   return snapshot()
 }
 
+function defaultFreeBounds(): TimerFreeWindowBounds {
+  const display = BrowserWindow.getFocusedWindow()?.getBounds()
+  if (display) {
+    return {
+      x: Math.max(display.x + 24, display.x + Math.floor((display.width - FREE_WIDTH) / 2)),
+      y: Math.max(display.y + 64, display.y + Math.floor((display.height - FREE_HEIGHT) / 2)),
+      width: FREE_WIDTH,
+      height: FREE_HEIGHT
+    }
+  }
+  return { x: 160, y: 160, width: FREE_WIDTH, height: FREE_HEIGHT }
+}
+
+function normalizeFreeBounds(bounds: TimerFreeWindowBounds | undefined): TimerFreeWindowBounds {
+  const fallback = defaultFreeBounds()
+  if (!bounds) return fallback
+  return {
+    x: Number.isFinite(bounds.x) ? bounds.x : fallback.x,
+    y: Number.isFinite(bounds.y) ? bounds.y : fallback.y,
+    width: Math.max(FREE_MIN_WIDTH, Number.isFinite(bounds.width) ? bounds.width : fallback.width),
+    height: Math.max(FREE_MIN_HEIGHT, Number.isFinite(bounds.height) ? bounds.height : fallback.height)
+  }
+}
+
+function openFreeInternal(id: string): TimerSnapshot {
+  const timer = findTimer(id)
+  if (!timer) throw new Error('timer not found')
+
+  if (freeWindows.has(id)) {
+    closeFreeInternal(id)
+    return snapshot()
+  }
+
+  closeFloatingInternal(id)
+
+  const bounds = normalizeFreeBounds(timer.freeWindowBounds)
+  const win = new BrowserWindow({
+    width: bounds.width,
+    height: bounds.height,
+    x: bounds.x,
+    y: bounds.y,
+    minWidth: FREE_MIN_WIDTH,
+    minHeight: FREE_MIN_HEIGHT,
+    resizable: true,
+    maximizable: false,
+    fullscreenable: false,
+    frame: false,
+    show: false,
+    alwaysOnTop: true,
+    backgroundColor: '#ffffff',
+    skipTaskbar: true,
+    title: timer.name,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
+
+  const persistBounds = (): void => {
+    const current = findTimer(id)
+    if (!current || win.isDestroyed()) return
+    const [x, y] = win.getPosition()
+    const [width, height] = win.getSize()
+    current.freeWindowBounds = { x, y, width, height }
+    saveTimers()
+  }
+
+  freeWindows.set(id, win)
+  win.setMenuBarVisibility(false)
+  win.on('ready-to-show', () => {
+    win.show()
+    win.setAlwaysOnTop(true, 'floating')
+  })
+  win.on('maximize', () => {
+    win.unmaximize()
+  })
+  win.on('enter-full-screen', () => {
+    win.setFullScreen(false)
+  })
+  win.on('moved', persistBounds)
+  win.on('resized', persistBounds)
+  win.on('closed', () => {
+    freeWindows.delete(id)
+    broadcast()
+  })
+
+  const freeUrl = `timer-free/${encodeURIComponent(id)}`
+  if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
+    win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#/${freeUrl}`)
+  } else {
+    win.loadFile(join(__dirname, '../renderer/index.html'), { hash: freeUrl })
+  }
+  return snapshot()
+}
+
 function createTimer(input: CreateTimerInput): TimerSnapshot {
   if (timers.length >= MAX_TIMERS) throw new Error('timer limit reached')
   const type = input.type
@@ -340,6 +466,7 @@ function updateTimer(id: string, patch: UpdateTimerInput): TimerSnapshot {
 
 function deleteTimer(id: string): TimerSnapshot {
   closeFloatingInternal(id)
+  closeFreeInternal(id)
   timers = timers.filter((timer) => timer.id !== id)
   saveTimers()
   ensureTick()
@@ -422,11 +549,13 @@ function reorderTimers(ids: string[]): TimerSnapshot {
 export function stopTimersForDisable(): void {
   pauseAllInternal()
   closeAllFloatingInternal()
+  closeAllFreeInternal()
 }
 
 export function stopTimersForQuit(): void {
   pauseAllInternal()
   closeAllFloatingInternal()
+  closeAllFreeInternal()
   if (tickHandle !== null) {
     clearInterval(tickHandle)
     tickHandle = null
@@ -463,6 +592,20 @@ export function registerTimerIpc(win: BrowserWindow): void {
   })
   ipcMain.handle('timer:close-all-floating', () => {
     closeAllFloatingInternal()
+    return snapshot()
+  })
+  ipcMain.handle('timer:open-free', (_event, id: string) => {
+    const data = openFreeInternal(id)
+    broadcast()
+    return data
+  })
+  ipcMain.handle('timer:close-free', (_event, id: string) => {
+    closeFreeInternal(id)
+    broadcast()
+    return snapshot()
+  })
+  ipcMain.handle('timer:close-all-free', () => {
+    closeAllFreeInternal()
     return snapshot()
   })
 }

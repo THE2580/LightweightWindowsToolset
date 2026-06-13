@@ -5,6 +5,7 @@ import {
   Bell,
   BellOff,
   Clock3,
+  Maximize2,
   MonitorUp,
   Pause,
   Play,
@@ -424,11 +425,15 @@ function TimerCard({
   const updateTimer = useTimerStore((s) => s.updateTimer)
   const openFloating = useTimerStore((s) => s.openFloating)
   const closeFloating = useTimerStore((s) => s.closeFloating)
+  const openFree = useTimerStore((s) => s.openFree)
+  const closeFree = useTimerStore((s) => s.closeFree)
   const floatingIds = useTimerStore((s) => s.floatingIds)
+  const freeIds = useTimerStore((s) => s.freeIds)
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const deleteTimer = useTimerStore((s) => s.deleteTimer)
   const isFloating = floatingIds.has(timer.id)
+  const isFree = freeIds.has(timer.id)
   const isRunning = timer.status === 'running'
   const showReset = timer.status === 'running' || timer.status === 'paused'
   const canEdit = !isRunning
@@ -531,6 +536,13 @@ function TimerCard({
         >
           <MonitorUp size={18} />
         </button>
+        <button
+          className={cn(ICON_BUTTON, isFree ? 'border-blue-500 bg-blue-50 text-blue-700 hover:bg-blue-100' : 'border-border hover:bg-accent')}
+          onClick={() => (isFree ? closeFree(timer.id) : openFree(timer.id))}
+          title={isFree ? '关闭自由窗口' : '自由窗口'}
+        >
+          <Maximize2 size={18} />
+        </button>
         {!isRunning && (
           <button className={cn(ICON_BUTTON, 'border-red-200 text-red-600 hover:bg-red-50')} onClick={() => setConfirmDelete(true)} title="删除">
             <Trash2 size={18} />
@@ -561,6 +573,7 @@ function TimerPage(): React.JSX.Element {
   const listen = useTimerStore((s) => s.listen)
   const pauseAll = useTimerStore((s) => s.pauseAll)
   const closeAllFloating = useTimerStore((s) => s.closeAllFloating)
+  const closeAllFree = useTimerStore((s) => s.closeAllFree)
   const resetPaused = useTimerStore((s) => s.resetPaused)
   const reorderTimers = useTimerStore((s) => s.reorderTimers)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -581,6 +594,8 @@ function TimerPage(): React.JSX.Element {
   const runningCount = timers.filter((timer) => timer.status === 'running').length
   const pausedCount = timers.filter((timer) => timer.status === 'paused').length
   const floatingCount = useTimerStore((s) => s.floatingIds.size)
+  const freeCount = useTimerStore((s) => s.freeIds.size)
+  const windowCount = floatingCount + freeCount
   const timerById = useMemo(() => new Map(timers.map((timer) => [timer.id, timer])), [timers])
   const visibleIds = sortedTimers.map((timer) => timer.id)
   const now = useNowTicker(timers.some((timer) => timer.status === 'running'))
@@ -691,7 +706,7 @@ function TimerPage(): React.JSX.Element {
                   重置全部
                 </motion.button>
               )}
-              {floatingCount >= 1 && (
+              {windowCount >= 1 && (
                 <motion.button
                   key="close-floating"
                   layout
@@ -700,9 +715,12 @@ function TimerPage(): React.JSX.Element {
                   exit={{ opacity: 0, y: -4, scale: 0.98 }}
                   transition={LAYOUT_TRANSITION}
                   className={cn('whitespace-nowrap rounded-lg border border-border px-3 py-2 text-sm hover:bg-accent', SMOOTH_BUTTON)}
-                  onClick={closeAllFloating}
+                  onClick={() => {
+                    closeAllFloating()
+                    closeAllFree()
+                  }}
                 >
-                  关闭悬浮
+                  关闭窗口
                 </motion.button>
               )}
             </AnimatePresence>
@@ -727,8 +745,8 @@ function TimerPage(): React.JSX.Element {
             <p className="mt-1 text-xl font-semibold text-blue-600">{runningCount}</p>
           </motion.div>
           <motion.div layout={!dragging} transition={LAYOUT_TRANSITION} className={cn('rounded-xl border border-border bg-card px-4 py-3', HOVER_CARD)}>
-            <p className="text-xs text-muted-foreground">悬浮窗口</p>
-            <p className="mt-1 text-xl font-semibold">{floatingCount}</p>
+            <p className="text-xs text-muted-foreground">独立窗口</p>
+            <p className="mt-1 text-xl font-semibold">{windowCount}</p>
           </motion.div>
         </section>
 
