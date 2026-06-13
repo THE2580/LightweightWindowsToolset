@@ -5,12 +5,18 @@
 - 桌面端正在开发第五个工具：`计时器`。
 - 本轮开始前已先提交基线：`a92c716 feat: 新增计时器工具`。
 - 本轮已完成计时器工具的拖拽中断、悬浮窗 hover、时间显示和窗口双击行为修复，并已打开开发版供测试。
+- 用户已确认开发版测试通过；本轮自由窗口响应式微调已准备提交，并已生成 `1.2.4` 本地 release。
 
 ## 已完成
 
 - 计时器新增“自由窗口”：可调整窗口大小，独立置顶显示，与小悬浮窗互斥；打开其中一种窗口时会自动关闭同一计时器的另一种窗口。
 - 计时器页面卡片新增自由窗口按钮，顶部独立窗口统计同时包含小悬浮窗和自由窗口，“关闭窗口”会同时关闭两类独立窗口。
 - 自由窗口会持久化位置与尺寸；禁用计时器工具、退出软件、删除计时器时会关闭小悬浮窗和自由窗口。
+- 自由窗口主体已改为整体响应式布局：时间字号增长曲线放缓，状态、时间、按钮作为一组居中，按钮和标题栏轻微跟随窗口尺寸变化，避免只放大时间导致比例失衡。
+- `electron-app` 版本号已从 `1.2.3` 提升到 `1.2.4`，用于生成最新本地 release。
+- 已生成 `1.2.4` 安装版和便携版本地 release 产物：
+  - `electron-app/dist/LightweightWindowsToolset-v1.2.4-setup-win-x64.exe`
+  - `electron-app/dist/LightweightWindowsToolset-v1.2.4-portable-win-x64.zip`
 
 - 支持多个正计时/倒计时，名称可重复，内部使用唯一 ID。
 - 支持备注字段，添加/编辑弹窗可输入备注，卡片原生 `title` 显示备注。
@@ -31,8 +37,8 @@
 
 ## 下一步
 
-- 等待用户在开发版验证本轮计时器修复。
-- 若仍有悬浮窗 hover、拖拽回位或双击窗口行为问题，优先复现具体交互，再做最小修复。
+- 提交本轮修改。
+- 若后续仍有悬浮窗 hover、拖拽回位或双击窗口行为问题，优先复现具体交互，再做最小修复。
 
 ## 验证记录
 
@@ -42,3 +48,6 @@
 - `cd pinman && dotnet publish -c Release -r win-x64 --self-contained -p:PublishAot=true -p:DebugType=none -p:DebugSymbols=false`
 - `cd keystats && dotnet publish -c Release -r win-x64 --self-contained -p:PublishAot=true -p:DebugType=none -p:DebugSymbols=false`
 - `cd appstats && dotnet publish -c Release -r win-x64 --self-contained -p:PublishAot=true -p:DebugType=none -p:DebugSymbols=false`
+- 用户开发版测试通过。
+- `cd electron-app && npx electron-builder --win --config.win.signAndEditExecutable=false`，使用临时 `ELECTRON_BUILDER_CACHE` 规避全局 cache 权限问题后成功生成 NSIS 安装包。
+- 已复制生成英文命名安装包，并从 `dist/win-unpacked` 压缩生成 `LightweightWindowsToolset-v1.2.4-portable-win-x64.zip`。

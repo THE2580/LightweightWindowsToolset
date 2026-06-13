@@ -7,6 +7,8 @@
 ## Current Focus
 
 - 最新新增“计时器自由窗口”：自由窗口可调整大小，与小悬浮窗互斥；计时器卡片内分别有小悬浮窗按钮和自由窗口按钮。自由窗口状态通过 `freeIds` 暴露，窗口位置和尺寸持久化到 `freeWindowBounds`。
+- 最新调整：自由窗口从单独放大时间改成整体响应式，时间使用 `min(10vw,30vh)`，按钮/标题栏/状态文案也随窗口轻微缩放。
+- 用户已确认开发版测试通过；本轮修改已准备提交，并已生成 `1.2.4` 本地 release。
 
 本轮已先提交基线：
 
@@ -23,10 +25,14 @@
 - 时间显示改为前端 250ms 轻量 tick 推导，倒计时按向上取整显示，减少直观跳秒。
 - 主窗口与计时器悬浮窗禁用最大化/全屏入口，降低双击拖拽区域导致窗口瞬移的风险。
 - 开发版已启动，等待用户测试。
+- `electron-app` 版本号已提升到 `1.2.4`，并已生成最新本地 release：
+  - `electron-app/dist/LightweightWindowsToolset-v1.2.4-setup-win-x64.exe`
+  - `electron-app/dist/LightweightWindowsToolset-v1.2.4-portable-win-x64.zip`
 
 ## Remaining
 
-- 等待用户验证：
+- 提交本轮修改。
+- 若后续用户反馈仍有问题，优先复现具体交互，再做最小修复：
   - 主面板拖拽时切换页面/应用后台是否会立即中断。
   - 悬浮窗 hover 是否立即生效，按钮是否只在 hover 时显示。
   - 悬浮窗顶部拖拽条、尺寸、布局、单层圆角和过渡动画是否符合预期。
@@ -41,12 +47,15 @@
 - `cd pinman && dotnet publish -c Release -r win-x64 --self-contained -p:PublishAot=true -p:DebugType=none -p:DebugSymbols=false`
 - `cd keystats && dotnet publish -c Release -r win-x64 --self-contained -p:PublishAot=true -p:DebugType=none -p:DebugSymbols=false`
 - `cd appstats && dotnet publish -c Release -r win-x64 --self-contained -p:PublishAot=true -p:DebugType=none -p:DebugSymbols=false`
+- 用户开发版测试通过。
+- `cd electron-app && npx electron-builder --win --config.win.signAndEditExecutable=false`，使用临时 `ELECTRON_BUILDER_CACHE` 规避全局 cache 权限问题后成功生成 NSIS 安装包。
+- 已复制生成英文命名安装包，并从 `dist/win-unpacked` 压缩生成 `LightweightWindowsToolset-v1.2.4-portable-win-x64.zip`。
 
 启动开发版前已检查项目相关进程；未发现旧进程，随后已启动 `electron-app` 开发版。
 
 ## Resume Here
 
-从用户对计时器工具开发版的反馈继续。若需要继续修复，优先查看：
+本轮已测试通过、已生成 `1.2.4` 本地 release，下一步从用户的新反馈继续。若需要继续修复，优先查看：
 
 - `electron-app/src/renderer/features/timer/TimerPage.tsx`
 - `electron-app/src/renderer/features/timer/TimerFloatingPage.tsx`

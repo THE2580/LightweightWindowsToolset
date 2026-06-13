@@ -79,45 +79,52 @@ function TimerFreePage(): React.JSX.Element {
   const showReset = timer.status === 'running' || timer.status === 'paused'
 
   return (
-    <div className="flex h-screen w-screen select-none flex-col overflow-hidden bg-white text-slate-950" style={noDragStyle}>
-      <header className="flex h-9 shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50/80 px-3" style={dragStyle}>
-        <div className="min-w-0 truncate text-sm font-semibold">{timer.name}</div>
+    <div
+      className="flex h-screen w-screen select-none flex-col overflow-hidden bg-white text-slate-950"
+      style={{
+        ...noDragStyle,
+        '--timer-free-control': 'clamp(2.5rem, min(6vw, 8vh), 5rem)',
+        '--timer-free-icon': 'clamp(1.25rem, min(3vw, 4vh), 2.25rem)'
+      } as CSSProperties}
+    >
+      <header className="flex h-[clamp(2.25rem,5vh,3.75rem)] shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50/80 px-[clamp(0.75rem,2vw,1.5rem)]" style={dragStyle}>
+        <div className="min-w-0 truncate text-[clamp(0.875rem,1.5vw,1.35rem)] font-semibold">{timer.name}</div>
         <div className="flex items-center gap-2" style={noDragStyle}>
-          <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', timer.type === 'stopwatch' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700')}>
+          <span className={cn('rounded-full px-[clamp(0.5rem,1vw,0.8rem)] py-0.5 text-[clamp(0.7rem,1.1vw,1rem)] font-medium', timer.type === 'stopwatch' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700')}>
             {timer.type === 'stopwatch' ? '正计时' : '倒计时'}
           </span>
           <button className={cn('rounded-md p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900', smoothButton)} onClick={() => closeFree(timer.id)} title="关闭自由窗口">
-            <X size={15} />
+            <X className="size-[clamp(0.95rem,1.4vw,1.35rem)]" />
           </button>
         </div>
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-5 py-4">
-        <div className="text-center">
-          <div className="mb-2 text-xs text-slate-500">{statusLabel(timer.status)}</div>
-          <div className="font-mono text-[clamp(2.25rem,12vw,5.5rem)] font-black leading-none tracking-tight tabular-nums">
+      <main className="flex min-h-0 flex-1 items-center justify-center px-[clamp(1rem,4vw,4rem)] py-[clamp(1rem,4vh,3rem)]">
+        <div className="flex w-full max-w-[min(86vw,72rem)] flex-col items-center gap-[clamp(0.8rem,2.8vh,2rem)] text-center">
+          <div className="text-[clamp(0.8rem,1.3vw,1.15rem)] text-slate-500">{statusLabel(timer.status)}</div>
+          <div className="font-mono text-[min(10vw,30vh)] font-black leading-none tracking-tight tabular-nums">
             {formatDuration(displayMs(timer, now), timer.type)}
           </div>
           {timer.type === 'countdown' && (
-            <div className="mt-2 text-xs text-slate-500">原始 {formatDuration(timer.totalMs, timer.type)}</div>
+            <div className="text-[clamp(0.75rem,1.1vw,1rem)] text-slate-500">原始 {formatDuration(timer.totalMs, timer.type)}</div>
           )}
-        </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-3">
-          {isRunning ? (
-            <button className={cn('rounded-xl bg-blue-600 px-4 py-2 text-white shadow-sm hover:bg-blue-700', smoothButton)} onClick={() => pauseTimer(timer.id)} title="暂停">
-              <Pause size={20} />
-            </button>
-          ) : (
-            <button className={cn('rounded-xl bg-blue-600 px-4 py-2 text-white shadow-sm hover:bg-blue-700', smoothButton)} onClick={() => startTimer(timer.id)} title="开始">
-              <Play size={20} />
-            </button>
-          )}
-          {showReset && (
-            <button className={cn('rounded-xl border border-slate-200 bg-white px-4 py-2 text-slate-700 hover:bg-slate-50', smoothButton)} onClick={() => resetTimer(timer.id)} title="重置">
-              <RotateCcw size={20} />
-            </button>
-          )}
+          <div className="flex flex-wrap items-center justify-center gap-[clamp(0.75rem,1.6vw,1.25rem)]">
+            {isRunning ? (
+              <button className={cn('flex h-[var(--timer-free-control)] min-w-[var(--timer-free-control)] items-center justify-center rounded-xl bg-blue-600 px-[clamp(1rem,2vw,2rem)] text-white shadow-sm hover:bg-blue-700', smoothButton)} onClick={() => pauseTimer(timer.id)} title="暂停">
+                <Pause className="size-[var(--timer-free-icon)]" />
+              </button>
+            ) : (
+              <button className={cn('flex h-[var(--timer-free-control)] min-w-[var(--timer-free-control)] items-center justify-center rounded-xl bg-blue-600 px-[clamp(1rem,2vw,2rem)] text-white shadow-sm hover:bg-blue-700', smoothButton)} onClick={() => startTimer(timer.id)} title="开始">
+                <Play className="size-[var(--timer-free-icon)]" />
+              </button>
+            )}
+            {showReset && (
+              <button className={cn('flex h-[var(--timer-free-control)] min-w-[var(--timer-free-control)] items-center justify-center rounded-xl border border-slate-200 bg-white px-[clamp(1rem,2vw,2rem)] text-slate-700 hover:bg-slate-50', smoothButton)} onClick={() => resetTimer(timer.id)} title="重置">
+                <RotateCcw className="size-[var(--timer-free-icon)]" />
+              </button>
+            )}
+          </div>
         </div>
       </main>
     </div>
