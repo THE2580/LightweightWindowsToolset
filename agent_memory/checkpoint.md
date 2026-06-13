@@ -25,7 +25,7 @@
 - 时间显示改为前端 250ms 轻量 tick 推导，倒计时按向上取整显示，减少直观跳秒。
 - 主窗口与计时器悬浮窗禁用最大化/全屏入口，降低双击拖拽区域导致窗口瞬移的风险。
 - 开发版已启动，等待用户测试。
-- `electron-app` 版本号已提升到 `1.2.4`，并已生成最新本地 release：
+- `electron-app` 版本号已提升到 `1.2.4`，并已生成且修复最新本地 release：
   - `electron-app/dist/LightweightWindowsToolset-v1.2.4-setup-win-x64.exe`
   - `electron-app/dist/LightweightWindowsToolset-v1.2.4-portable-win-x64.zip`
 
@@ -50,12 +50,14 @@
 - 用户开发版测试通过。
 - `cd electron-app && npx electron-builder --win --config.win.signAndEditExecutable=false`，使用临时 `ELECTRON_BUILDER_CACHE` 规避全局 cache 权限问题后成功生成 NSIS 安装包。
 - 已复制生成英文命名安装包，并从 `dist/win-unpacked` 压缩生成 `LightweightWindowsToolset-v1.2.4-portable-win-x64.zip`。
+- 后续发现 `signAndEditExecutable=false` 会跳过 `rcedit --set-icon`，导致 release 变为 Electron 默认图标；已用缓存里的 `rcedit-x64.exe` 对 `dist/win-unpacked/轻量化工具集.exe` 写入 `resources/icon.ico`，再通过 `electron-builder --win --prepackaged dist/win-unpacked --config.win.signAndEditExecutable=false` 重建 NSIS。
+- 已重新覆盖 `LightweightWindowsToolset-v1.2.4-setup-win-x64.exe` 和 `LightweightWindowsToolset-v1.2.4-portable-win-x64.zip`，并提取主程序/安装包图标确认均为项目齿轮图标。
 
 启动开发版前已检查项目相关进程；未发现旧进程，随后已启动 `electron-app` 开发版。
 
 ## Resume Here
 
-本轮已测试通过、已生成 `1.2.4` 本地 release，下一步从用户的新反馈继续。若需要继续修复，优先查看：
+本轮已测试通过、已生成并修复 `1.2.4` 本地 release 图标，下一步从用户的新反馈继续。若需要继续修复，优先查看：
 
 - `electron-app/src/renderer/features/timer/TimerPage.tsx`
 - `electron-app/src/renderer/features/timer/TimerFloatingPage.tsx`

@@ -8,8 +8,9 @@
 - `electron-app/src/renderer/pages/HomePage.tsx` 可能在 `git status` 中显示 `M`，如果 `git diff` 为空则属于 CRLF/LF 噪声，不要作为真实改动提交。
 - 重新打包或 Native AOT publish 前，先清理运行中的本项目进程，避免 `pinman.exe`、`keystats.exe`、`appstats.exe` 被锁。
 - Windows 下源码和记忆文件写入继续使用 `apply_patch`。
-- 当前账户打包 NSIS 时，默认 `electron-builder` 可能在解压 `winCodeSign` 时因无符号链接权限失败；可使用 `npx electron-builder --win --config.win.signAndEditExecutable=false` 绕过该路径。
+- 当前账户打包 NSIS 时，默认 `electron-builder` 可能在解压 `winCodeSign` 时因无符号链接权限失败；不要直接用 `npx electron-builder --win --config.win.signAndEditExecutable=false` 作为完整 release 命令，因为它会跳过 `rcedit --set-icon` 并导致 exe 显示 Electron 默认图标。
 - 全局 `electron-builder` cache 可能出现 NSIS 目录重命名 `Access is denied`；可临时设置 `ELECTRON_BUILDER_CACHE` 到 `%TEMP%` 下的新目录后重跑。
+- 若必须绕过 `winCodeSign`，先生成/修复 `dist/win-unpacked`，用缓存中的 `rcedit-x64.exe` 对 `dist/win-unpacked/轻量化工具集.exe` 执行 `--set-icon electron-app/resources/icon.ico`，再用 `electron-builder --win --prepackaged dist/win-unpacked --config.win.signAndEditExecutable=false` 重建安装包，并重新压缩 portable zip。
 
 ## 计时器工具已处理问题
 

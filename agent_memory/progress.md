@@ -14,7 +14,7 @@
 - 自由窗口会持久化位置与尺寸；禁用计时器工具、退出软件、删除计时器时会关闭小悬浮窗和自由窗口。
 - 自由窗口主体已改为整体响应式布局：时间字号增长曲线放缓，状态、时间、按钮作为一组居中，按钮和标题栏轻微跟随窗口尺寸变化，避免只放大时间导致比例失衡。
 - `electron-app` 版本号已从 `1.2.3` 提升到 `1.2.4`，用于生成最新本地 release。
-- 已生成 `1.2.4` 安装版和便携版本地 release 产物：
+- 已生成并修复 `1.2.4` 安装版和便携版本地 release 产物：
   - `electron-app/dist/LightweightWindowsToolset-v1.2.4-setup-win-x64.exe`
   - `electron-app/dist/LightweightWindowsToolset-v1.2.4-portable-win-x64.zip`
 
@@ -51,3 +51,5 @@
 - 用户开发版测试通过。
 - `cd electron-app && npx electron-builder --win --config.win.signAndEditExecutable=false`，使用临时 `ELECTRON_BUILDER_CACHE` 规避全局 cache 权限问题后成功生成 NSIS 安装包。
 - 已复制生成英文命名安装包，并从 `dist/win-unpacked` 压缩生成 `LightweightWindowsToolset-v1.2.4-portable-win-x64.zip`。
+- 发现上述 `signAndEditExecutable=false` 会跳过 `rcedit --set-icon`，导致 release 主程序和安装包显示 Electron 默认图标；已用 `rcedit-x64.exe --set-icon resources/icon.ico` 修复 `dist/win-unpacked/轻量化工具集.exe`，再用 `electron-builder --win --prepackaged dist/win-unpacked --config.win.signAndEditExecutable=false` 重建 NSIS，并重新生成英文安装包副本和 portable zip。
+- 已通过 `System.Drawing.Icon.ExtractAssociatedIcon()` 提取主程序和安装包图标，确认均为项目齿轮图标。
