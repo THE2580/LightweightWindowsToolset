@@ -589,6 +589,7 @@ function TimerPage(): React.JSX.Element {
   const resetPaused = useTimerStore((s) => s.resetPaused)
   const reorderTimers = useTimerStore((s) => s.reorderTimers)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [statsVisible, setStatsVisible] = useState(true)
   const [orderedIds, setOrderedIds] = useState<string[]>([])
   const [dragging, setDragging] = useState(false)
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -686,12 +687,20 @@ function TimerPage(): React.JSX.Element {
 
   return (
     <AnimatedRoute>
-      <div className="space-y-5 pb-3">
-        <header className="flex items-center justify-between gap-4">
-          <h1 className="flex items-center gap-2 text-xl font-bold">
-            <Clock3 className="text-blue-600" size={24} />
-            计时器
-          </h1>
+      <div className="space-y-5 overflow-x-hidden pb-3">
+        <header className="sticky top-0 z-30 -mx-5 -mt-5 flex items-center justify-between gap-4 border-b border-border/70 bg-background px-5 py-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <h1 className="flex items-center gap-2 text-xl font-bold">
+              <Clock3 className="text-blue-600" size={24} />
+              计时器
+            </h1>
+            <button
+              className={cn('whitespace-nowrap rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground', SMOOTH_BUTTON)}
+              onClick={() => setStatsVisible((visible) => !visible)}
+            >
+              {statsVisible ? '隐藏统计卡片' : '显示统计卡片'}
+            </button>
+          </div>
           <div className="flex shrink-0 items-center justify-end gap-2">
             <AnimatePresence initial={false} mode="popLayout">
               {runningCount >= 1 && (
@@ -751,65 +760,92 @@ function TimerPage(): React.JSX.Element {
           </div>
         </header>
 
-        <section className="grid gap-3 sm:grid-cols-4">
-          <motion.div layout={!dragging} transition={LAYOUT_TRANSITION} className={cn('rounded-xl border border-border bg-card px-4 py-3', HOVER_CARD)}>
-            <p className="text-xs text-muted-foreground">计时器数量</p>
-            <p className="mt-1 text-xl font-semibold">{timers.length}/{MAX_TIMERS}</p>
-          </motion.div>
-          <motion.div layout={!dragging} transition={LAYOUT_TRANSITION} className={cn('rounded-xl border border-border bg-card px-4 py-3', HOVER_CARD)}>
-            <p className="text-xs text-muted-foreground">运行中</p>
-            <p className="mt-1 text-xl font-semibold text-blue-600">{runningCount}</p>
-          </motion.div>
-          <motion.div layout={!dragging} transition={LAYOUT_TRANSITION} className={cn('rounded-xl border border-border bg-card px-4 py-3', HOVER_CARD)}>
-            <p className="text-xs text-muted-foreground">独立窗口</p>
-            <p className="mt-1 text-xl font-semibold">{windowCount}</p>
-          </motion.div>
-          <motion.button
-            type="button"
-            layout={!dragging}
-            transition={LAYOUT_TRANSITION}
-            className={cn(
-              'rounded-xl border bg-card px-4 py-3 text-left',
-              HOVER_CARD,
-              SMOOTH_BUTTON,
-              clockOpen ? 'border-blue-400/80 bg-blue-50/45 shadow-blue-100/70' : 'border-border'
+        <motion.div layout className="min-w-0 space-y-5 overflow-x-hidden" transition={LAYOUT_TRANSITION}>
+          <AnimatePresence initial={false}>
+            {statsVisible && (
+              <motion.section
+                key="timer-stats"
+                layout={!dragging}
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={LAYOUT_TRANSITION}
+                className={cn('overflow-hidden rounded-xl border border-border bg-card px-4 py-2.5', HOVER_CARD)}
+              >
+                <div className="grid min-h-[3.35rem] grid-cols-3 divide-x divide-border/70">
+                  <div className="flex flex-col justify-center pr-4">
+                    <p className="text-xs text-muted-foreground">计时器数量</p>
+                    <p className="mt-1 text-xl font-semibold">{timers.length}/{MAX_TIMERS}</p>
+                  </div>
+                  <div className="flex flex-col justify-center px-4">
+                    <p className="text-xs text-muted-foreground">运行中</p>
+                    <p className="mt-1 text-xl font-semibold text-blue-600">{runningCount}</p>
+                  </div>
+                  <div className="flex flex-col justify-center pl-4">
+                    <p className="text-xs text-muted-foreground">独立窗口</p>
+                    <p className="mt-1 text-xl font-semibold">{windowCount}</p>
+                  </div>
+                </div>
+              </motion.section>
             )}
-            onClick={toggleClock}
-            title={clockOpen ? '关闭本地时间窗口' : '打开本地时间窗口'}
-          >
-            <p className="text-xs text-muted-foreground">本地时间</p>
-            <p className="mt-1 font-mono text-xl font-semibold tabular-nums">{localTime}</p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">{localDate}</p>
-          </motion.button>
-        </section>
+          </AnimatePresence>
 
-        {!loaded ? (
-          <section className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">正在加载计时器...</section>
-        ) : orderedTimers.length === 0 ? (
-          <section className="rounded-xl border border-dashed border-border bg-card p-10 text-center">
-            <Clock3 className="mx-auto text-muted-foreground" size={36} />
-            <h2 className="mt-3 text-lg font-semibold">还没有计时器</h2>
-            <p className="mt-1 text-sm text-muted-foreground">添加一个正计时或倒计时后，就能在这里统一管理。</p>
-            <button className={cn('mt-4 whitespace-nowrap rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700', SMOOTH_BUTTON)} onClick={() => setDialogOpen(true)}>
-              添加计时器
-            </button>
-          </section>
-        ) : (
-          <Reorder.Group ref={listRef} axis="y" values={orderedIds} onReorder={handleReorder} className="flex flex-col gap-3 pb-3">
-            {orderedTimers.map((timer) => (
-              <TimerCard
-                key={timer.id}
-                timer={timer}
-                now={now}
-                isDragging={draggingId === timer.id}
-                dragConstraints={listRef}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-                shouldSuppressClick={() => suppressClickRef.current}
-              />
-            ))}
-          </Reorder.Group>
-        )}
+          <div className="flex justify-end">
+            <motion.button
+              type="button"
+              layout={!dragging}
+              transition={LAYOUT_TRANSITION}
+              className={cn(
+                'w-full max-w-[360px] rounded-xl border bg-card px-5 py-2.5 text-left',
+                HOVER_CARD,
+                SMOOTH_BUTTON,
+                clockOpen ? 'border-blue-400/80 bg-blue-50/45 shadow-blue-100/70' : 'border-border'
+              )}
+              onClick={toggleClock}
+              title={clockOpen ? '关闭本地时间窗口' : '打开本地时间窗口'}
+            >
+              <div className="flex h-full min-h-[3.35rem] items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">本地时间</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">{localDate}</p>
+                </div>
+                <p className="shrink-0 font-mono text-[1.25rem] font-semibold leading-none tracking-tight tabular-nums text-slate-950">
+                  {localTime}
+                </p>
+              </div>
+            </motion.button>
+          </div>
+
+          {!loaded ? (
+            <motion.section layout transition={LAYOUT_TRANSITION} className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+              正在加载计时器...
+            </motion.section>
+          ) : orderedTimers.length === 0 ? (
+            <motion.section layout transition={LAYOUT_TRANSITION} className="rounded-xl border border-dashed border-border bg-card p-10 text-center">
+              <Clock3 className="mx-auto text-muted-foreground" size={36} />
+              <h2 className="mt-3 text-lg font-semibold">还没有计时器</h2>
+              <p className="mt-1 text-sm text-muted-foreground">添加一个正计时或倒计时后，就能在这里统一管理。</p>
+              <button className={cn('mt-4 whitespace-nowrap rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700', SMOOTH_BUTTON)} onClick={() => setDialogOpen(true)}>
+                添加计时器
+              </button>
+            </motion.section>
+          ) : (
+            <Reorder.Group ref={listRef} layout axis="y" values={orderedIds} onReorder={handleReorder} className="flex flex-col gap-3 pb-3">
+              {orderedTimers.map((timer) => (
+                <TimerCard
+                  key={timer.id}
+                  timer={timer}
+                  now={now}
+                  isDragging={draggingId === timer.id}
+                  dragConstraints={listRef}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                  shouldSuppressClick={() => suppressClickRef.current}
+                />
+              ))}
+            </Reorder.Group>
+          )}
+        </motion.div>
       </div>
       {dialogOpen && <TimerDialog mode="create" timer={null} onClose={() => setDialogOpen(false)} />}
     </AnimatedRoute>
