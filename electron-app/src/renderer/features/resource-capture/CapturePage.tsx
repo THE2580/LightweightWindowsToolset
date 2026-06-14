@@ -65,7 +65,7 @@ function CapturePage(): React.JSX.Element {
         ref={scrollRef}
         onScroll={handleHistoryScroll}
         className={historyExpanded
-          ? 'h-full overflow-y-auto pr-1 pb-2 space-y-3'
+          ? 'scrollbar-hidden h-full overflow-y-auto pr-1 pb-2 space-y-3'
           : 'flex flex-col h-full space-y-3 pr-1'
         }
       >

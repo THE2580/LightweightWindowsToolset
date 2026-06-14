@@ -223,7 +223,7 @@ function KeyCounterPage(): React.JSX.Element {
 
   return (
     <AnimatedRoute>
-      <div className="h-full overflow-y-auto pr-1 space-y-3">
+      <div className="scrollbar-hidden h-full overflow-y-auto pr-1 space-y-3">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-lg font-bold">按键统计</h1>

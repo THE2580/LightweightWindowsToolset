@@ -87,7 +87,7 @@ function AppShell({ children }: AppShellProps): React.JSX.Element {
       <TitleBar />
       <div className="flex flex-1 overflow-hidden relative" onMouseMove={handleShellMouseMove} onMouseLeave={clearAutoExpandTimer}>
         <Sidebar onToggleChat={toggleChat} />
-        <main className="flex-1 overflow-auto bg-background p-5">
+        <main className="scrollbar-hidden flex-1 overflow-auto bg-background p-5">
           {children}
         </main>
 

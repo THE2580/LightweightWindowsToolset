@@ -250,7 +250,7 @@ function AppStatsPage(): React.JSX.Element {
 
   return (
     <AnimatedRoute>
-      <div className="h-full space-y-3 overflow-y-auto pr-1">
+      <div className="scrollbar-hidden h-full space-y-3 overflow-y-auto pr-1">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-lg font-bold">软件使用统计</h1>

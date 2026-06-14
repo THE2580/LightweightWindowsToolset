@@ -50,9 +50,11 @@ function TimerClockFreePage(): React.JSX.Element {
         </div>
       </header>
 
-      <main className="flex min-h-0 flex-1 items-center justify-center px-[clamp(1rem,4vw,4rem)] py-[clamp(1rem,4vh,3rem)]">
-        <div className="flex w-full max-w-[min(86vw,72rem)] flex-col items-center gap-[clamp(0.8rem,2.8vh,2rem)] text-center">
-          <div className="text-[clamp(0.85rem,1.4vw,1.2rem)] text-slate-500">{date}</div>
+      <main className="relative min-h-0 flex-1 overflow-hidden px-[clamp(1rem,4vw,4rem)] py-[clamp(1rem,4vh,3rem)]">
+        <div className="absolute left-1/2 top-1/2 w-full max-w-[min(86vw,72rem)] -translate-x-1/2 -translate-y-1/2 text-center">
+          <div className="absolute left-0 right-0 top-[calc(-1*clamp(2.4rem,8vh,5.5rem))] text-[clamp(0.85rem,1.4vw,1.2rem)] text-slate-500">
+            {date}
+          </div>
           <div className="font-mono text-[min(14vw,34vh)] font-black leading-none tracking-tight tabular-nums">
             {time}
           </div>

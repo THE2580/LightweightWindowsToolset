@@ -23,6 +23,7 @@ const SMOOTH_BUTTON = 'transition-[background-color,border-color,color,box-shado
 const HOVER_CARD = 'transition-[border-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:border-blue-400/80 hover:shadow-md'
 const ICON_BUTTON = cn('rounded-md border p-2', SMOOTH_BUTTON)
 const LAYOUT_TRANSITION = { type: 'spring', stiffness: 520, damping: 44, mass: 0.8 } as const
+const QUICK_LAYOUT_TRANSITION = { type: 'spring', stiffness: 680, damping: 52, mass: 0.75 } as const
 const DRAG_TRANSITION = { type: 'spring', stiffness: 640, damping: 46, mass: 0.7 } as const
 const MAX_TIMERS = 20
 const MAX_NAME_LENGTH = 24
@@ -687,8 +688,8 @@ function TimerPage(): React.JSX.Element {
 
   return (
     <AnimatedRoute>
-      <div className="flex h-full min-h-0 flex-col overflow-hidden">
-        <header className="z-30 -mx-5 -mt-5 flex shrink-0 items-center justify-between gap-4 border-b border-border/70 bg-background px-5 py-4 shadow-sm">
+      <div className="-m-5 flex h-[calc(100%+2.5rem)] min-h-0 flex-col overflow-hidden">
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border/70 bg-background px-8 py-4 shadow-sm">
           <div className="flex items-center gap-3">
             <h1 className="flex items-center gap-2 text-xl font-bold">
               <Clock3 className="text-blue-600" size={24} />
@@ -760,16 +761,16 @@ function TimerPage(): React.JSX.Element {
           </div>
         </header>
 
-        <motion.div layout className="min-w-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden pt-5 pb-3 pr-1" transition={LAYOUT_TRANSITION}>
-          <AnimatePresence initial={false}>
+        <motion.div layout className="scrollbar-hidden min-w-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden px-8 pt-5 pb-5" transition={QUICK_LAYOUT_TRANSITION}>
+          <AnimatePresence initial={false} mode="popLayout">
             {statsVisible && (
               <motion.section
                 key="timer-stats"
-                layout={!dragging}
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={LAYOUT_TRANSITION}
+                layout={!dragging ? 'position' : false}
+                initial={{ opacity: 0, y: -6, scale: 0.99 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.99, transition: { duration: 0.12, ease: 'easeOut' } }}
+                transition={QUICK_LAYOUT_TRANSITION}
                 className={cn('overflow-hidden rounded-xl border border-border bg-card px-4 py-2.5', HOVER_CARD)}
               >
                 <div className="grid min-h-[3.35rem] grid-cols-3 divide-x divide-border/70">

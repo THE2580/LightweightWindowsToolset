@@ -66,10 +66,13 @@
 - 计时器页新增本地时间时钟统计卡片，点击打开/关闭时钟自由窗口。
 - 计时器页布局已收敛：顶部标题工具栏实底吸附；统计卡片保持在内容顶部；时钟卡片不再尝试顶部吸附，位于统计卡片下方；隐藏统计卡片使用高度折叠动画。
 - 最新修复：计时器页标题工具栏改为固定在页面顶部，下方内容独立滚动；本地时间卡片改为与界面统一的全宽卡片。
+- 最新修复：计时器页标题栏取消高层级覆盖并修复上边界裁切；统计卡片隐藏改为更快的 `popLayout` 归位；时钟自由窗口时间视觉垂直居中；页面级滚动条隐藏、列表级滚动条保留。
+- 当前准备发布 `1.2.5`：`package.json` / `package-lock.json` 已升级，README 已补充计时器和当前版本说明。
 
 若需要继续修复计时器，优先查看：
 
 - `electron-app/src/renderer/features/timer/TimerPage.tsx`
+- `electron-app/src/renderer/features/timer/TimerClockFreePage.tsx`
 - `electron-app/src/renderer/features/timer/TimerFloatingPage.tsx`
 - `electron-app/src/main/ipc/timer.ts`
 - `electron-app/src/main/index.ts`
