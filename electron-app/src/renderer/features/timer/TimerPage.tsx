@@ -687,8 +687,8 @@ function TimerPage(): React.JSX.Element {
 
   return (
     <AnimatedRoute>
-      <div className="space-y-5 overflow-x-hidden pb-3">
-        <header className="sticky top-0 z-30 -mx-5 -mt-5 flex items-center justify-between gap-4 border-b border-border/70 bg-background px-5 py-4 shadow-sm">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+        <header className="z-30 -mx-5 -mt-5 flex shrink-0 items-center justify-between gap-4 border-b border-border/70 bg-background px-5 py-4 shadow-sm">
           <div className="flex items-center gap-3">
             <h1 className="flex items-center gap-2 text-xl font-bold">
               <Clock3 className="text-blue-600" size={24} />
@@ -760,7 +760,7 @@ function TimerPage(): React.JSX.Element {
           </div>
         </header>
 
-        <motion.div layout className="min-w-0 space-y-5 overflow-x-hidden" transition={LAYOUT_TRANSITION}>
+        <motion.div layout className="min-w-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden pt-5 pb-3 pr-1" transition={LAYOUT_TRANSITION}>
           <AnimatePresence initial={false}>
             {statsVisible && (
               <motion.section
@@ -790,31 +790,29 @@ function TimerPage(): React.JSX.Element {
             )}
           </AnimatePresence>
 
-          <div className="flex justify-end">
-            <motion.button
-              type="button"
-              layout={!dragging}
-              transition={LAYOUT_TRANSITION}
-              className={cn(
-                'w-full max-w-[360px] rounded-xl border bg-card px-5 py-2.5 text-left',
-                HOVER_CARD,
-                SMOOTH_BUTTON,
-                clockOpen ? 'border-blue-400/80 bg-blue-50/45 shadow-blue-100/70' : 'border-border'
-              )}
-              onClick={toggleClock}
-              title={clockOpen ? '关闭本地时间窗口' : '打开本地时间窗口'}
-            >
-              <div className="flex h-full min-h-[3.35rem] items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">本地时间</p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">{localDate}</p>
-                </div>
-                <p className="shrink-0 font-mono text-[1.25rem] font-semibold leading-none tracking-tight tabular-nums text-slate-950">
-                  {localTime}
-                </p>
+          <motion.button
+            type="button"
+            layout={!dragging}
+            transition={LAYOUT_TRANSITION}
+            className={cn(
+              'w-full rounded-xl border bg-card px-4 py-2.5 text-left',
+              HOVER_CARD,
+              SMOOTH_BUTTON,
+              clockOpen ? 'border-blue-400/80 bg-blue-50/45 shadow-blue-100/70' : 'border-border'
+            )}
+            onClick={toggleClock}
+            title={clockOpen ? '关闭本地时间窗口' : '打开本地时间窗口'}
+          >
+            <div className="grid min-h-[3.35rem] grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">本地时间</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">{localDate}</p>
               </div>
-            </motion.button>
-          </div>
+              <p className="shrink-0 font-mono text-[1.25rem] font-semibold leading-none tracking-tight tabular-nums text-slate-950">
+                {localTime}
+              </p>
+            </div>
+          </motion.button>
 
           {!loaded ? (
             <motion.section layout transition={LAYOUT_TRANSITION} className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
