@@ -8,7 +8,7 @@
 
 - 最新新增“计时器自由窗口”：自由窗口可调整大小，与小悬浮窗互斥；计时器卡片内分别有小悬浮窗按钮和自由窗口按钮。自由窗口状态通过 `freeIds` 暴露，窗口位置和尺寸持久化到 `freeWindowBounds`。
 - 最新调整：自由窗口从单独放大时间改成整体响应式，时间使用 `min(10vw,30vh)`，按钮/标题栏/状态文案也随窗口轻微缩放。
-- 用户已确认开发版测试通过；本轮修改已准备提交，并已生成 `1.2.4` 本地 release。
+- 用户已确认开发版测试通过；本轮修改已提交，并已生成、修复且准备推送 `1.2.4` 本地 release。
 
 本轮已先提交基线：
 
@@ -52,12 +52,18 @@
 - 已复制生成英文命名安装包，并从 `dist/win-unpacked` 压缩生成 `LightweightWindowsToolset-v1.2.4-portable-win-x64.zip`。
 - 后续发现 `signAndEditExecutable=false` 会跳过 `rcedit --set-icon`，导致 release 变为 Electron 默认图标；已用缓存里的 `rcedit-x64.exe` 对 `dist/win-unpacked/轻量化工具集.exe` 写入 `resources/icon.ico`，再通过 `electron-builder --win --prepackaged dist/win-unpacked --config.win.signAndEditExecutable=false` 重建 NSIS。
 - 已重新覆盖 `LightweightWindowsToolset-v1.2.4-setup-win-x64.exe` 和 `LightweightWindowsToolset-v1.2.4-portable-win-x64.zip`，并提取主程序/安装包图标确认均为项目齿轮图标。
+- 已清理 `electron-app/dist` 中 `1.0.1` 到 `1.2.3` 的旧 release 产物，保留 `1.2.4` 和 `win-unpacked`。
 
 启动开发版前已检查项目相关进程；未发现旧进程，随后已启动 `electron-app` 开发版。
 
 ## Resume Here
 
-本轮已测试通过、已生成并修复 `1.2.4` 本地 release 图标，下一步从用户的新反馈继续。若需要继续修复，优先查看：
+本轮已测试通过、已生成并修复 `1.2.4` 本地 release 图标，下一步进入新功能：
+
+- 禁用当前工具标签页时跳转首页。
+- 计时器页新增本地时间时钟统计卡片，点击打开/关闭时钟自由窗口。
+
+若需要继续修复计时器，优先查看：
 
 - `electron-app/src/renderer/features/timer/TimerPage.tsx`
 - `electron-app/src/renderer/features/timer/TimerFloatingPage.tsx`

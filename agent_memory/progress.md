@@ -5,7 +5,7 @@
 - 桌面端正在开发第五个工具：`计时器`。
 - 本轮开始前已先提交基线：`a92c716 feat: 新增计时器工具`。
 - 本轮已完成计时器工具的拖拽中断、悬浮窗 hover、时间显示和窗口双击行为修复，并已打开开发版供测试。
-- 用户已确认开发版测试通过；本轮自由窗口响应式微调已准备提交，并已生成 `1.2.4` 本地 release。
+- 用户已确认开发版测试通过；本轮自由窗口响应式微调已提交，并已生成、修复且准备推送 `1.2.4` 本地 release。
 
 ## 已完成
 
@@ -53,3 +53,9 @@
 - 已复制生成英文命名安装包，并从 `dist/win-unpacked` 压缩生成 `LightweightWindowsToolset-v1.2.4-portable-win-x64.zip`。
 - 发现上述 `signAndEditExecutable=false` 会跳过 `rcedit --set-icon`，导致 release 主程序和安装包显示 Electron 默认图标；已用 `rcedit-x64.exe --set-icon resources/icon.ico` 修复 `dist/win-unpacked/轻量化工具集.exe`，再用 `electron-builder --win --prepackaged dist/win-unpacked --config.win.signAndEditExecutable=false` 重建 NSIS，并重新生成英文安装包副本和 portable zip。
 - 已通过 `System.Drawing.Icon.ExtractAssociatedIcon()` 提取主程序和安装包图标，确认均为项目齿轮图标。
+- 已清理 `electron-app/dist` 中 `1.0.1` 到 `1.2.3` 的旧 release 产物，保留 `1.2.4` 和 `win-unpacked`。
+
+## 待开发
+
+- 禁用当前正在浏览的工具时，应自动跳转首页，避免工具已禁用但页面仍可操作。
+- 计时器页统计卡片区域新增本地时间时钟显示，点击可打开/关闭对应时钟自由窗口；顶部独立窗口统计不新增“一键关闭”入口。
