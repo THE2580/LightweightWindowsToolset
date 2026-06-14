@@ -4,6 +4,7 @@ interface TimerState {
   timers: TimerItem[]
   floatingIds: Set<string>
   freeIds: Set<string>
+  clockOpen: boolean
   loaded: boolean
   load: () => Promise<void>
   listen: () => () => void
@@ -22,13 +23,16 @@ interface TimerState {
   openFree: (id: string) => Promise<void>
   closeFree: (id: string) => Promise<void>
   closeAllFree: () => Promise<void>
+  toggleClock: () => Promise<void>
+  closeClock: () => Promise<void>
 }
 
-function applySnapshot(snapshot: TimerSnapshot): Pick<TimerState, 'timers' | 'floatingIds' | 'freeIds' | 'loaded'> {
+function applySnapshot(snapshot: TimerSnapshot): Pick<TimerState, 'timers' | 'floatingIds' | 'freeIds' | 'clockOpen' | 'loaded'> {
   return {
     timers: snapshot.timers,
     floatingIds: new Set(snapshot.floatingIds),
     freeIds: new Set(snapshot.freeIds),
+    clockOpen: snapshot.clockOpen,
     loaded: true
   }
 }
@@ -42,6 +46,7 @@ export const useTimerStore = create<TimerState>((set) => ({
   timers: [],
   floatingIds: new Set<string>(),
   freeIds: new Set<string>(),
+  clockOpen: false,
   loaded: false,
 
   load: async () => {
@@ -69,5 +74,7 @@ export const useTimerStore = create<TimerState>((set) => ({
   closeAllFloating: () => runAndApply(window.api.timer.closeAllFloating(), set),
   openFree: (id) => runAndApply(window.api.timer.openFree(id), set),
   closeFree: (id) => runAndApply(window.api.timer.closeFree(id), set),
-  closeAllFree: () => runAndApply(window.api.timer.closeAllFree(), set)
+  closeAllFree: () => runAndApply(window.api.timer.closeAllFree(), set),
+  toggleClock: () => runAndApply(window.api.timer.toggleClock(), set),
+  closeClock: () => runAndApply(window.api.timer.closeClock(), set)
 }))

@@ -51,6 +51,7 @@ export interface TimerSnapshot {
   timers: TimerItem[]
   floatingIds: string[]
   freeIds: string[]
+  clockOpen: boolean
 }
 
 const STORE_KEY = 'timers'
@@ -63,12 +64,18 @@ const FREE_WIDTH = 320
 const FREE_HEIGHT = 200
 const FREE_MIN_WIDTH = 260
 const FREE_MIN_HEIGHT = 150
+const CLOCK_WINDOW_BOUNDS_KEY = 'timerClockWindowBounds'
+const CLOCK_WIDTH = 360
+const CLOCK_HEIGHT = 190
+const CLOCK_MIN_WIDTH = 280
+const CLOCK_MIN_HEIGHT = 150
 
 let mainWindow: BrowserWindow | null = null
 let timers: TimerItem[] = []
 let tickHandle: NodeJS.Timeout | null = null
 const floatingWindows = new Map<string, BrowserWindow>()
 const freeWindows = new Map<string, BrowserWindow>()
+let clockWindow: BrowserWindow | null = null
 
 function cloneTimer(timer: TimerItem): TimerItem {
   return {
@@ -144,7 +151,8 @@ function snapshot(): TimerSnapshot {
   return {
     timers: timers.map(cloneTimer),
     floatingIds: [...floatingWindows.keys()],
-    freeIds: [...freeWindows.keys()]
+    freeIds: [...freeWindows.keys()],
+    clockOpen: clockWindow !== null && !clockWindow.isDestroyed()
   }
 }
 
@@ -238,6 +246,12 @@ function closeFreeInternal(id: string): void {
 function closeAllFreeInternal(): void {
   for (const id of [...freeWindows.keys()]) closeFreeInternal(id)
   broadcast()
+}
+
+function closeClockInternal(): void {
+  const win = clockWindow
+  clockWindow = null
+  if (win && !win.isDestroyed()) win.close()
 }
 
 function defaultFloatingBounds(): TimerBounds {
@@ -343,6 +357,30 @@ function normalizeFreeBounds(bounds: TimerFreeWindowBounds | undefined): TimerFr
   }
 }
 
+function defaultClockBounds(): TimerFreeWindowBounds {
+  const display = BrowserWindow.getFocusedWindow()?.getBounds()
+  if (display) {
+    return {
+      x: Math.max(display.x + 24, display.x + Math.floor((display.width - CLOCK_WIDTH) / 2)),
+      y: Math.max(display.y + 64, display.y + Math.floor((display.height - CLOCK_HEIGHT) / 2)),
+      width: CLOCK_WIDTH,
+      height: CLOCK_HEIGHT
+    }
+  }
+  return { x: 180, y: 180, width: CLOCK_WIDTH, height: CLOCK_HEIGHT }
+}
+
+function normalizeClockBounds(bounds: Partial<TimerFreeWindowBounds> | undefined): TimerFreeWindowBounds {
+  const fallback = defaultClockBounds()
+  if (!bounds) return fallback
+  return {
+    x: Number.isFinite(bounds.x) ? Number(bounds.x) : fallback.x,
+    y: Number.isFinite(bounds.y) ? Number(bounds.y) : fallback.y,
+    width: Math.max(CLOCK_MIN_WIDTH, Number.isFinite(bounds.width) ? Number(bounds.width) : fallback.width),
+    height: Math.max(CLOCK_MIN_HEIGHT, Number.isFinite(bounds.height) ? Number(bounds.height) : fallback.height)
+  }
+}
+
 function openFreeInternal(id: string): TimerSnapshot {
   const timer = findTimer(id)
   if (!timer) throw new Error('timer not found')
@@ -412,6 +450,72 @@ function openFreeInternal(id: string): TimerSnapshot {
     win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#/${freeUrl}`)
   } else {
     win.loadFile(join(__dirname, '../renderer/index.html'), { hash: freeUrl })
+  }
+  return snapshot()
+}
+
+function toggleClockInternal(): TimerSnapshot {
+  if (clockWindow && !clockWindow.isDestroyed()) {
+    closeClockInternal()
+    return snapshot()
+  }
+
+  const storedBounds = getStore().get(CLOCK_WINDOW_BOUNDS_KEY) as Partial<TimerFreeWindowBounds> | undefined
+  const bounds = normalizeClockBounds(storedBounds)
+  const win = new BrowserWindow({
+    width: bounds.width,
+    height: bounds.height,
+    x: bounds.x,
+    y: bounds.y,
+    minWidth: CLOCK_MIN_WIDTH,
+    minHeight: CLOCK_MIN_HEIGHT,
+    resizable: true,
+    maximizable: false,
+    fullscreenable: false,
+    frame: false,
+    show: false,
+    alwaysOnTop: true,
+    backgroundColor: '#ffffff',
+    skipTaskbar: true,
+    title: '本地时间',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
+
+  const persistBounds = (): void => {
+    if (!clockWindow || win.isDestroyed()) return
+    const [x, y] = win.getPosition()
+    const [width, height] = win.getSize()
+    getStore().set(CLOCK_WINDOW_BOUNDS_KEY, { x, y, width, height })
+  }
+
+  clockWindow = win
+  win.setMenuBarVisibility(false)
+  win.on('ready-to-show', () => {
+    win.show()
+    win.setAlwaysOnTop(true, 'floating')
+  })
+  win.on('maximize', () => {
+    win.unmaximize()
+  })
+  win.on('enter-full-screen', () => {
+    win.setFullScreen(false)
+  })
+  win.on('moved', persistBounds)
+  win.on('resized', persistBounds)
+  win.on('closed', () => {
+    if (clockWindow === win) clockWindow = null
+    broadcast()
+  })
+
+  if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
+    win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#/timer-clock`)
+  } else {
+    win.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'timer-clock' })
   }
   return snapshot()
 }
@@ -550,12 +654,14 @@ export function stopTimersForDisable(): void {
   pauseAllInternal()
   closeAllFloatingInternal()
   closeAllFreeInternal()
+  closeClockInternal()
 }
 
 export function stopTimersForQuit(): void {
   pauseAllInternal()
   closeAllFloatingInternal()
   closeAllFreeInternal()
+  closeClockInternal()
   if (tickHandle !== null) {
     clearInterval(tickHandle)
     tickHandle = null
@@ -606,6 +712,16 @@ export function registerTimerIpc(win: BrowserWindow): void {
   })
   ipcMain.handle('timer:close-all-free', () => {
     closeAllFreeInternal()
+    return snapshot()
+  })
+  ipcMain.handle('timer:toggle-clock', () => {
+    const data = toggleClockInternal()
+    broadcast()
+    return data
+  })
+  ipcMain.handle('timer:close-clock', () => {
+    closeClockInternal()
+    broadcast()
     return snapshot()
   })
 }

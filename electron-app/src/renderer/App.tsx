@@ -7,6 +7,7 @@ import SettingsPage from './pages/SettingsPage'
 import PluginRoute from './lib/plugin-loader.tsx'
 import TimerFloatingPage from './features/timer/TimerFloatingPage'
 import TimerFreePage from './features/timer/TimerFreePage'
+import TimerClockFreePage from './features/timer/TimerClockFreePage'
 import { usePluginStore } from './stores/pluginStore'
 import { useCaptureStore } from './stores/captureStore'
 import { useDeepseekStore } from './stores/deepseekStore'
@@ -105,6 +106,14 @@ function AppContent(): React.JSX.Element {
     return (
       <Routes location={location} key={location.pathname}>
         <Route path="/timer-free/:timerId" element={<TimerFreePage />} />
+      </Routes>
+    )
+  }
+
+  if (location.pathname === '/timer-clock') {
+    return (
+      <Routes location={location} key={location.pathname}>
+        <Route path="/timer-clock" element={<TimerClockFreePage />} />
       </Routes>
     )
   }

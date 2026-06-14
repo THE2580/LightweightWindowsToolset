@@ -88,6 +88,17 @@ function useNowTicker(enabled: boolean): number {
   return now
 }
 
+function useLocalClock(): Date {
+  const [now, setNow] = useState(() => new Date())
+
+  useEffect(() => {
+    const handle = window.setInterval(() => setNow(new Date()), 1000)
+    return () => window.clearInterval(handle)
+  }, [])
+
+  return now
+}
+
 function displayMs(timer: TimerItem, now: number): number {
   if (timer.status !== 'running' || timer.lastStartedAt === null) {
     return timer.type === 'countdown' ? timer.remainingMs : timer.elapsedMs
@@ -574,6 +585,7 @@ function TimerPage(): React.JSX.Element {
   const pauseAll = useTimerStore((s) => s.pauseAll)
   const closeAllFloating = useTimerStore((s) => s.closeAllFloating)
   const closeAllFree = useTimerStore((s) => s.closeAllFree)
+  const toggleClock = useTimerStore((s) => s.toggleClock)
   const resetPaused = useTimerStore((s) => s.resetPaused)
   const reorderTimers = useTimerStore((s) => s.reorderTimers)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -595,10 +607,14 @@ function TimerPage(): React.JSX.Element {
   const pausedCount = timers.filter((timer) => timer.status === 'paused').length
   const floatingCount = useTimerStore((s) => s.floatingIds.size)
   const freeCount = useTimerStore((s) => s.freeIds.size)
+  const clockOpen = useTimerStore((s) => s.clockOpen)
   const windowCount = floatingCount + freeCount
   const timerById = useMemo(() => new Map(timers.map((timer) => [timer.id, timer])), [timers])
   const visibleIds = sortedTimers.map((timer) => timer.id)
   const now = useNowTicker(timers.some((timer) => timer.status === 'running'))
+  const clockNow = useLocalClock()
+  const localTime = clockNow.toLocaleTimeString('zh-CN', { hour12: false })
+  const localDate = clockNow.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit', weekday: 'short' })
   const orderedTimers = orderedIds
     .map((id) => timerById.get(id))
     .filter((timer): timer is TimerItem => Boolean(timer))
@@ -735,7 +751,7 @@ function TimerPage(): React.JSX.Element {
           </div>
         </header>
 
-        <section className="grid gap-3 sm:grid-cols-3">
+        <section className="grid gap-3 sm:grid-cols-4">
           <motion.div layout={!dragging} transition={LAYOUT_TRANSITION} className={cn('rounded-xl border border-border bg-card px-4 py-3', HOVER_CARD)}>
             <p className="text-xs text-muted-foreground">计时器数量</p>
             <p className="mt-1 text-xl font-semibold">{timers.length}/{MAX_TIMERS}</p>
@@ -748,6 +764,23 @@ function TimerPage(): React.JSX.Element {
             <p className="text-xs text-muted-foreground">独立窗口</p>
             <p className="mt-1 text-xl font-semibold">{windowCount}</p>
           </motion.div>
+          <motion.button
+            type="button"
+            layout={!dragging}
+            transition={LAYOUT_TRANSITION}
+            className={cn(
+              'rounded-xl border bg-card px-4 py-3 text-left',
+              HOVER_CARD,
+              SMOOTH_BUTTON,
+              clockOpen ? 'border-blue-400/80 bg-blue-50/45 shadow-blue-100/70' : 'border-border'
+            )}
+            onClick={toggleClock}
+            title={clockOpen ? '关闭本地时间窗口' : '打开本地时间窗口'}
+          >
+            <p className="text-xs text-muted-foreground">本地时间</p>
+            <p className="mt-1 font-mono text-xl font-semibold tabular-nums">{localTime}</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">{localDate}</p>
+          </motion.button>
         </section>
 
         {!loaded ? (

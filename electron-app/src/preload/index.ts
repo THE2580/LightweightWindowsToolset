@@ -102,6 +102,8 @@ const api = {
     openFree: (id: string): Promise<unknown> => ipcRenderer.invoke('timer:open-free', id),
     closeFree: (id: string): Promise<unknown> => ipcRenderer.invoke('timer:close-free', id),
     closeAllFree: (): Promise<unknown> => ipcRenderer.invoke('timer:close-all-free'),
+    toggleClock: (): Promise<unknown> => ipcRenderer.invoke('timer:toggle-clock'),
+    closeClock: (): Promise<unknown> => ipcRenderer.invoke('timer:close-clock'),
     onSnapshot: (callback: (snapshot: unknown) => void): (() => void) => {
       const handler = (_event: Electron.IpcRendererEvent, snapshot: unknown) => callback(snapshot)
       ipcRenderer.on('timer:snapshot', handler)

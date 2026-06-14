@@ -5,14 +5,14 @@ import { usePluginStore } from '@/stores/pluginStore'
 
 function PluginRoute(): React.JSX.Element {
   const { pluginId } = useParams<{ pluginId: string }>()
-  const isToolEnabled = usePluginStore((s) => s.isToolEnabled)
+  const disabledTools = usePluginStore((s) => s.disabledTools)
 
   if (!pluginId) {
     return <Navigate to="/" replace />
   }
 
   // Check if tool is enabled
-  if (!isToolEnabled(pluginId)) {
+  if (disabledTools.has(pluginId)) {
     return <Navigate to="/" replace />
   }
 

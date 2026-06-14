@@ -84,6 +84,8 @@ interface Window {
       openFree: (id: string) => Promise<TimerSnapshot>
       closeFree: (id: string) => Promise<TimerSnapshot>
       closeAllFree: () => Promise<TimerSnapshot>
+      toggleClock: () => Promise<TimerSnapshot>
+      closeClock: () => Promise<TimerSnapshot>
       onSnapshot: (callback: (snapshot: TimerSnapshot) => void) => (() => void)
     }
     tray: {
@@ -156,6 +158,7 @@ interface TimerSnapshot {
   timers: TimerItem[]
   floatingIds: string[]
   freeIds: string[]
+  clockOpen: boolean
 }
 
 interface CreateTimerInput {
