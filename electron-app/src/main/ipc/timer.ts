@@ -328,7 +328,7 @@ function openFloatingInternal(id: string): TimerSnapshot {
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
     win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#/${floatingUrl}`)
   } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'), { hash: floatingUrl })
+    win.loadFile(join(__dirname, '../renderer/index.html'), { hash: `/${floatingUrl}` })
   }
   return snapshot()
 }
@@ -449,7 +449,7 @@ function openFreeInternal(id: string): TimerSnapshot {
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
     win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#/${freeUrl}`)
   } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'), { hash: freeUrl })
+    win.loadFile(join(__dirname, '../renderer/index.html'), { hash: `/${freeUrl}` })
   }
   return snapshot()
 }
@@ -515,7 +515,7 @@ function toggleClockInternal(): TimerSnapshot {
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
     win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#/timer-clock`)
   } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'timer-clock' })
+    win.loadFile(join(__dirname, '../renderer/index.html'), { hash: '/timer-clock' })
   }
   return snapshot()
 }

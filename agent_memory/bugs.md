@@ -35,3 +35,4 @@
 - 计时器页标题栏不要再使用高 `z-index` sticky 覆盖层；否则 AI 聊天侧栏展开时会被标题栏压住。当前做法是让标题栏作为计时器页 flex 固定头部，下方内容独立滚动。
 - 统计卡片隐藏时不要用 `height: 0/auto` 长动画；退出元素会继续占位并造成列表归位间隔。当前用 `AnimatePresence mode="popLayout"` 让列表立即重排，只保留轻量 opacity/transform 退场。
 - 项目级隐藏滚动条应只作用于页面级滚动容器；排行榜、历史记录等列表级滚动容器不要加 `scrollbar-hidden`，以保留列表滚动反馈。
+- 打包模式下计时器独立窗口使用 `loadFile(..., { hash })` 时，hash 必须带前导 `/`，例如 `#/timer-clock`；若写成 `#timer-clock`，`HashRouter` 不会命中 `/timer-clock`，表现为时钟自由窗口创建了但页面打不开。
